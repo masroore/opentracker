@@ -7,6 +7,7 @@
 #include "fmt.h"
 #include "iob.h"
 #include "str.h"
+#include <string.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -182,7 +183,7 @@ e404:
 }
 
 int main() {
-  int s=socket_tcp6b();
+  int s=socket_tcp6();
   uint32 scope_id;
   char ip[16];
   uint16 port;
@@ -253,6 +254,7 @@ int main() {
 	  buffer_putnlflush(buffer_2);
 	  io_close(i);
 	} else if (l>0) {
+buffer_puts(buffer_2,"Garr");
 	  array_catb(&h->r,buf,l);
 	  if (array_failed(&h->r)) {
 	    httperror(h,"500 Server Error","request too long.");
