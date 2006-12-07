@@ -57,4 +57,15 @@ void *binary_search( const void *key, const void *base,
                      int (*compar) (const void *, const void *),
                      int *exactmatch );
 
+//
+// Exported functions
+//
+
+int  init_logic( char *chdir_directory );
+void deinit_logic( );
+
+ot_torrent add_peer_to_torrent( ot_hash hash, ot_peer peer );
+void return_peers_for_torrent( ot_torrent torrent, unsigned long amount, char *reply );
+void heal_torrent( ot_torrent torrent );
+
 #endif

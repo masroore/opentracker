@@ -31,7 +31,6 @@ struct http_data {
   io_batch iob;
   char* hdrbuf;
   int hlen;
-  int keepalive;
 };
 
 int header_complete(struct http_data* r) {
@@ -58,9 +57,7 @@ void httperror(struct http_data* r,const char* title,const char* message) {
   } else {
     c+=fmt_str(c,"HTTP/1.0 ");
     c+=fmt_str(c,title);
-    c+=fmt_str(c,"\r\nContent-Type: text/html\r\nConnection: ");
-    c+=fmt_str(c,r->keepalive?"keep-alive":"close");
-    c+=fmt_str(c,"\r\nContent-Length: ");
+    c+=fmt_str(c,"\r\nContent-Type: text/html\r\nConnection: close\r\nContent-Length: ");
     c+=fmt_ulong(c,strlen(message)+strlen(title)+16-4);
     c+=fmt_str(c,"\r\n\r\n<title>");
     c+=fmt_str(c,title+4);
@@ -68,48 +65,6 @@ void httperror(struct http_data* r,const char* title,const char* message) {
     r->hlen=c - r->hdrbuf;
   }
   iob_addbuf(&r->iob,r->hdrbuf,r->hlen);
-}
-
-static struct mimeentry { const char* name, *type; } mimetab[] = {
-  { "html",	"text/html" },
-  { "css",	"text/css" },
-  { "dvi",	"application/x-dvi" },
-  { "ps",	"application/postscript" },
-  { "pdf",	"application/pdf" },
-  { "gif",	"image/gif" },
-  { "png",	"image/png" },
-  { "jpeg",	"image/jpeg" },
-  { "jpg",	"image/jpeg" },
-  { "mpeg",	"video/mpeg" },
-  { "mpg",	"video/mpeg" },
-  { "avi",	"video/x-msvideo" },
-  { "mov",	"video/quicktime" },
-  { "qt",	"video/quicktime" },
-  { "mp3",	"audio/mpeg" },
-  { "ogg",	"audio/x-oggvorbis" },
-  { "wav",	"audio/x-wav" },
-  { "pac",	"application/x-ns-proxy-autoconfig" },
-  { "sig",	"application/pgp-signature" },
-  { "torrent",	"application/x-bittorrent" },
-  { "class",	"application/octet-stream" },
-  { "js",	"application/x-javascript" },
-  { "tar",	"application/x-tar" },
-  { "zip",	"application/zip" },
-  { "dtd",	"text/xml" },
-  { "xml",	"text/xml" },
-  { "xbm",	"image/x-xbitmap" },
-  { "xpm",	"image/x-xpixmap" },
-  { "xwd",	"image/x-xwindowdump" },
-  { 0,0 } };
-
-const char* mimetype(const char* filename) {
-  int i,e=str_rchr(filename,'.');
-  if (filename[e]==0) return "text/plain";
-  ++e;
-  for (i=0; mimetab[i].name; ++i)
-    if (str_equal(mimetab[i].name,filename+e))
-      return mimetab[i].type;
-  return "application/octet-stream";
 }
 
 const char* http_header(struct http_data* r,const char* h) {
@@ -128,7 +83,6 @@ const char* http_header(struct http_data* r,const char* h) {
 
 void httpresponse(struct http_data* h,int64 s) {
   char* c;
-  const char* m;
   array_cat0(&h->r);
   c=array_start(&h->r);
   if (byte_diff(c,4,"GET ")) {
@@ -152,28 +106,15 @@ e404:
 	io_close(fd);
 	goto e404;
       }
-      if ((m=http_header(h,"Connection"))) {
-	if (str_equal(m,"keep-alive"))
-	  h->keepalive=1;
-	else
-	  h->keepalive=0;
-      } else {
-	if (byte_equal(d+1,8,"HTTP/1.0"))
-	  h->keepalive=0;
-	else
-	  h->keepalive=1;
-      }
-      m=mimetype(c);
       c=h->hdrbuf=(char*)malloc(500);
-      c+=fmt_str(c,"HTTP/1.1 Coming Up\r\nContent-Type: ");
-      c+=fmt_str(c,m);
+      c+=fmt_str(c,"HTTP/1.1 Coming Up\r\nContent-Type: text/plain");
       c+=fmt_str(c,"\r\nContent-Length: ");
+/* ANSWER SIZE*/
       c+=fmt_ulonglong(c,s.st_size);
       c+=fmt_str(c,"\r\nLast-Modified: ");
+/* MODIFY DATE */
       c+=fmt_httpdate(c,s.st_mtime);
-      c+=fmt_str(c,"\r\nConnection: ");
-      c+=fmt_str(c,h->keepalive?"keep-alive":"close");
-      c+=fmt_str(c,"\r\n\r\n");
+      c+=fmt_str(c,"\r\nConnection: close\r\n\r\n");
       iob_addbuf(&h->iob,h->hdrbuf,c - h->hdrbuf);
       iob_addfile(&h->iob,fd,0,s.st_size);
     }
@@ -201,14 +142,6 @@ int main() {
       if (i==s) {
 	int n;
 	while ((n=socket_accept6(s,ip,&port,&scope_id))!=-1) {
-	  char buf[IP6_FMT];
-	  buffer_puts(buffer_2,"accepted new connection from ");
-	  buffer_put(buffer_2,buf,fmt_ip6(buf,ip));
-	  buffer_puts(buffer_2,":");
-	  buffer_putulong(buffer_2,port);
-	  buffer_puts(buffer_2," (fd ");
-	  buffer_putulong(buffer_2,n);
-	  buffer_puts(buffer_2,")");
 	  if (io_fd(n)) {
 	    struct http_data* h=(struct http_data*)malloc(sizeof(struct http_data));
 	    io_wantread(n);
@@ -217,10 +150,8 @@ int main() {
 	      io_setcookie(n,h);
 	    } else
 	      io_close(n);
-	  } else {
-	    buffer_puts(buffer_2,", but io_fd failed.");
+	  } else
 	    io_close(n);
-	  }
 	  buffer_putnlflush(buffer_2);
 	}
 	if (errno==EAGAIN)
@@ -237,11 +168,6 @@ int main() {
 	    iob_reset(&h->iob);
 	    free(h->hdrbuf); h->hdrbuf=0;
 	  }
-	  buffer_puts(buffer_2,"io_tryread(");
-	  buffer_putulong(buffer_2,i);
-	  buffer_puts(buffer_2,"): ");
-	  buffer_puterror(buffer_2);
-	  buffer_putnlflush(buffer_2);
 	  io_close(i);
 	} else if (l==0) {
 	  if (h) {
@@ -249,12 +175,8 @@ int main() {
 	    iob_reset(&h->iob);
 	    free(h->hdrbuf); h->hdrbuf=0;
 	  }
-	  buffer_puts(buffer_2,"eof on fd #");
-	  buffer_putulong(buffer_2,i);
-	  buffer_putnlflush(buffer_2);
 	  io_close(i);
 	} else if (l>0) {
-buffer_puts(buffer_2,"Garr");
 	  array_catb(&h->r,buf,l);
 	  if (array_failed(&h->r)) {
 	    httperror(h,"500 Server Error","request too long.");
@@ -272,17 +194,12 @@ emerge:
     while ((i=io_canwrite())!=-1) {
       struct http_data* h=io_getcookie(i);
       int64 r=iob_send(i,&h->iob);
-/*      printf("iob_send returned %lld\n",r); */
       if (r==-1) io_eagain(i); else
       if (r<=0) {
 	array_trunc(&h->r);
 	iob_reset(&h->iob);
 	free(h->hdrbuf); h->hdrbuf=0;
-	if (h->keepalive) {
-	  io_dontwantwrite(i);
-	  io_wantread(i);
-	} else
-	  io_close(i);
+        io_close(i);
       }
     }
   }

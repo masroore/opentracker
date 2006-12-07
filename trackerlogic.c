@@ -250,9 +250,12 @@ void count_peers_and_seeds( ot_peer peer_list, unsigned long *peers, unsigned lo
     } while( compare_ip_port( peer_list + *peers, peer_list + *peers - 1 ) < 0 );
 }
 
-int init_logic( ) {
+int init_logic( char *directory ) {
   glob_t globber;
   int i;
+
+  if( directory )
+   chdir( directory );
 
   scratch_space    = map_file( "" );
   torrents_list    = map_file( "" );
