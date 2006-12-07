@@ -130,6 +130,7 @@ e400:
 		{
 			// info_hash, left, port, numwant, compact			
 			struct ot_peer peer;
+            ot_hash hash;
 			byte_copy( peer.ip, h->ip, 4);
 			peer.port = 6881;
 			
@@ -137,10 +138,14 @@ e400:
 			while( *c!=' ' ) {
 				if(!byte_diff(c,10,"info_hash="))
 				{
+                    size_t destlen = 20;
 					// String is expected to be URL encoded, so expect
 					// (%[0-9A-F][0-9A-F]){20}
-                    int s = scan_urlencoded( 
-
+                    
+                    int s = scan_urlencoded( c+10, hash, &destlen);
+                    if( c[s+10] != '&' )
+                        goto e_parse;
+                    
 				}
 				else if(!byte_diff(c,8,"numwant="))
 				{
