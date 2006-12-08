@@ -14,6 +14,9 @@
 #include <stdlib.h>
 #include <errno.h>
 
+#include "trackerlogic.h"
+#include "scan_urlencoded_query.h"
+
 static void carp(const char* routine) {
   buffer_puts(buffer_2,routine);
   buffer_puts(buffer_2,": ");
@@ -112,9 +115,7 @@ e400:
     }
     else
     {
-        char *d;
-        int64 fd;
-        struct stat s;
+        char *d, *data;
         
         // expect 'GET /uri?nnbjhg HTTP/1.*'
         c+=4;
@@ -130,19 +131,18 @@ e400:
         switch( scan_urlencoded_query( &c, data, SCAN_PATH ) ) {
         case 6: /* scrape ? */
           if (!byte_diff(c,6,"scrape"))
-            goto 404;
+            goto e404;
           break;
         case 9:
           if( !byte_diff(c,8,"announce"))
-            goto 404;
+            goto e404;
           else {
             // info_hash, left, port, numwant, compact            
             struct ot_peer peer;
-            ot_hash hash;
-            byte_copy( peer.ip, h->ip, 4);
+            byte_copy( peer.ip, 4, h->ip );
             peer.port = 6881;
 
-            while( NOCHAMSCANNEN ) {
+            while( 1 ) {
               data = c;
               switch( scan_urlencoded_query( &c, data, SCAN_SEARCHPATH_PARAM ) ) {
               case -1: /* error */
@@ -150,20 +150,21 @@ e400:
                 goto e404;
               case 4:
                 if(!byte_diff(c,4,"port"))
-                  /* scan int */
+                  /* scan int */  c;
                 else if(!byte_diff(c,4,"left"))
-                  /* scan int */
+                  /* scan int */  c;
                 break;
               case 7:
                 if(!byte_diff(c,7,"numwant"))
-                  /* scan int */
+                  /* scan int */  c;
                 else if(!byte_diff(c,7,"compact"))
-                  /* scan flag */
+                  /* scan flag */  c;
                 break; 
               case 9: /* info_hash */
-                if(!byte_diff(c,9,"info_hash"))
+                if(!byte_diff(c,9,"info_hash")) c;
                   /* scan 20 bytes */
                 break; 
+              }
             }
           }
           break;
@@ -176,13 +177,13 @@ e400:
         c+=fmt_str(c,"HTTP/1.1 Coming Up\r\nContent-Type: text/plain");
         c+=fmt_str(c,"\r\nContent-Length: ");
         /* ANSWER SIZE*/
-        c+=fmt_ulonglong(c,s.st_size);
+        c+=fmt_ulonglong(c, 100 );
         c+=fmt_str(c,"\r\nLast-Modified: ");
-        /* MODIFY DATE */
-        c+=fmt_httpdate(c,s.st_mtime);
+        /* MODIFY DATE
+        c+=fmt_httpdate(c,s.st_mtime); */
         c+=fmt_str(c,"\r\nConnection: close\r\n\r\n");
         iob_addbuf(&h->iob,h->hdrbuf,c - h->hdrbuf);
-        iob_addbuf(&h->iob,tracker_answer, tzracker_answer_size);
+        iob_addbuf(&h->iob,tracker_answer, tracker_answer_size);
     }
 e404:
     io_dontwantread(s);
@@ -227,7 +228,7 @@ int main()
                         if (h)
                         {
                             byte_zero(h,sizeof(struct http_data));
-                            byte_copy(h->ip,ip,sizeof(ip));
+                            byte_copy(h->ip,sizeof(ip),ip);
                             io_setcookie(n,h);
                         } else
                             io_close(n);
