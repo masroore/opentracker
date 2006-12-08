@@ -104,6 +104,9 @@ const char* http_header(struct http_data* r,const char* h)
 void httpresponse(struct http_data* h,int64 s)
 {
     char *c, *d, *data;
+    struct ot_peer peer;
+    ot_hash *hash = NULL;
+
     array_cat0(&h->r);
 
     c = array_start(&h->r);
@@ -124,8 +127,7 @@ e400:
     if (c[0]!='/') goto e404;
     while (c[1]=='/') ++c;
 
-    data = c;
-    switch( scan_urlencoded_query( &c, data, SCAN_PATH ) ) {
+    switch( scan_urlencoded_query( &c, data = c, SCAN_PATH ) ) {
     case 0:
 e404:
       httperror(h,"404 Not Found","No such file or directory.");
@@ -134,49 +136,42 @@ e404:
       if (!byte_diff(c,6,"scrape"))
         goto e404;
       break;
-    case 9:
+    case 8: 
       if( !byte_diff(c,8,"announce"))
         goto e404;
-      else {
-        // info_hash, left, port, numwant, compact            
-        struct ot_peer peer;
-        ot_hash *hash = NULL;
-        byte_copy( peer.ip, 4, h->ip );
-        peer.port = 6881;
 
-        while( 1 ) {
-          data = c;
-          switch( scan_urlencoded_query( &c, data, SCAN_SEARCHPATH_PARAM ) ) {
-          case -1: /* error */
-            goto e404;
-          case 4:
-            if(!byte_diff(c,4,"port"))
-              /* scan int */  c;
-            else if(!byte_diff(c,4,"left"))
-              /* scan int */  c;
-            break;
-          case 7:
-            if(!byte_diff(c,7,"numwant"))
-              /* scan int */  c;
-            else if(!byte_diff(c,7,"compact"))
-              /* scan flag */  c;
-            break; 
-          case 9: /* info_hash= */
-            if(!byte_diff(c,9,"info_hash")) {
-              data = c;
-              /* ignore this, when we have less than 20 bytes */
-              switch( scan_urlencoded_query( &c, data, SCAN_SEARCHPATH_VALUE ) )
-              case -1:
-                httperror(h,"404 Not Found","No such file or directory.");
-                goto bailout;
-              case 20:
-                hash = (ot_hash*)data;
-                break;
-              default:
-                continue;
-            }
-            break; 
+      byte_copy( peer.ip, 4, h->ip );
+      peer.port = 6881;
+
+      while( 1 ) {
+        switch( scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_PARAM ) ) {
+        case -1: /* error */
+          goto e404;
+        case 4:
+          if(!byte_diff(c,4,"port"))
+            /* scan int */  c;
+          else if(!byte_diff(c,4,"left"))
+            /* scan int */  c;
+          break;
+        case 7:
+          if(!byte_diff(c,7,"numwant"))
+            /* scan int */  c;
+          else if(!byte_diff(c,7,"compact"))
+            /* scan flag */  c;
+          break; 
+        case 9: /* info_hash= */
+          if(!byte_diff(c,9,"info_hash")) {
+            /* ignore this, when we have less than 20 bytes */
+            switch( scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE ) )
+            case -1:
+              httperror(h,"404 Not Found","No such file or directory.");
+              goto bailout;
+            case 20:
+              hash = (ot_hash*)data; /* Fall through intended */
+            default:
+              continue;
           }
+          break; 
         }
       }
       break;
