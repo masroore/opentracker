@@ -13,6 +13,8 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <signal.h>
+#include <stdio.h>
 
 #include "trackerlogic.h"
 #include "scan_urlencoded_query.h"
@@ -109,7 +111,7 @@ void httpresponse(struct http_data* h,int64 s)
     ot_torrent torrent;
     ot_hash *hash = NULL;
     unsigned long numwant;
-    int compact;
+    int compact,x;
     size_t reply_size = 0;
 
     array_cat0(&h->r);
@@ -130,40 +132,40 @@ e400:
     if (*d!=' ') goto e400;
     *d=0;
     if (c[0]!='/') goto e404;
-    while (c[1]=='/') ++c;
+    while (*c=='/') ++c;
 
-    switch( scan_urlencoded_query( &c, data = c, SCAN_PATH ) ) {
+    switch( x = scan_urlencoded_query( &c, data = c, SCAN_PATH ) )
+    {
     case 6: /* scrape ? */
-      if (!byte_diff(c,6,"scrape"))
+      if (byte_diff(data,6,"scrape"))
         goto e404;
       break;
     case 8: 
-      if( !byte_diff(c,8,"announce"))
+      if( byte_diff(data,8,"announce"))
         goto e404;
-
       byte_copy( peer.ip, 4, h->ip );
       peer.port = 6881;
       numwant = 50;
       compact = 1;
 
       while( 1 ) {
-        switch( scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_PARAM ) ) {
+        switch( x=scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_PARAM ) ) {
         case -1: /* error */
           goto e404;
         case 4:
-          if(!byte_diff(c,4,"port"))
+          if(!byte_diff(data,4,"port"))
             /* scan int */  c;
-          else if(!byte_diff(c,4,"left"))
+          else if(!byte_diff(data,4,"left"))
             /* scan int */  c;
           break;
         case 7:
-          if(!byte_diff(c,7,"numwant"))
+          if(!byte_diff(data,7,"numwant"))
             /* scan int */  c;
-          else if(!byte_diff(c,7,"compact"))
+          else if(!byte_diff(data,7,"compact"))
             /* scan flag */  c;
           break;
         case 9:
-          if(byte_diff(c,9,"info_hash"))
+          if(byte_diff(data,9,"info_hash"))
             continue;
           /* ignore this, when we have less than 20 bytes */
           switch( scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE ) ) {
@@ -171,11 +173,13 @@ e400:
             goto e404;
           case 20:
             hash = (ot_hash*)data; /* Fall through intended */
+            printf("hash: %s\n",*hash);
           default:
             continue;
           }
         default:
-          continue;
+          printf("blub %i\n",x);
+          break;
         }
       }
 
@@ -196,6 +200,7 @@ e500:
       }
       break;
     default: /* neither scrape nor announce */
+          printf("blub %i\n",x);
 e404:
       httperror(h,"404 Not Found","No such file or directory.");
       goto bailout;
@@ -218,6 +223,11 @@ bailout:
     io_wantwrite(s);
 }
 
+void graceful( int s ) {
+  signal( SIGINT, SIG_IGN );
+  deinit_logic();
+}
+
 int main()
 {
     int s=socket_tcp6();
@@ -225,7 +235,7 @@ int main()
     char ip[16];
     uint16 port;
 
-    if (socket_bind6_reuse(s,V6any,8000,0)==-1)
+    if (socket_bind6_reuse(s,V6any,6969,0)==-1)
         panic("socket_bind6_reuse");
 
     if (socket_listen(s,16)==-1)
@@ -233,6 +243,9 @@ int main()
 
     if (!io_fd(s))
         panic("io_fd");
+
+    signal( SIGINT, graceful );
+    init_logic( "." );
 
     io_wantread(s);
 
