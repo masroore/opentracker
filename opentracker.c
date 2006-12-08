@@ -224,8 +224,11 @@ bailout:
 }
 
 void graceful( int s ) {
-  signal( SIGINT, SIG_IGN );
-  deinit_logic();
+  if( s == SIGINT ) {
+    signal( SIGINT, SIG_IGN);
+    deinit_logic();
+    exit( 0 );
+  }
 }
 
 int main()
@@ -245,7 +248,8 @@ int main()
         panic("io_fd");
 
     signal( SIGINT, graceful );
-    init_logic( "." );
+    if( init_logic( "." ) == -1 )
+      panic("Logic not started");
 
     io_wantread(s);
 

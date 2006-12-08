@@ -212,7 +212,7 @@ void heal_torrent( ot_torrent torrent ) {
 }
 
 void dispose_torrent( ot_torrent torrent ) {
-  unmap_file( "", torrent->peer_list, 0 );
+  unmap_file( NULL, torrent->peer_list, 0 );
   unlink( to_hex( torrent->hash ) );
   MEMMOVE( torrent, torrent + 1, ( torrents_list + torrents_count ) - ( torrent + 1 ) );
   torrents_count--;
@@ -229,11 +229,11 @@ void *map_file( char *file_name ) {
     int file_desc=open(file_name,O_RDWR|O_CREAT|O_NDELAY,0644);
     if( file_desc < 0) return 0;
     lseek( file_desc, OT_HUGE_FILESIZE, SEEK_SET );
-    
+    write( file_desc, "_", 1 );
     map=mmap(0,OT_HUGE_FILESIZE,PROT_READ|PROT_WRITE,MAP_SHARED,file_desc,0);
     close(file_desc);
   } else
-    map=mmap(0,OT_HUGE_FILESIZE,PROT_READ|PROT_WRITE,MAP_ANON,-1,0);
+    map=mmap(0,OT_HUGE_FILESIZE,PROT_READ|PROT_WRITE,MAP_ANON|MAP_PRIVATE,-1,0);
 
   return (map == (char*)-1) ? 0 : map;
 }
@@ -259,13 +259,15 @@ int init_logic( char *directory ) {
   if( directory )
    chdir( directory );
 
-  scratch_space    = map_file( "" );
-  torrents_list    = map_file( "" );
+  scratch_space    = map_file( NULL );
+  torrents_list    = map_file( NULL );
   torrents_count   = 0;
+
+  printf( "%08x  %08x\n", scratch_space, torrents_list );
 
   if( !scratch_space || !torrents_list ) {
     if( scratch_space || torrents_list )
-      unmap_file( "", scratch_space ? (void*)scratch_space : (void*)torrents_list, 0 );
+      unmap_file( NULL, scratch_space ? (void*)scratch_space : (void*)torrents_list, 0 );
     return -1;
   }
 
@@ -308,6 +310,6 @@ void deinit_logic( ) {
   // For all torrents... blablabla
   while( torrents_count-- )
     unmap_file( to_hex(torrents_list[torrents_count].hash), torrents_list[torrents_count].peer_list, torrents_list[torrents_count].peer_count * sizeof(struct ot_peer) );
-  unmap_file( "", torrents_list, 0 );
-  unmap_file( "", scratch_space, 0 );
+  unmap_file( NULL, torrents_list, 0 );
+  unmap_file( NULL, scratch_space, 0 );
 }
