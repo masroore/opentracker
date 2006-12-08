@@ -162,7 +162,7 @@ void return_peers_for_torrent( ot_torrent torrent, unsigned long amount, char *r
 
 // Compacts a torrents peer list
 // * torrents older than OT_TIMEOUT are being kicked
-// * is rather expansive
+// * is rather expensive
 // * if this fails, torrent file is invalid, should add flag
 //
 void heal_torrent( ot_torrent torrent ) {
@@ -269,7 +269,7 @@ int init_logic( char *directory ) {
 
   // Scan directory for filenames in the form [0-9A-F]{20}
   // * I know this looks ugly, but I've seen A-F to match umlauts as well in strange locales
-  // * lower case for .. better being safe than sorry, this is not expansive here :)
+  // * lower case for .. better being safe than sorry, this is not expensive here :)
   if( !glob(
     "[0-9ABCDEFabcdef][0-9ABCDEFabcdef][0-9ABCDEFabcdef][0-9ABCDEFabcdef]"
     "[0-9ABCDEFabcdef][0-9ABCDEFabcdef][0-9ABCDEFabcdef][0-9ABCDEFabcdef]"
