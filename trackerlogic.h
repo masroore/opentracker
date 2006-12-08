@@ -1,6 +1,8 @@
 #ifndef __TRACKERLOGIC_H__
 #define __TRACKERLOGIC_H__
 
+#include <sys/types.h>
+
 /* Should be called BYTE, WORD, DWORD - but some OSs already have that and there's no #iftypedef */
 /* They mark memory used as data instead of integer or human readable string -
    they should be cast before used as integer/text */
@@ -12,8 +14,8 @@ typedef unsigned long  ot_time;
 typedef ot_byte        ot_hash[20];
 typedef ot_byte        ot_ip[ 4/*0*/ ];
 // tunables
-const unsigned long OT_TIMEOUT          = 2700;
-const unsigned long OT_HUGE_FILESIZE    = 1024*1024*256; // Thats 256MB per file, enough for 204800 peers of 128 bytes
+static const unsigned long OT_TIMEOUT          = 2700;
+static const unsigned long OT_HUGE_FILESIZE    = 1024*1024*256; // Thats 256MB per file, enough for 204800 peers of 128 bytes
 
 // We will not service v6, yes
 #define OT_COMPACT_ONLY
@@ -35,8 +37,8 @@ typedef struct ot_peer {
   ot_time death;
   ot_byte flags;
 } *ot_peer;
-ot_byte PEER_FLAG_SEEDING   = 0x80;
-ot_byte PEER_IP_LENGTH_MASK = 0x3f;
+static const ot_byte PEER_FLAG_SEEDING   = 0x80;
+static const ot_byte PEER_IP_LENGTH_MASK = 0x3f;
 
 typedef struct {
   ot_hash       hash;
@@ -64,8 +66,8 @@ void *binary_search( const void *key, const void *base,
 int  init_logic( char *chdir_directory );
 void deinit_logic( );
 
-ot_torrent add_peer_to_torrent( ot_hash hash, ot_peer peer );
-void return_peers_for_torrent( ot_torrent torrent, unsigned long amount, char *reply );
+ot_torrent add_peer_to_torrent( ot_hash *hash, ot_peer peer );
+size_t return_peers_for_torrent( ot_torrent torrent, unsigned long amount, char *reply );
 void heal_torrent( ot_torrent torrent );
 
 #endif

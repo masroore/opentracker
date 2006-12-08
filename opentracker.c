@@ -97,15 +97,20 @@ const char* http_header(struct http_data* r,const char* h)
             if (*c==' ' || *c=='\t') ++c;
             return c;
         }
-            return 0;
+        return 0;
     }
+    return 0;
 }
 
 void httpresponse(struct http_data* h,int64 s)
 {
-    char *c, *d, *data;
+    char *c, *d, *data, *reply = NULL;
     struct ot_peer peer;
+    ot_torrent torrent;
     ot_hash *hash = NULL;
+    unsigned long numwant;
+    int compact;
+    size_t reply_size = 0;
 
     array_cat0(&h->r);
 
@@ -128,10 +133,6 @@ e400:
     while (c[1]=='/') ++c;
 
     switch( scan_urlencoded_query( &c, data = c, SCAN_PATH ) ) {
-    case 0:
-e404:
-      httperror(h,"404 Not Found","No such file or directory.");
-      goto bailout;
     case 6: /* scrape ? */
       if (!byte_diff(c,6,"scrape"))
         goto e404;
@@ -142,6 +143,8 @@ e404:
 
       byte_copy( peer.ip, 4, h->ip );
       peer.port = 6881;
+      numwant = 50;
+      compact = 1;
 
       while( 1 ) {
         switch( scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_PARAM ) ) {
@@ -158,24 +161,42 @@ e404:
             /* scan int */  c;
           else if(!byte_diff(c,7,"compact"))
             /* scan flag */  c;
-          break; 
-        case 9: /* info_hash= */
-          if(!byte_diff(c,9,"info_hash")) {
-            /* ignore this, when we have less than 20 bytes */
-            switch( scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE ) )
-            case -1:
-              httperror(h,"404 Not Found","No such file or directory.");
-              goto bailout;
-            case 20:
-              hash = (ot_hash*)data; /* Fall through intended */
-            default:
-              continue;
+          break;
+        case 9:
+          if(byte_diff(c,9,"info_hash"))
+            continue;
+          /* ignore this, when we have less than 20 bytes */
+          switch( scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE ) ) {
+          case -1:
+            goto e404;
+          case 20:
+            hash = (ot_hash*)data; /* Fall through intended */
+          default:
+            continue;
           }
-          break; 
+        default:
+          continue;
         }
+      }
+
+      /* Scanned whole query string */
+      if( !hash || ( compact == 0 ) ) goto e404;
+      torrent = add_peer_to_torrent( hash, &peer );
+      if( !torrent ) {
+e500:
+        httperror(h,"500 Internal Server Error","A server error has occured. Please retry later.");
+        goto bailout;
+      }
+      reply = malloc( numwant*6+10 );
+      if( reply )
+        reply_size = return_peers_for_torrent( torrent, numwant, reply );
+      if( !reply || reply_size < 0 ) {
+        if( reply ) free( reply );
+        goto e500;
       }
       break;
     default: /* neither scrape nor announce */
+e404:
       httperror(h,"404 Not Found","No such file or directory.");
       goto bailout;
     }
@@ -190,7 +211,7 @@ e404:
     c+=fmt_httpdate(c,s.st_mtime); */
     c+=fmt_str(c,"\r\nConnection: close\r\n\r\n");
     iob_addbuf(&h->iob,h->hdrbuf,c - h->hdrbuf);
-    iob_addbuf(&h->iob,tracker_answer, tracker_answer_size);
+    if( reply && reply_size ) iob_addbuf(&h->iob,reply, reply_size );
 
 bailout:
     io_dontwantread(s);

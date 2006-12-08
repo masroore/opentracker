@@ -54,7 +54,7 @@ ot_byte       *scratch_space = 0;
 #define TESTSET( i )      (scratch_space[index])
 #define RANDOM            random()
 
-ot_torrent add_peer_to_torrent( ot_hash hash, ot_peer peer ) {
+ot_torrent add_peer_to_torrent( ot_hash *hash, ot_peer peer ) {
   ot_torrent torrent;
   ot_peer    peer_dest;
   int        exactmatch;
@@ -66,7 +66,7 @@ ot_torrent add_peer_to_torrent( ot_hash hash, ot_peer peer ) {
 
     // Create a new torrent entry, then
     MEMMOVE( &torrent->hash, hash, sizeof( ot_hash ) );
-    torrent->peer_list  = map_file( to_hex( hash ) );
+    torrent->peer_list  = map_file( to_hex( *hash ) );
     torrent->peer_count = 0;
     torrent->seed_count = 0;
   }
@@ -106,8 +106,9 @@ inline int TESTVALIDPEER( ot_peer p ) { return p->death > NOW; }
 // * it is not guaranteed to see all peers, so no assumptions on active seeders/peers may be done
 // * since compact format cannot handle v6 addresses, it must be enabled by OT_COMPACT_ONLY
 //
-void return_peers_for_torrent( ot_torrent torrent, unsigned long amount, char *reply ) {
+size_t return_peers_for_torrent( ot_torrent torrent, unsigned long amount, char *reply ) {
   register ot_peer peer_base = torrent->peer_list;
+  char            *r = reply;
   unsigned long    peer_count = torrent->peer_count;
   unsigned long    selected_count = 0, invalid_count = 0;
   unsigned long    index = 0;
@@ -132,9 +133,9 @@ void return_peers_for_torrent( ot_torrent torrent, unsigned long amount, char *r
   index = 0;
 
 #ifndef OT_COMPACT_ONLY
-  reply += FORMAT_FIXED_STRING( reply, "d5:peersl" );
+  r += FORMAT_FIXED_STRING( r, "d5:peersl" );
 #else
-  reply += FORMAT_FORMAT_STRING( reply, "d5:peers%li:",6*selected_count );
+  r += FORMAT_FORMAT_STRING( r, "d5:peers%li:",6*selected_count );
 #endif
 
   while( selected_count-- ) {
@@ -142,11 +143,11 @@ void return_peers_for_torrent( ot_torrent torrent, unsigned long amount, char *r
     while( !TESTSELECTED( index ) ) ++index;
     peer = peer_base + index;
 #ifdef OT_COMPACT_ONLY
-    MEMMOVE( reply, &peer->ip, 4 );
-    MEMMOVE( reply+4, &peer->port, 2 );
-    reply += 6;
+    MEMMOVE( r, &peer->ip, 4 );
+    MEMMOVE( r+4, &peer->port, 2 );
+    r += 6;
 #else
-    reply += FORMAT_FORMAT_STRING( reply, "d2:ip%d:%s7:peer id20:%20c4:porti%ie",
+    r += FORMAT_FORMAT_STRING( r, "d2:ip%d:%s7:peer id20:%20c4:porti%ie",
       peer->flags & PEER_IP_LENGTH_MASK,
       peer->ip,
       peer->id,
@@ -154,10 +155,11 @@ void return_peers_for_torrent( ot_torrent torrent, unsigned long amount, char *r
 #endif
   }
 #ifndef OT_COMPACT_ONLY
-  reply += FORMAT_FIXED_STRING( reply, "ee" );
+  r += FORMAT_FIXED_STRING( r, "ee" );
 #else
-  reply += FORMAT_FIXED_STRING( reply, "e" );
+  r += FORMAT_FIXED_STRING( r, "e" );
 #endif
+  return r - reply;
 }
 
 // Compacts a torrents peer list
