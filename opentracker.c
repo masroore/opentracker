@@ -103,89 +103,101 @@ const char* http_header(struct http_data* r,const char* h)
 
 void httpresponse(struct http_data* h,int64 s)
 {
-    char* c;
+    char *c, *d, *data;
     array_cat0(&h->r);
 
     c = array_start(&h->r);
 
-    if (byte_diff(c,4,"GET "))
-    {
+    if (byte_diff(c,4,"GET ")) {
 e400:
         httperror(h,"400 Invalid Request","This server only understands GET.");
+        goto bailout;
     }
-    else
-    {
-        char *d, *data;
-        
-        // expect 'GET /uri?nnbjhg HTTP/1.*'
-        c+=4;
 
-        for (d=c; *d!=' '&&*d!='\t'&&*d!='\n'&&*d!='\r'; ++d) ;
+    // expect 'GET /uri?nnbjhg HTTP/1.*'
+    c+=4;
 
-        if (*d!=' ') goto e400;
-        *d=0;
-        if (c[0]!='/') goto e404;
-        while (c[1]=='/') ++c;
+    for (d=c; *d!=' '&&*d!='\t'&&*d!='\n'&&*d!='\r'; ++d) ;
 
-        data = c;
-        switch( scan_urlencoded_query( &c, data, SCAN_PATH ) ) {
-        case 6: /* scrape ? */
-          if (!byte_diff(c,6,"scrape"))
-            goto e404;
-          break;
-        case 9:
-          if( !byte_diff(c,8,"announce"))
-            goto e404;
-          else {
-            // info_hash, left, port, numwant, compact            
-            struct ot_peer peer;
-            byte_copy( peer.ip, 4, h->ip );
-            peer.port = 6881;
+    if (*d!=' ') goto e400;
+    *d=0;
+    if (c[0]!='/') goto e404;
+    while (c[1]=='/') ++c;
 
-            while( 1 ) {
-              data = c;
-              switch( scan_urlencoded_query( &c, data, SCAN_SEARCHPATH_PARAM ) ) {
-              case -1: /* error */
-                httperror(h,"404 Not Found","No such file or directory.");
-                goto e404;
-              case 4:
-                if(!byte_diff(c,4,"port"))
-                  /* scan int */  c;
-                else if(!byte_diff(c,4,"left"))
-                  /* scan int */  c;
-                break;
-              case 7:
-                if(!byte_diff(c,7,"numwant"))
-                  /* scan int */  c;
-                else if(!byte_diff(c,7,"compact"))
-                  /* scan flag */  c;
-                break; 
-              case 9: /* info_hash */
-                if(!byte_diff(c,9,"info_hash")) c;
-                  /* scan 20 bytes */
-                break; 
-              }
-            }
-          }
-          break;
-        default: /* neither scrape nor announce */
-          httperror(h,"404 Not Found","No such file or directory.");
-          goto e404;
-        }
-
-        c=h->hdrbuf=(char*)malloc(500);
-        c+=fmt_str(c,"HTTP/1.1 Coming Up\r\nContent-Type: text/plain");
-        c+=fmt_str(c,"\r\nContent-Length: ");
-        /* ANSWER SIZE*/
-        c+=fmt_ulonglong(c, 100 );
-        c+=fmt_str(c,"\r\nLast-Modified: ");
-        /* MODIFY DATE
-        c+=fmt_httpdate(c,s.st_mtime); */
-        c+=fmt_str(c,"\r\nConnection: close\r\n\r\n");
-        iob_addbuf(&h->iob,h->hdrbuf,c - h->hdrbuf);
-        iob_addbuf(&h->iob,tracker_answer, tracker_answer_size);
-    }
+    data = c;
+    switch( scan_urlencoded_query( &c, data, SCAN_PATH ) ) {
+    case 0:
 e404:
+      httperror(h,"404 Not Found","No such file or directory.");
+      goto bailout;
+    case 6: /* scrape ? */
+      if (!byte_diff(c,6,"scrape"))
+        goto e404;
+      break;
+    case 9:
+      if( !byte_diff(c,8,"announce"))
+        goto e404;
+      else {
+        // info_hash, left, port, numwant, compact            
+        struct ot_peer peer;
+        ot_hash *hash = NULL;
+        byte_copy( peer.ip, 4, h->ip );
+        peer.port = 6881;
+
+        while( 1 ) {
+          data = c;
+          switch( scan_urlencoded_query( &c, data, SCAN_SEARCHPATH_PARAM ) ) {
+          case -1: /* error */
+            goto e404;
+          case 4:
+            if(!byte_diff(c,4,"port"))
+              /* scan int */  c;
+            else if(!byte_diff(c,4,"left"))
+              /* scan int */  c;
+            break;
+          case 7:
+            if(!byte_diff(c,7,"numwant"))
+              /* scan int */  c;
+            else if(!byte_diff(c,7,"compact"))
+              /* scan flag */  c;
+            break; 
+          case 9: /* info_hash= */
+            if(!byte_diff(c,9,"info_hash")) {
+              data = c;
+              /* ignore this, when we have less than 20 bytes */
+              switch( scan_urlencoded_query( &c, data, SCAN_SEARCHPATH_VALUE ) )
+              case -1:
+                httperror(h,"404 Not Found","No such file or directory.");
+                goto bailout;
+              case 20:
+                hash = (ot_hash*)data;
+                break;
+              default:
+                continue;
+            }
+            break; 
+          }
+        }
+      }
+      break;
+    default: /* neither scrape nor announce */
+      httperror(h,"404 Not Found","No such file or directory.");
+      goto bailout;
+    }
+
+    c=h->hdrbuf=(char*)malloc(500);
+    c+=fmt_str(c,"HTTP/1.1 Coming Up\r\nContent-Type: text/plain");
+    c+=fmt_str(c,"\r\nContent-Length: ");
+    /* ANSWER SIZE*/
+    c+=fmt_ulonglong(c, 100 );
+    c+=fmt_str(c,"\r\nLast-Modified: ");
+    /* MODIFY DATE
+    c+=fmt_httpdate(c,s.st_mtime); */
+    c+=fmt_str(c,"\r\nConnection: close\r\n\r\n");
+    iob_addbuf(&h->iob,h->hdrbuf,c - h->hdrbuf);
+    iob_addbuf(&h->iob,tracker_answer, tracker_answer_size);
+
+bailout:
     io_dontwantread(s);
     io_wantwrite(s);
 }
