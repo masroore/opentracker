@@ -24,21 +24,23 @@ size_t scan_urlencoded_query(char **string, char *deststring, int flags) {
       if( ( b = scan_fromhex(*s++) ) == 0xff ) return -1;
       c=(c<<4)|b;
     }
-    *d++ = c;
+    if(d) *d++ = c;
   }
 
   switch( c ) {
   case 0: case '\r': case '\n': case ' ':
-    if ( ( flags & BREAK_AT_WHITESPACE ) == 0 ) return -1;
+    if( d == (unsigned char*)deststring ) return -2;
+    --s;
     break;
   case '?':
-    if ( ( flags & BREAK_AT_QUESTIONMARK ) == 0 ) return -1;
+    if( flags != SCAN_PATH ) return -1;
     break;
   case '=':
-    if ( ( flags & BREAK_AT_EQUALSIGN ) == 0 ) return -1;
+    if( flags != SCAN_SEARCHPATH_PARAM ) return -1;
     break;
   case '&':
-    if ( ( flags & BREAK_AT_AMPERSAND ) == 0 ) return -1;
+    if( flags == SCAN_PATH ) return -1;
+    if( flags == SCAN_SEARCHPATH_PARAM ) --s;
     break;
   default:
     return -1;

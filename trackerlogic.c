@@ -227,6 +227,7 @@ void *map_file( char *file_name ) {
   char *map;
   if( file_name ) {
     int file_desc=open(file_name,O_RDWR|O_CREAT|O_NDELAY,0644);
+printf( "%s\n", file_name );
     if( file_desc < 0) return 0;
     lseek( file_desc, OT_HUGE_FILESIZE, SEEK_SET );
     write( file_desc, "_", 1 );
@@ -262,8 +263,6 @@ int init_logic( char *directory ) {
   scratch_space    = map_file( NULL );
   torrents_list    = map_file( NULL );
   torrents_count   = 0;
-
-  printf( "%08x  %08x\n", scratch_space, torrents_list );
 
   if( !scratch_space || !torrents_list ) {
     if( scratch_space || torrents_list )

@@ -1,14 +1,9 @@
-#ifndef  __SCAN_URLENCODED_QUERY_H__
+#ifndef __SCAN_URLENCODED_QUERY_H__
 #define __SCAN_URLENCODED_QUERY_H__
 
-#define BREAK_AT_QUESTIONMARK (1<<0)
-#define BREAK_AT_WHITESPACE   (1<<1)
-#define BREAK_AT_AMPERSAND    (1<<2)
-#define BREAK_AT_EQUALSIGN    (1<<3)
-
-#define SCAN_PATH             ( BREAK_AT_QUESTIONMARK | BREAK_AT_WHITESPACE )
-#define SCAN_SEARCHPATH_PARAM ( BREAK_AT_EQUALSIGN )
-#define SCAN_SEARCHPATH_VALUE ( BREAK_AT_AMPERSAND | BREAK_AT_WHITESPACE )
+#define SCAN_PATH             0
+#define SCAN_SEARCHPATH_PARAM 1
+#define SCAN_SEARCHPATH_VALUE 2
 
 // string     pointer to source, pointer to after terminator on return
 // deststring pointer to destination

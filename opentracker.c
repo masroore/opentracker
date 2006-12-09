@@ -111,7 +111,7 @@ void httpresponse(struct http_data* h,int64 s)
     ot_torrent torrent;
     ot_hash *hash = NULL;
     unsigned long numwant;
-    int compact,x;
+    int compact, scanon;
     size_t reply_size = 0;
 
     array_cat0(&h->r);
@@ -124,9 +124,7 @@ e400:
         goto bailout;
     }
 
-    // expect 'GET /uri?nnbjhg HTTP/1.*'
     c+=4;
-
     for (d=c; *d!=' '&&*d!='\t'&&*d!='\n'&&*d!='\r'; ++d) ;
 
     if (*d!=' ') goto e400;
@@ -134,7 +132,7 @@ e400:
     if (c[0]!='/') goto e404;
     while (*c=='/') ++c;
 
-    switch( x = scan_urlencoded_query( &c, data = c, SCAN_PATH ) )
+    switch( scan_urlencoded_query( &c, data = c, SCAN_PATH ) )
     {
     case 6: /* scrape ? */
       if (byte_diff(data,6,"scrape"))
@@ -147,9 +145,13 @@ e400:
       peer.port = 6881;
       numwant = 50;
       compact = 1;
+      scanon = 1;
 
-      while( 1 ) {
-        switch( x=scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_PARAM ) ) {
+      while( scanon ) {
+        switch( scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_PARAM ) ) {
+        case -2: /* terminator */
+          scanon = 0;
+          break;
         case -1: /* error */
           goto e404;
         case 4:
@@ -157,16 +159,22 @@ e400:
             /* scan int */  c;
           else if(!byte_diff(data,4,"left"))
             /* scan int */  c;
+          else
+            scan_urlencoded_query( &c, NULL, SCAN_SEARCHPATH_VALUE );
           break;
         case 7:
           if(!byte_diff(data,7,"numwant"))
             /* scan int */  c;
           else if(!byte_diff(data,7,"compact"))
             /* scan flag */  c;
+          else
+            scan_urlencoded_query( &c, NULL, SCAN_SEARCHPATH_VALUE );
           break;
         case 9:
-          if(byte_diff(data,9,"info_hash"))
+          if(byte_diff(data,9,"info_hash")) {
+            scan_urlencoded_query( &c, NULL, SCAN_SEARCHPATH_VALUE );
             continue;
+          }
           /* ignore this, when we have less than 20 bytes */
           switch( scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE ) ) {
           case -1:
@@ -178,13 +186,14 @@ e400:
             continue;
           }
         default:
-          printf("blub %i\n",x);
+          scan_urlencoded_query( &c, NULL, SCAN_SEARCHPATH_VALUE );
           break;
         }
       }
 
       /* Scanned whole query string */
       if( !hash || ( compact == 0 ) ) goto e404;
+      printf("ALLFINE\n");
       torrent = add_peer_to_torrent( hash, &peer );
       if( !torrent ) {
 e500:
@@ -194,18 +203,16 @@ e500:
       reply = malloc( numwant*6+10 );
       if( reply )
         reply_size = return_peers_for_torrent( torrent, numwant, reply );
-      if( !reply || reply_size < 0 ) {
+      if( !reply || ( reply_size < 0 ) ) {
         if( reply ) free( reply );
         goto e500;
       }
       break;
     default: /* neither scrape nor announce */
-          printf("blub %i\n",x);
 e404:
       httperror(h,"404 Not Found","No such file or directory.");
       goto bailout;
     }
-
     c=h->hdrbuf=(char*)malloc(500);
     c+=fmt_str(c,"HTTP/1.1 Coming Up\r\nContent-Type: text/plain");
     c+=fmt_str(c,"\r\nContent-Length: ");
