@@ -141,8 +141,8 @@ e400:
     case 8: 
       if( byte_diff(data,8,"announce"))
         goto e404;
-      byte_copy( peer.ip, 4, h->ip );
-      peer.port = 6881;
+      byte_copy( &peer.ip, 4, h->ip );
+      peer.port_flags = 6881 << 16;
       numwant = 50;
       compact = 1;
       scanon = 1;

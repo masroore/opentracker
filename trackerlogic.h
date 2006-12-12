@@ -2,6 +2,7 @@
 #define __TRACKERLOGIC_H__
 
 #include <sys/types.h>
+#include <sys/time.h>
 
 /* Should be called BYTE, WORD, DWORD - but some OSs already have that and there's no #iftypedef */
 /* They mark memory used as data instead of integer or human readable string -
@@ -10,15 +11,9 @@ typedef unsigned char  ot_byte;
 typedef unsigned short ot_word;
 typedef unsigned long  ot_dword;
 
-typedef unsigned long  ot_time;
 typedef ot_byte        ot_hash[20];
-typedef ot_byte        ot_ip[ 4/*0*/ ];
-// tunables
-static const unsigned long OT_TIMEOUT          = 2700;
-static const unsigned long OT_HUGE_FILESIZE    = 1024*1024*256; // Thats 256MB per file, enough for 204800 peers of 128 bytes
-
-// We will not service v6, yes
-#define OT_COMPACT_ONLY
+typedef ot_dword       ot_ip;
+typedef time_t         ot_time;
 
 #define MEMMOVE              memmove
 #define BZERO                bzero
@@ -27,28 +22,41 @@ static const unsigned long OT_HUGE_FILESIZE    = 1024*1024*256; // Thats 256MB p
 #define BINARY_FIND          binary_search
 #define NOW                  time(NULL)
 
+// We maintain a list of 256 pointers to sorted list of ot_torrent structs
+// Sort key is, of course, its hash
+
+// This list points to 9 pools of peers each grouped in five-minute-intervals
+// thus achieving a timeout of 2700s or 45 minutes
+// These pools are sorted by its binary content
+
+#define OT_POOLS_COUNT   9
+#define OT_POOLS_TIMEOUT 300
+
+typedef struct ot_vector {
+  void   *data;
+  size_t  size;
+  size_t  space;   
+} *ot_vector;
+
 typedef struct ot_peer {
-#ifndef OT_COMPACT_ONLY
-  ot_hash id;
-  ot_hash key;
-#endif
-  ot_ip   ip;
-  ot_word port;
-  ot_time death;
-  ot_byte flags;
+  ot_ip    ip;
+  ot_dword port_flags;
 } *ot_peer;
 static const ot_byte PEER_FLAG_SEEDING   = 0x80;
-static const ot_byte PEER_IP_LENGTH_MASK = 0x3f;
 
-typedef struct {
+typedef struct ot_peerlist {
+  ot_time          base;
+  unsigned long    seed_count[ OT_POOLS_COUNT ];
+  struct ot_vector peers[ OT_POOLS_COUNT ];
+} *ot_peerlist;
+
+typedef struct ot_torrent {
   ot_hash       hash;
-  ot_peer       peer_list;
-  unsigned long peer_count;
-  unsigned long seed_count;
+  ot_peerlist   peer_list;
 } *ot_torrent;
 
-void *map_file( char *file_name );
-void  unmap_file( char *file_name, void *map, unsigned long real_size );
+void *map_file( char *file_name, size_t map_size );
+void  unmap_file( char *file_name, void *map, size_t mapped_size, unsigned long real_size );
 
 // This behaves quite like bsearch but allows to find
 // the insertion point for inserts after unsuccessful searches
@@ -68,6 +76,5 @@ void deinit_logic( );
 
 ot_torrent add_peer_to_torrent( ot_hash *hash, ot_peer peer );
 size_t return_peers_for_torrent( ot_torrent torrent, unsigned long amount, char *reply );
-void heal_torrent( ot_torrent torrent );
 
 #endif
