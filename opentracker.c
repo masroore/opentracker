@@ -36,7 +36,7 @@ struct http_data {
   io_batch iob;
   char* hdrbuf;
   int hlen;
-  char ip[16];
+  unsigned long ip;
 };
 
 int header_complete(struct http_data* r)
@@ -141,7 +141,7 @@ e400:
     case 8: 
       if( byte_diff(data,8,"announce"))
         goto e404;
-      byte_copy( &peer.ip, 4, h->ip );
+      peer.ip = h->ip;
       peer.port_flags = 6881 << 16;
       numwant = 50;
       compact = 1;
@@ -193,14 +193,14 @@ e400:
 
       /* Scanned whole query string */
       if( !hash || ( compact == 0 ) ) goto e404;
-      printf("ALLFINE\n");
+
       torrent = add_peer_to_torrent( hash, &peer );
       if( !torrent ) {
 e500:
         httperror(h,"500 Internal Server Error","A server error has occured. Please retry later.");
         goto bailout;
       }
-      reply = malloc( numwant*6+10 );
+      reply = malloc( numwant*6+24 );
       if( reply )
         reply_size = return_peers_for_torrent( torrent, numwant, reply );
       if( !reply || ( reply_size < 0 ) ) {
@@ -214,13 +214,11 @@ e404:
       goto bailout;
     }
     c=h->hdrbuf=(char*)malloc(500);
-    c+=fmt_str(c,"HTTP/1.1 Coming Up\r\nContent-Type: text/plain");
+    c+=fmt_str(c,"HTTP/1.1 200 OK\r\nContent-Type: text/plain");
     c+=fmt_str(c,"\r\nContent-Length: ");
-    /* ANSWER SIZE*/
-    c+=fmt_ulonglong(c, 100 );
+    c+=fmt_ulonglong(c, reply_size );
     c+=fmt_str(c,"\r\nLast-Modified: ");
-    /* MODIFY DATE
-    c+=fmt_httpdate(c,s.st_mtime); */
+    c+=fmt_httpdate(c,time(0));
     c+=fmt_str(c,"\r\nConnection: close\r\n\r\n");
     iob_addbuf(&h->iob,h->hdrbuf,c - h->hdrbuf);
     if( reply && reply_size ) iob_addbuf(&h->iob,reply, reply_size );
@@ -240,13 +238,13 @@ void graceful( int s ) {
 
 int main()
 {
-    int s=socket_tcp6();
+    int s=socket_tcp4();
     uint32 scope_id;
-    char ip[16];
+    unsigned long ip;
     uint16 port;
 
-    if (socket_bind6_reuse(s,V6any,6969,0)==-1)
-        panic("socket_bind6_reuse");
+    if (socket_bind4_reuse(s,NULL,6969)==-1)
+        panic("socket_bind4_reuse");
 
     if (socket_listen(s,16)==-1)
         panic("socket_listen");
@@ -270,7 +268,7 @@ int main()
             if (i==s)    // ist es der serversocket?
             {
                 int n;
-                while ((n=socket_accept6(s,ip,&port,&scope_id))!=-1)
+                while ((n=socket_accept4(s,(void*)&ip,&port))!=-1)
                 {
                     if (io_fd(n))
                     {
@@ -280,7 +278,7 @@ int main()
                         if (h)
                         {
                             byte_zero(h,sizeof(struct http_data));
-                            byte_copy(h->ip,sizeof(ip),ip);
+                            h->ip=ip;
                             io_setcookie(n,h);
                         } else
                             io_close(n);
@@ -291,7 +289,7 @@ int main()
                 if (errno==EAGAIN)
                     io_eagain(s);
                 else
-                    carp("socket_accept6");
+                    carp("socket_accept4");
             }
             else
             {

@@ -54,25 +54,27 @@ char ths[1+2*20];char*to_hex(ot_byte*s){char*m="0123456789ABCDEF";char*e=ths+40;
 struct ot_vector all_torrents[256];
 
 void *vector_find_or_insert( ot_vector vector, void *key, size_t member_size, int(*compare_func)(const void*, const void*), int *exactmatch ) {
-  ot_byte *end = ((ot_byte*)vector->data) + member_size * vector->size;
   ot_byte *match = BINARY_FIND( key, vector->data, vector->size, member_size, compare_func, exactmatch );
 
-  if( exactmatch ) return match;
+  if( *exactmatch ) return match;
 
   if( vector->size + 1 >= vector->space ) {
-    void *new_data = realloc( vector->data, vector->space ? 2 * vector->space : 1024 );
+    ot_byte *new_data = realloc( vector->data, vector->space ? 2 * vector->space : 1024 );
     if( !new_data ) return NULL;
+
+    // Adjust pointer if it moved by realloc
+    match = match - (ot_byte*)vector->data + new_data;
+
     vector->data = new_data;
     vector->space = vector->space ? vector->space * 2 : 1024;
   }
-  MEMMOVE( match + member_size, match, end - match );
+  MEMMOVE( match + member_size, match, ((ot_byte*)vector->data) + member_size * vector->size - match );
   vector->size++;
   return match;
 }
 
 int vector_remove_peer( ot_vector vector, ot_peer peer ) {
   int exactmatch;
-  ot_peer end = ((ot_peer)vector->data) + vector->size;
   ot_peer match;
 
   if( !vector->size ) return 0;
@@ -80,7 +82,7 @@ int vector_remove_peer( ot_vector vector, ot_peer peer ) {
 
   if( !exactmatch ) return 0;
   exactmatch = match->port_flags & PEER_FLAG_SEEDING ? 2 : 1;
-  MEMMOVE( match, match + 1, end - match - 1 );
+  MEMMOVE( match, match + 1, ((ot_peer)vector->data) + vector->size - match - 1 );
   vector->size--;
   return exactmatch;
 }
@@ -187,7 +189,7 @@ ot_torrent add_peer_to_torrent( ot_hash *hash, ot_peer peer ) {
 size_t return_peers_for_torrent( ot_torrent torrent, unsigned long amount, char *reply ) {
   char           *r = reply;
   unsigned long  peer_count, index;
-  unsigned long  pool_offset = 0, pool_index = 0;
+  signed   long  pool_offset = -1, pool_index = 0;
   signed   long  wert = -1;
 
   for( peer_count=index=0; index<OT_POOLS_COUNT; ++index) peer_count += torrent->peer_list->peers[index].size;
@@ -198,14 +200,14 @@ size_t return_peers_for_torrent( ot_torrent torrent, unsigned long amount, char 
     double step = 1.8*((double)( peer_count - wert - 1 ))/((double)( amount - index ));
     int off = random() % (int)floor( step );
     off = 1 + ( off % ( peer_count - wert - 1 ));
-    wert += off;
+    wert += off; pool_offset += off;
 
-    while( pool_offset + off > torrent->peer_list->peers[pool_index].size ) {
-      off -= torrent->peer_list->peers[pool_index].size - pool_offset;
-      pool_offset = 0; pool_index++;
+    while( pool_offset >= torrent->peer_list->peers[pool_index].size ) {
+      pool_offset -= torrent->peer_list->peers[pool_index].size;
+      pool_index++;
     }
 
-    MEMMOVE( r, ((ot_peer*)torrent->peer_list->peers[pool_index].data)[pool_offset], 6 );
+    MEMMOVE( r, ((ot_peer*)torrent->peer_list->peers[pool_index].data) + pool_offset, 6 );
     r += 6;
   }
   *r++ = 'e';
