@@ -110,7 +110,22 @@ int vector_remove_torrent( ot_vector vector, ot_hash *hash ) {
 }
 
 void clean_peerlist( ot_peerlist peer_list ) {
-  exit( 1 );
+  long timedout = NOW-peer_list->base;
+  int i;
+
+  if( !timedout ) return;
+  if( timedout > OT_POOLS_COUNT ) timedout = OT_POOLS_COUNT;
+
+  for( i=OT_POOLS_COUNT-timedout; i<OT_POOLS_COUNT; ++i )
+    free( peer_list->peers[i].data);
+
+  MEMMOVE( peer_list->peers + timedout, peer_list->peers, sizeof( ot_vector ) * (OT_POOLS_COUNT-timedout) );
+  byte_zero( peer_list->peers, sizeof( ot_vector ) * timedout );
+
+  MEMMOVE( peer_list->seed_count + timedout, peer_list->seed_count, sizeof( unsigned long ) * (OT_POOLS_COUNT-timedout) );
+  byte_zero( peer_list->seed_count, sizeof( unsigned long ) * timedout );
+
+  peer_list->base = NOW;
 }
 
 ot_torrent add_peer_to_torrent( ot_hash *hash, ot_peer peer ) {

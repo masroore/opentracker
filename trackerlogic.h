@@ -20,7 +20,6 @@ typedef time_t         ot_time;
 #define FORMAT_FIXED_STRING  sprintf
 #define FORMAT_FORMAT_STRING sprintf
 #define BINARY_FIND          binary_search
-#define NOW                  time(NULL)
 
 // We maintain a list of 256 pointers to sorted list of ot_torrent structs
 // Sort key is, of course, its hash
@@ -31,6 +30,7 @@ typedef time_t         ot_time;
 
 #define OT_POOLS_COUNT   9
 #define OT_POOLS_TIMEOUT 300
+#define NOW              (time(NULL)/OT_POOLS_TIMEOUT)
 
 typedef struct ot_vector {
   void   *data;
