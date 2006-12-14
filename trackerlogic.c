@@ -193,11 +193,14 @@ ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer ) {
 //
 size_t return_peers_for_torrent( ot_torrent *torrent, unsigned long amount, char *reply ) {
   char           *r = reply;
-  unsigned long  peer_count, index;
+  unsigned long  peer_count, seed_count, index;
   signed   long  pool_offset = -1, pool_index = 0;
   signed   long  wert = -1;
 
-  for( peer_count=index=0; index<OT_POOLS_COUNT; ++index) peer_count += torrent->peer_list->peers[index].size;
+  for( peer_count=seed_count=index=0; index<OT_POOLS_COUNT; ++index) {
+    peer_count += torrent->peer_list->peers[index].size;
+    seed_count += torrent->peer_list->seed_count[index];
+  }
   if( peer_count < amount ) amount = peer_count;
 
   r += FORMAT_FORMAT_STRING( r, "d5:peers%li:",6*amount );
@@ -215,7 +218,8 @@ size_t return_peers_for_torrent( ot_torrent *torrent, unsigned long amount, char
     MEMMOVE( r, ((ot_peer*)torrent->peer_list->peers[pool_index].data) + pool_offset, 6 );
     r += 6;
   }
-  *r++ = 'e';
+  r += FORMAT_FORMAT_STRING( r, "8:completei%lie10:incompletei%lie8:intervali60ee", seed_count, peer_count-seed_count );
+
   return r - reply;
 }
 

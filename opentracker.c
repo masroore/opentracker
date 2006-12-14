@@ -270,7 +270,7 @@ e500:
           httperror(h,"500 Internal Server Error","A server error has occured. Please retry later.");
           goto bailout;
         }
-        reply = malloc( numwant*6+64 ); // peerlist + seeder, peers and lametta
+        reply = malloc( numwant*6+128 ); // peerlist + seeder, peers and lametta n*6+81 a.t.m.
         if( reply )
           reply_size = return_peers_for_torrent( torrent, numwant, reply );
         if( !reply || ( reply_size < 0 ) ) {
