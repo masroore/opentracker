@@ -19,13 +19,14 @@
 //
 int compare_hash( const void *hash1, const void *hash2 ) { return memcmp( hash1, hash2, sizeof( ot_hash )); }
 int compare_ip_port( const void *peer1, const void *peer2 ) {
-if( ((ot_peer)peer1)->ip != ((ot_peer)peer2)->ip ) return ((ot_peer)peer1)->ip - ((ot_peer)peer2)->ip;
-return ((ot_peer)peer1)->port_flags - ((ot_peer)peer2)->port_flags; }
+if( ((ot_peer*)peer1)->ip != ((ot_peer*)peer2)->ip ) return ((ot_peer*)peer1)->ip - ((ot_peer*)peer2)->ip;
+return ((ot_peer*)peer1)->port_flags - ((ot_peer*)peer2)->port_flags; }
 
-void *binary_search( const void *key, const void *base,
-                     unsigned long member_count, const unsigned long member_size,
-                     int (*compar) (const void *, const void *),
-                     int *exactmatch ) {
+static void *binary_search( const void *key, const void *base,
+  unsigned long member_count, const unsigned long member_size,
+  int (*compar) (const void *, const void *),
+  int *exactmatch )
+{
   ot_byte *lookat = ((ot_byte*)base) + member_size * (member_count >> 1);
   *exactmatch = 1;
 
@@ -51,9 +52,9 @@ char ths[1+2*20];char*to_hex(ot_byte*s){char*m="0123456789ABCDEF";char*e=ths+40;
 
 // GLOBAL VARIABLES
 //
-struct ot_vector all_torrents[256];
+static ot_vector all_torrents[256];
 
-void *vector_find_or_insert( ot_vector vector, void *key, size_t member_size, int(*compare_func)(const void*, const void*), int *exactmatch ) {
+static void *vector_find_or_insert( ot_vector *vector, void *key, size_t member_size, int(*compare_func)(const void*, const void*), int *exactmatch ) {
   ot_byte *match = BINARY_FIND( key, vector->data, vector->size, member_size, compare_func, exactmatch );
 
   if( *exactmatch ) return match;
@@ -72,22 +73,22 @@ void *vector_find_or_insert( ot_vector vector, void *key, size_t member_size, in
   vector->size++;
   return match;
 }
-
-int vector_remove_peer( ot_vector vector, ot_peer peer ) {
+	
+static int vector_remove_peer( ot_vector *vector, ot_peer *peer ) {
   int exactmatch;
-  ot_peer match;
+  ot_peer *match;
 
   if( !vector->size ) return 0;
-  match = BINARY_FIND( peer, vector->data, vector->size, sizeof( struct ot_peer ), compare_ip_port, &exactmatch );
+  match = BINARY_FIND( peer, vector->data, vector->size, sizeof( ot_peer ), compare_ip_port, &exactmatch );
 
   if( !exactmatch ) return 0;
   exactmatch = match->port_flags & PEER_FLAG_SEEDING ? 2 : 1;
-  MEMMOVE( match, match + 1, ((ot_peer)vector->data) + vector->size - match - 1 );
+  MEMMOVE( match, match + 1, ((ot_peer*)vector->data) + vector->size - match - 1 );
   vector->size--;
   return exactmatch;
 }
 
-void free_peerlist( ot_peerlist peer_list ) {
+static void free_peerlist( ot_peerlist *peer_list ) {
   int i;
   for( i=0; i<OT_POOLS_COUNT; ++i )
     if( peer_list->peers[i].data )
@@ -95,10 +96,10 @@ void free_peerlist( ot_peerlist peer_list ) {
   free( peer_list );
 }
 
-int vector_remove_torrent( ot_vector vector, ot_hash *hash ) {
+static int vector_remove_torrent( ot_vector *vector, ot_hash *hash ) {
   int exactmatch;
-  ot_torrent end = ((ot_torrent)vector->data) + vector->size;
-  ot_torrent match = BINARY_FIND( hash, vector->data, vector->size, sizeof( struct ot_torrent ), compare_hash, &exactmatch );
+  ot_torrent *end = ((ot_torrent*)vector->data) + vector->size;
+  ot_torrent *match = BINARY_FIND( hash, vector->data, vector->size, sizeof( ot_torrent ), compare_hash, &exactmatch );
 
   if( !exactmatch ) return -1;
   free_peerlist( match->peer_list );
@@ -111,11 +112,12 @@ int vector_remove_torrent( ot_vector vector, ot_hash *hash ) {
   return 0;
 }
 
-void clean_peerlist( ot_peerlist peer_list ) {
+// Returns 1, if torrent is gone, 0 otherwise
+static int clean_peerlist( ot_peerlist *peer_list ) {
   long timedout = NOW-peer_list->base;
   int i;
 
-  if( !timedout ) return;
+  if( !timedout ) return 0;
   if( timedout > OT_POOLS_COUNT ) timedout = OT_POOLS_COUNT;
 
   for( i=OT_POOLS_COUNT-timedout; i<OT_POOLS_COUNT; ++i )
@@ -128,39 +130,40 @@ void clean_peerlist( ot_peerlist peer_list ) {
   byte_zero( peer_list->seed_count, sizeof( unsigned long ) * timedout );
 
   peer_list->base = NOW;
+  return timedout == OT_POOLS_COUNT;
 }
 
-ot_torrent add_peer_to_torrent( ot_hash *hash, ot_peer peer ) {
-  int exactmatch;
-  ot_torrent torrent;
-  ot_peer    peer_dest;
-  ot_vector  torrents_list = all_torrents + *hash[0], peer_pool;
+ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer ) {
+  int          exactmatch;
+  ot_torrent *torrent;
+  ot_peer    *peer_dest;
+  ot_vector  *torrents_list = &all_torrents[*hash[0]], *peer_pool;
 
-  torrent = vector_find_or_insert( torrents_list, (void*)hash, sizeof( struct ot_torrent ), compare_hash, &exactmatch );
+  torrent = vector_find_or_insert( torrents_list, (void*)hash, sizeof( ot_torrent ), compare_hash, &exactmatch );
   if( !torrent ) return NULL;
 
   if( !exactmatch ) {
     // Create a new torrent entry, then
-    torrent->peer_list = malloc( sizeof (struct ot_peerlist) );
+    torrent->peer_list = malloc( sizeof (ot_peerlist) );
     if( !torrent->peer_list ) {
       vector_remove_torrent( torrents_list, hash );
       return NULL;
     }
     MEMMOVE( &torrent->hash, hash, sizeof( ot_hash ) );
 
-    byte_zero( torrent->peer_list, sizeof( struct ot_peerlist ));
+    byte_zero( torrent->peer_list, sizeof( ot_peerlist ));
     torrent->peer_list->base = NOW;
   } else
     clean_peerlist( torrent->peer_list );
 
   peer_pool = &torrent->peer_list->peers[0];
-  peer_dest = vector_find_or_insert( peer_pool, (void*)peer, sizeof( struct ot_peer ), compare_ip_port, &exactmatch );
+  peer_dest = vector_find_or_insert( peer_pool, (void*)peer, sizeof( ot_peer ), compare_ip_port, &exactmatch );
 
   // If we hadn't had a match in current pool, create peer there and
   // remove it from all older pools
   if( !exactmatch ) {
     int i;
-    MEMMOVE( peer_dest, peer, sizeof( struct ot_peer ) );
+    MEMMOVE( peer_dest, peer, sizeof( ot_peer ) );
     if( peer->port_flags & PEER_FLAG_SEEDING )
       torrent->peer_list->seed_count[0]++;
     for( i=1; i<OT_POOLS_COUNT; ++i ) {
@@ -176,6 +179,8 @@ ot_torrent add_peer_to_torrent( ot_hash *hash, ot_peer peer ) {
     if( !(peer_dest->port_flags & PEER_FLAG_SEEDING ) && (peer->port_flags & PEER_FLAG_SEEDING ) )
       torrent->peer_list->seed_count[0]++;
   }
+  if( peer->port_flags & PEER_FLAG_COMPLETED )
+    torrent->peer_list->downloaded++;
 
   return torrent;
 }
@@ -186,7 +191,7 @@ ot_torrent add_peer_to_torrent( ot_hash *hash, ot_peer peer ) {
 // * RANDOM may return huge values
 // * does not yet check not to return self
 //
-size_t return_peers_for_torrent( ot_torrent torrent, unsigned long amount, char *reply ) {
+size_t return_peers_for_torrent( ot_torrent *torrent, unsigned long amount, char *reply ) {
   char           *r = reply;
   unsigned long  peer_count, index;
   signed   long  pool_offset = -1, pool_index = 0;
@@ -212,6 +217,48 @@ size_t return_peers_for_torrent( ot_torrent torrent, unsigned long amount, char 
   }
   *r++ = 'e';
   return r - reply;
+}
+
+// Fetches scrape info for a specific torrent
+size_t return_scrape_for_torrent( ot_hash *hash, char *reply ) {
+  char        *r = reply;
+  int          exactmatch, peers = 0, seeds = 0, i;
+  ot_vector   *torrents_list = &all_torrents[*hash[0]];
+  ot_torrent  *torrent = BINARY_FIND( hash, torrents_list->data, torrents_list->size, sizeof( ot_torrent ), compare_hash, &exactmatch );
+
+  if( !exactmatch ) return 0;
+  clean_peerlist( torrent->peer_list );
+
+  for( i=0; i<OT_POOLS_COUNT; ++i ) {
+    peers += torrent->peer_list->peers[i].size;
+    seeds += torrent->peer_list->seed_count[i];
+  }
+
+  MEMMOVE( r, "d5:filesd20:", 12 ); MEMMOVE( r+12, hash, 20 );
+  r += FORMAT_FORMAT_STRING( r+32, "d8:completei%de10:downloadedi%lde10:incompletei%deeee", seeds, torrent->peer_list->downloaded, peers-seeds ) + 32;
+
+  return r - reply;
+}
+
+void remove_peer_from_torrent( ot_hash *hash, ot_peer *peer ) {
+  int          exactmatch, i;
+  ot_vector   *torrents_list = &all_torrents[*hash[0]];
+  ot_torrent  *torrent = BINARY_FIND( hash, torrents_list->data, torrents_list->size, sizeof( ot_torrent ), compare_hash, &exactmatch );
+  
+  if( !exactmatch ) return;
+  
+  for( i=0; i<OT_POOLS_COUNT; ++i )
+    switch( vector_remove_peer( &torrent->peer_list->peers[i], peer ) ) {
+      case 0: continue;
+      case 2: torrent->peer_list->seed_count[i]--;
+      case 1: default: return;
+    }
+
+  clean_peerlist( torrent->peer_list );
+}
+
+void cleanup_torrents( void ) {
+
 }
 
 int init_logic( char *directory ) {
@@ -257,7 +304,7 @@ void deinit_logic( ) {
   // Free all torrents...
   for(i=0; i<256; ++i ) {
     if( all_torrents[i].size ) {
-      ot_torrent torrents_list = (ot_torrent)all_torrents[i].data;
+      ot_torrent *torrents_list = (ot_torrent*)all_torrents[i].data;
       for( j=0; j<all_torrents[i].size; ++j )
         free_peerlist( torrents_list[j].peer_list );
       free( all_torrents[i].data );

@@ -32,40 +32,31 @@ typedef time_t         ot_time;
 #define OT_POOLS_TIMEOUT 300
 #define NOW              (time(NULL)/OT_POOLS_TIMEOUT)
 
-typedef struct ot_vector {
+typedef struct {
   void   *data;
   size_t  size;
   size_t  space;   
-} *ot_vector;
+} ot_vector;
 
-typedef struct ot_peer {
+typedef struct {
   ot_ip    ip;
   ot_dword port_flags;
-} *ot_peer;
+} ot_peer;
 static const ot_byte PEER_FLAG_SEEDING   = 0x80;
+static const ot_byte PEER_FLAG_COMPLETED = 0x40;
+static const ot_byte PEER_FLAG_STOPPED   = 0x20;
 
-typedef struct ot_peerlist {
-  ot_time          base;
-  unsigned long    seed_count[ OT_POOLS_COUNT ];
-  struct ot_vector peers[ OT_POOLS_COUNT ];
-} *ot_peerlist;
+typedef struct {
+  ot_time        base;
+  unsigned long  seed_count[ OT_POOLS_COUNT ];
+  unsigned long  downloaded;
+  ot_vector      peers[ OT_POOLS_COUNT ];
+} ot_peerlist;
 
-typedef struct ot_torrent {
-  ot_hash       hash;
-  ot_peerlist   peer_list;
-} *ot_torrent;
-
-void *map_file( char *file_name, size_t map_size );
-void  unmap_file( char *file_name, void *map, size_t mapped_size, unsigned long real_size );
-
-// This behaves quite like bsearch but allows to find
-// the insertion point for inserts after unsuccessful searches
-// in this case exactmatch is 0 on exit
-//
-void *binary_search( const void *key, const void *base,
-                     const unsigned long member_count, const unsigned long member_size,
-                     int (*compar) (const void *, const void *),
-                     int *exactmatch );
+typedef struct {
+  ot_hash      hash;
+  ot_peerlist *peer_list;
+} ot_torrent;
 
 //
 // Exported functions
@@ -74,7 +65,10 @@ void *binary_search( const void *key, const void *base,
 int  init_logic( char *chdir_directory );
 void deinit_logic( );
 
-ot_torrent add_peer_to_torrent( ot_hash *hash, ot_peer peer );
-size_t return_peers_for_torrent( ot_torrent torrent, unsigned long amount, char *reply );
+ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer );
+size_t return_peers_for_torrent( ot_torrent *torrent, unsigned long amount, char *reply );
+size_t return_scrape_for_torrent( ot_hash *hash, char *reply );
+void  remove_peer_from_torrent( ot_hash *hash, ot_peer *peer );
+void cleanup_torrents( void );
 
 #endif

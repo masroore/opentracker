@@ -49,3 +49,9 @@ size_t scan_urlencoded_query(char **string, char *deststring, int flags) {
   *string = (char *)s;
   return d - (unsigned char*)deststring;
 }
+
+size_t scan_fixed_int( char *data, size_t len, int *tmp ) {
+  *tmp = 0;
+  while( (len > 0) && (*data >= '0') && (*data <= '9') ) { --len; *tmp = 10**tmp + *data++-'0'; }
+  return len;
+}

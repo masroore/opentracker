@@ -106,13 +106,12 @@ const char* http_header(struct http_data* r,const char* h)
 
 void httpresponse(struct http_data* h,int64 s)
 {
-    char *c, *d, *data, *reply = NULL;
-    struct ot_peer peer;
-    ot_torrent torrent;
-    ot_hash *hash = NULL;
-    unsigned long numwant;
-    int compact, scanon;
-    size_t reply_size = 0;
+    char       *c, *d, *data, *reply = NULL;
+    ot_peer     peer;
+    ot_torrent *torrent;
+    ot_hash    *hash = NULL;
+    int         numwant, tmp, scanon;
+    size_t      reply_size = 0;
 
     array_cat0(&h->r);
 
@@ -137,14 +136,57 @@ e400:
     case 6: /* scrape ? */
       if (byte_diff(data,6,"scrape"))
         goto e404;
+      scanon = 1;
+
+      while( scanon ) {
+        switch( scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_PARAM ) ) {
+        case -2: /* terminator */
+          scanon = 0;
+          break;
+        case -1: /* error */
+          goto e404;
+        case 9:
+          if(byte_diff(data,9,"info_hash")) {
+            scan_urlencoded_query( &c, NULL, SCAN_SEARCHPATH_VALUE );
+            continue;
+          }
+          /* ignore this, when we have less than 20 bytes */
+          switch( scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE ) ) {
+          case -1:
+            goto e404;
+          case 20:
+            hash = (ot_hash*)data; /* Fall through intended */
+          default:
+            continue;
+          }
+        default:
+          scan_urlencoded_query( &c, NULL, SCAN_SEARCHPATH_VALUE );
+          break;
+        }
+      }
+
+      /* Scanned whole query string, wo */
+      if( !hash ) {
+        httperror(h,"400 Invalid Request","This server only serves specific scrapes.");
+        goto bailout;
+      }
+
+      // Enough for whole scrape string
+      reply = malloc( 128 );
+      if( reply )
+        reply_size = return_scrape_for_torrent( hash, reply );
+      if( !reply || ( reply_size < 0 ) ) {
+        if( reply ) free( reply );
+        goto e500;
+      }
       break;
     case 8: 
       if( byte_diff(data,8,"announce"))
         goto e404;
+
       peer.ip = h->ip;
       peer.port_flags = 6881 << 16;
       numwant = 50;
-      compact = 1;
       scanon = 1;
 
       while( scanon ) {
@@ -155,19 +197,44 @@ e400:
         case -1: /* error */
           goto e404;
         case 4:
-          if(!byte_diff(data,4,"port"))
-            /* scan int */  c;
-          else if(!byte_diff(data,4,"left"))
-            /* scan int */  c;
-          else
+          if(!byte_diff(data,4,"port")) {
+            size_t len = scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE );
+            if( ( len <= 0 ) || scan_fixed_int( data, len, &tmp ) || (tmp > 65536) ) goto e404;
+            peer.port_flags = ( tmp << 16 ) | ( peer.port_flags & 0xffff );
+          } else if(!byte_diff(data,4,"left")) {
+            size_t len = scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE );
+            if( ( len <= 0 ) || scan_fixed_int( data, len, &tmp ) ) goto e404;
+            if( !tmp ) peer.port_flags |= PEER_FLAG_SEEDING;
+          } else
             scan_urlencoded_query( &c, NULL, SCAN_SEARCHPATH_VALUE );
           break;
+        case 5:
+          if(byte_diff(data,5,"event"))
+            scan_urlencoded_query( &c, NULL, SCAN_SEARCHPATH_VALUE );
+          else switch( scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE ) ) {
+          case -1:
+            goto e404;
+          case 7:
+            if(!byte_diff(data,7,"stopped")) peer.port_flags |= PEER_FLAG_STOPPED;
+            break;
+          case 9:
+            if(!byte_diff(data,9,"complete")) peer.port_flags |= PEER_FLAG_COMPLETED;
+          default: // Fall through intended
+            break;
+          }
+          break;
         case 7:
-          if(!byte_diff(data,7,"numwant"))
-            /* scan int */  c;
-          else if(!byte_diff(data,7,"compact"))
-            /* scan flag */  c;
-          else
+          if(!byte_diff(data,7,"numwant")) {
+            size_t len = scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE );
+            if( ( len <= 0 ) || scan_fixed_int( data, len, &numwant ) ) goto e404;
+          } else if(!byte_diff(data,7,"compact")) {
+            size_t len = scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE );
+            if( ( len <= 0 ) || scan_fixed_int( data, len, &tmp ) ) goto e404;
+            if( !tmp ) {
+              httperror(h,"400 Invalid Request","This server only delivers compact results.");
+              goto bailout;
+            }
+          } else
             scan_urlencoded_query( &c, NULL, SCAN_SEARCHPATH_VALUE );
           break;
         case 9:
@@ -180,9 +247,8 @@ e400:
           case -1:
             goto e404;
           case 20:
-            hash = (ot_hash*)data; /* Fall through intended */
-            printf("hash: %s\n",*hash);
-          default:
+            hash = (ot_hash*)data;
+          default: // Fall through intended
             continue;
           }
         default:
@@ -192,20 +258,25 @@ e400:
       }
 
       /* Scanned whole query string */
-      if( !hash || ( compact == 0 ) ) goto e404;
+      if( !hash ) goto e404;
 
-      torrent = add_peer_to_torrent( hash, &peer );
-      if( !torrent ) {
+      if( peer.port_flags & PEER_FLAG_STOPPED ) {
+        remove_peer_from_torrent( hash, &peer );
+        reply = strdup( "d15:warning message4:Okaye" ); reply_size = 26;
+      } else {
+        torrent = add_peer_to_torrent( hash, &peer );
+        if( !torrent ) {
 e500:
-        httperror(h,"500 Internal Server Error","A server error has occured. Please retry later.");
-        goto bailout;
-      }
-      reply = malloc( numwant*6+24 );
-      if( reply )
-        reply_size = return_peers_for_torrent( torrent, numwant, reply );
-      if( !reply || ( reply_size < 0 ) ) {
-        if( reply ) free( reply );
-        goto e500;
+          httperror(h,"500 Internal Server Error","A server error has occured. Please retry later.");
+          goto bailout;
+        }
+        reply = malloc( numwant*6+64 ); // peerlist + seeder, peers and lametta
+        if( reply )
+          reply_size = return_peers_for_torrent( torrent, numwant, reply );
+        if( !reply || ( reply_size < 0 ) ) {
+          if( reply ) free( reply );
+          goto e500;
+        }
       }
       break;
     default: /* neither scrape nor announce */
@@ -213,6 +284,7 @@ e404:
       httperror(h,"404 Not Found","No such file or directory.");
       goto bailout;
     }
+
     c=h->hdrbuf=(char*)malloc(500);
     c+=fmt_str(c,"HTTP/1.1 200 OK\r\nContent-Type: text/plain");
     c+=fmt_str(c,"\r\nContent-Length: ");
@@ -239,7 +311,6 @@ void graceful( int s ) {
 int main()
 {
     int s=socket_tcp4();
-    uint32 scope_id;
     unsigned long ip;
     uint16 port;
 
@@ -284,7 +355,6 @@ int main()
                             io_close(n);
                     } else
                         io_close(n);
-                    buffer_putnlflush(buffer_2);
                 }
                 if (errno==EAGAIN)
                     io_eagain(s);
