@@ -203,7 +203,7 @@ size_t return_peers_for_torrent( ot_torrent *torrent, unsigned long amount, char
   }
   if( peer_count < amount ) amount = peer_count;
 
-  r += FORMAT_FORMAT_STRING( r, "d5:peers%li:",6*amount );
+  r += FORMAT_FORMAT_STRING( r, "d8:completei%lie10:incompletei%lie8:intervali60e5:peers%li:", seed_count, peer_count-seed_count, 6*amount );
   for( index = 0; index < amount; ++index ) {
     double step = 1.8*((double)( peer_count - wert - 1 ))/((double)( amount - index ));
     int off = random() % (int)floor( step );
@@ -222,7 +222,7 @@ size_t return_peers_for_torrent( ot_torrent *torrent, unsigned long amount, char
     MEMMOVE( r, ((ot_peer*)torrent->peer_list->peers[pool_index].data) + pool_offset, 6 );
     r += 6;
   }
-  r += FORMAT_FORMAT_STRING( r, "8:completei%lie10:incompletei%lie8:intervali60ee", seed_count, peer_count-seed_count );
+  *r++ = 'e';
 
   return r - reply;
 }

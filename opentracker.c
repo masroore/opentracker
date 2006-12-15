@@ -19,7 +19,8 @@
 #include "trackerlogic.h"
 #include "scan_urlencoded_query.h"
 
-static unsigned int overall_connections = 0;
+static unsigned int ot_overall_connections = 0;
+static time_t ot_start_time;
 
 static void carp(const char* routine) {
   buffer_puts(buffer_2,routine);
@@ -282,10 +283,14 @@ e500:
       }
       break;
     case 11:
-      if( byte_diff(data,11,",mrtg_scrape"))
+      if( byte_diff(data,11,"mrtg_scrape"))
         goto e404;
       reply = malloc( 128 );
-      reply_size = sprintf( reply, "%d\n%d\nUp: 23 years.\nPertuned by german engineers.", overall_connections, overall_connections );
+      { 
+        unsigned long seconds_elapsed = time( NULL ) - ot_start_time;
+        reply_size = sprintf( reply, "%d\n%d\nUp: %ld seconds (%ld hours)\nPertuned by german engineers, currently handling %li connections per second.",
+        ot_overall_connections, ot_overall_connections, seconds_elapsed, seconds_elapsed / 3600, ot_overall_connections / seconds_elapsed ? seconds_elapsed : 1 );
+      }
       break;
     default: /* neither *scrape nor announce */
 e404:
@@ -321,6 +326,8 @@ int main()
     int s=socket_tcp4();
     unsigned long ip;
     uint16 port;
+
+    ot_start_time = time( NULL );
 
     if (socket_bind4_reuse(s,NULL,6969)==-1)
         panic("socket_bind4_reuse");
@@ -359,7 +366,7 @@ int main()
                             byte_zero(h,sizeof(struct http_data));
                             h->ip=ip;
                             io_setcookie(n,h);
-                            ++overall_connections;
+                            ++ot_overall_connections;
                         } else
                             io_close(n);
                     } else
