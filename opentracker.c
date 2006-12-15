@@ -288,7 +288,7 @@ e500:
       reply = malloc( 128 );
       { 
         unsigned long seconds_elapsed = time( NULL ) - ot_start_time;
-        reply_size = sprintf( reply, "%d\n%d\nUp: %ld seconds (%ld hours)\nPertuned by german engineers, currently handling %li connections per second.",
+        reply_size = sprintf( reply, "%d\n%d\nUp: %ld seconds (%ld hours)\nPretuned by german engineers, currently handling %li connections per second.",
         ot_overall_connections, ot_overall_connections, seconds_elapsed, seconds_elapsed / 3600, ot_overall_connections / seconds_elapsed ? seconds_elapsed : 1 );
       }
       break;
@@ -328,8 +328,7 @@ int main()
     uint16 port;
 
     ot_start_time = time( NULL );
-
-    if (socket_bind4_reuse(s,NULL,6969)==-1)
+    if (socket_bind4_reuse(s,NULL,9090)==-1)
         panic("socket_bind4_reuse");
 
     if (socket_listen(s,16)==-1)
