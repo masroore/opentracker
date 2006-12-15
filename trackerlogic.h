@@ -39,12 +39,15 @@ typedef struct {
 } ot_vector;
 
 typedef struct {
-  ot_ip    ip;
-  ot_dword port_flags;
+  ot_byte data[8];
 } ot_peer;
 static const ot_byte PEER_FLAG_SEEDING   = 0x80;
 static const ot_byte PEER_FLAG_COMPLETED = 0x40;
 static const ot_byte PEER_FLAG_STOPPED   = 0x20;
+
+#define OT_SETIP( peer, ip ) MEMMOVE((peer),(ip),4);
+#define OT_SETPORT( peer, port ) MEMMOVE((peer),(port),2);
+#define OT_FLAG(peer) (((ot_byte*)(peer))[6])
 
 typedef struct {
   ot_time        base;

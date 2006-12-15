@@ -114,6 +114,7 @@ void httpresponse(struct http_data* h,int64 s)
     ot_torrent *torrent;
     ot_hash    *hash = NULL;
     int         numwant, tmp, scanon;
+    unsigned short port = htons(6881);
     size_t      reply_size = 0;
 
     array_cat0(&h->r);
@@ -187,8 +188,9 @@ e400:
       if( byte_diff(data,8,"announce"))
         goto e404;
 
-      peer.ip = h->ip;
-      peer.port_flags = 6881 << 16;
+      OT_SETIP( &peer, &h->ip);
+      OT_SETPORT( &peer, &port );
+      OT_FLAG( &peer ) = 0;
       numwant = 50;
       scanon = 1;
 
@@ -202,12 +204,12 @@ e400:
         case 4:
           if(!byte_diff(data,4,"port")) {
             size_t len = scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE );
-            if( ( len <= 0 ) || scan_fixed_int( data, len, &tmp ) || (tmp > 65536) ) goto e404;
-            peer.port_flags = ( tmp << 16 ) | ( peer.port_flags & 0xffff );
+            if( ( len <= 0 ) || scan_fixed_int( data, len, &tmp ) || ( tmp > 0xffff ) ) goto e404;
+            port = htons( tmp ); OT_SETPORT ( &peer, &port );
           } else if(!byte_diff(data,4,"left")) {
             size_t len = scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE );
             if( ( len <= 0 ) || scan_fixed_int( data, len, &tmp ) ) goto e404;
-            if( !tmp ) peer.port_flags |= PEER_FLAG_SEEDING;
+            if( !tmp ) OT_FLAG( &peer ) |= PEER_FLAG_SEEDING;
           } else
             scan_urlencoded_query( &c, NULL, SCAN_SEARCHPATH_VALUE );
           break;
@@ -218,10 +220,10 @@ e400:
           case -1:
             goto e404;
           case 7:
-            if(!byte_diff(data,7,"stopped")) peer.port_flags |= PEER_FLAG_STOPPED;
+            if(!byte_diff(data,7,"stopped")) OT_FLAG( &peer ) |= PEER_FLAG_STOPPED;
             break;
           case 9:
-            if(!byte_diff(data,9,"complete")) peer.port_flags |= PEER_FLAG_COMPLETED;
+            if(!byte_diff(data,9,"complete")) OT_FLAG( &peer ) |= PEER_FLAG_COMPLETED;
           default: // Fall through intended
             break;
           }
@@ -263,7 +265,7 @@ e400:
       /* Scanned whole query string */
       if( !hash ) goto e404;
 
-      if( peer.port_flags & PEER_FLAG_STOPPED ) {
+      if( OT_FLAG( &peer ) & PEER_FLAG_STOPPED ) {
         remove_peer_from_torrent( hash, &peer );
         reply = strdup( "d15:warning message4:Okaye" ); reply_size = 26;
       } else {

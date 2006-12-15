@@ -18,9 +18,7 @@
 // Helper functions for binary_find
 //
 int compare_hash( const void *hash1, const void *hash2 ) { return memcmp( hash1, hash2, sizeof( ot_hash )); }
-int compare_ip_port( const void *peer1, const void *peer2 ) {
-if( ((ot_peer*)peer1)->ip != ((ot_peer*)peer2)->ip ) return ((ot_peer*)peer1)->ip - ((ot_peer*)peer2)->ip;
-return ((ot_peer*)peer1)->port_flags - ((ot_peer*)peer2)->port_flags; }
+int compare_ip_port( const void *peer1, const void *peer2 ) { return memcmp( peer1, peer2, 6 ); }
 
 static void *binary_search( const void *key, const void *base,
   unsigned long member_count, const unsigned long member_size,
@@ -82,7 +80,7 @@ static int vector_remove_peer( ot_vector *vector, ot_peer *peer ) {
   match = BINARY_FIND( peer, vector->data, vector->size, sizeof( ot_peer ), compare_ip_port, &exactmatch );
 
   if( !exactmatch ) return 0;
-  exactmatch = match->port_flags & PEER_FLAG_SEEDING ? 2 : 1;
+  exactmatch = OT_FLAG( match ) & PEER_FLAG_SEEDING ? 2 : 1;
   MEMMOVE( match, match + 1, ((ot_peer*)vector->data) + vector->size - match - 1 );
   vector->size--;
   return exactmatch;
@@ -164,7 +162,7 @@ ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer ) {
   if( !exactmatch ) {
     int i;
     MEMMOVE( peer_dest, peer, sizeof( ot_peer ) );
-    if( peer->port_flags & PEER_FLAG_SEEDING )
+    if( OT_FLAG(peer) & PEER_FLAG_SEEDING )
       torrent->peer_list->seed_count[0]++;
     for( i=1; i<OT_POOLS_COUNT; ++i ) {
       switch( vector_remove_peer( &torrent->peer_list->peers[i], peer ) ) {
@@ -174,12 +172,12 @@ ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer ) {
       }
     }
   } else {
-    if( (peer_dest->port_flags & PEER_FLAG_SEEDING ) && !(peer->port_flags & PEER_FLAG_SEEDING ) )
+    if( (OT_FLAG(peer_dest) & PEER_FLAG_SEEDING ) && !(OT_FLAG(peer) & PEER_FLAG_SEEDING ) )
       torrent->peer_list->seed_count[0]--;
-    if( !(peer_dest->port_flags & PEER_FLAG_SEEDING ) && (peer->port_flags & PEER_FLAG_SEEDING ) )
+    if( !(OT_FLAG(peer_dest) & PEER_FLAG_SEEDING ) && (OT_FLAG(peer) & PEER_FLAG_SEEDING ) )
       torrent->peer_list->seed_count[0]++;
   }
-  if( peer->port_flags & PEER_FLAG_COMPLETED )
+  if( OT_FLAG(peer) & PEER_FLAG_COMPLETED )
     torrent->peer_list->downloaded++;
 
   return torrent;
