@@ -46,7 +46,7 @@ static const ot_byte PEER_FLAG_COMPLETED = 0x40;
 static const ot_byte PEER_FLAG_STOPPED   = 0x20;
 
 #define OT_SETIP( peer, ip ) MEMMOVE((peer),(ip),4);
-#define OT_SETPORT( peer, port ) MEMMOVE(((ot_byte*)peer)+6,(port),2);
+#define OT_SETPORT( peer, port ) MEMMOVE(((ot_byte*)peer)+4,(port),2);
 #define OT_FLAG(peer) (((ot_byte*)(peer))[6])
 
 typedef struct {
