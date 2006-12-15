@@ -292,7 +292,7 @@ e500:
       { 
         unsigned long seconds_elapsed = time( NULL ) - ot_start_time;
         reply_size = sprintf( reply, "%d\n%d\nUp: %ld seconds (%ld hours)\nPretuned by german engineers, currently handling %li connections per second.",
-        ot_overall_connections, ot_overall_connections, seconds_elapsed, seconds_elapsed / 3600, ot_overall_connections / seconds_elapsed ? seconds_elapsed : 1 );
+        ot_overall_connections, ot_overall_connections, seconds_elapsed, seconds_elapsed / 3600, ot_overall_connections / ( seconds_elapsed ? seconds_elapsed : 1 ) );
       }
       break;
     default: /* neither *scrape nor announce */
