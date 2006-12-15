@@ -1,0 +1,8 @@
+Q: Why is there no v6-support in opentracker?
+
+A: Although I tried very hard, implementing v6 right now would be a terrible waste of bandwidth, there is no compact format for v6 addresses, so instead of 
+answering "d5:peers6:AAAAPPe" I'd have to send "d5:peersld2:ip39:AAAA:AAAA:AAAA:AAAA:AAAA:AAAA:AAAA:AAAA4:port2:PPPPeee" for a single peer. Even if there was a 
+compact mode, v6 addresses still would eat up thrice the memory, v4 addresses take. This, however, wouldn't be a show stopper.
+
+Other problems concern efficient peer selection for obviously v6-capable peers and how to select peers for non-v6 clients. v6 addresses eat up more memory on the 
+host, too ;)
