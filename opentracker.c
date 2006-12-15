@@ -19,6 +19,8 @@
 #include "trackerlogic.h"
 #include "scan_urlencoded_query.h"
 
+static unsigned int overall_connections = 0;
+
 static void carp(const char* routine) {
   buffer_puts(buffer_2,routine);
   buffer_puts(buffer_2,": ");
@@ -279,7 +281,13 @@ e500:
         }
       }
       break;
-    default: /* neither scrape nor announce */
+    case 11:
+      if( byte_diff(data,11,",mrtg_scrape"))
+        goto e404;
+      reply = malloc( 128 );
+      reply_size = sprintf( reply, "%d\n%d\nUp: 23 years.\nPertuned by german engineers.", overall_connections, overall_connections );
+      break;
+    default: /* neither *scrape nor announce */
 e404:
       httperror(h,"404 Not Found","No such file or directory.");
       goto bailout;
@@ -293,7 +301,7 @@ e404:
     c+=fmt_httpdate(c,time(0));
     c+=fmt_str(c,"\r\nConnection: close\r\n\r\n");
     iob_addbuf(&h->iob,h->hdrbuf,c - h->hdrbuf);
-    if( reply && reply_size ) iob_addbuf(&h->iob,reply, reply_size );
+    if( reply && reply_size ) iob_addbuf_free(&h->iob,reply, reply_size );
 
 bailout:
     io_dontwantread(s);
@@ -351,6 +359,7 @@ int main()
                             byte_zero(h,sizeof(struct http_data));
                             h->ip=ip;
                             io_setcookie(n,h);
+                            ++overall_connections;
                         } else
                             io_close(n);
                     } else

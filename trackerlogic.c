@@ -210,6 +210,10 @@ size_t return_peers_for_torrent( ot_torrent *torrent, unsigned long amount, char
     off = 1 + ( off % ( peer_count - wert - 1 ));
     wert += off; pool_offset += off;
 
+    // In some rare occasions random gets the last peer a round to early
+    // correct that and return last peer twice
+    if( wert >= peer_count ) { wert--; pool_offset--; }
+
     while( pool_offset >= torrent->peer_list->peers[pool_index].size ) {
       pool_offset -= torrent->peer_list->peers[pool_index].size;
       pool_index++;
