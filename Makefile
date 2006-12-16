@@ -1,6 +1,6 @@
 CC?=gcc
-CFLAGS+=-I../libowfat -Wall -pipe -O2
-LDFLAGS+=-L../libowfat/ -lowfat -s -lm
+CFLAGS+=-I../libowfat -Wall -pipe -Os
+LDFLAGS+=-L../libowfat/ -lowfat -s
 
 HEADERS=trackerlogic.h scan_urlencoded_query.h
 SOURCES=opentracker.c trackerlogic.c scan_urlencoded_query.c

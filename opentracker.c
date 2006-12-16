@@ -38,8 +38,6 @@ static void panic(const char* routine) {
 struct http_data {
   array r;
   io_batch iob;
-  char* hdrbuf;
-  int hlen;
   unsigned long ip;
 };
 
@@ -61,28 +59,13 @@ int header_complete(struct http_data* r)
     return 0;
 }
 
-void httperror(struct http_data* r,const char* title,const char* message)
+void httperror(struct http_data* h,const char* title,const char* message)
 {
-    char* c;
-    c=r->hdrbuf=(char*)malloc(strlen(message)+strlen(title)+200);
-    
-    if (!c)
-    {
-        r->hdrbuf="HTTP/1.0 500 internal error\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nout of memory\n";
-        r->hlen=strlen(r->hdrbuf);
-    }
-    else
-    {
-        c+=fmt_str(c,"HTTP/1.0 ");
-        c+=fmt_str(c,title);
-        c+=fmt_str(c,"\r\nContent-Type: text/html\r\nConnection: close\r\nContent-Length: ");
-        c+=fmt_ulong(c,strlen(message)+strlen(title)+16-4);
-        c+=fmt_str(c,"\r\n\r\n<title>");
-        c+=fmt_str(c,title+4);
-        c+=fmt_str(c,"</title>\n");
-        r->hlen=c - r->hdrbuf;
-    }
-    iob_addbuf(&r->iob,r->hdrbuf,r->hlen);
+    char* c = (char*)malloc(strlen(message)+strlen(title)+200);
+    if( !c) iob_addbuf(&h->iob, "HTTP/1.0 500 internal error\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nout of memory\n", 90);
+    else    iob_addbuf_free( &h->iob, c,
+              sprintf( c, "HTTP/1.0 %s\r\nContent-Type: text/html\r\nConnection: close\r\nContent-Length: %ld\r\n\r\n<title>%s</title>\n",
+                       title, strlen(message)+strlen(title)+16-4,title+4) );
 }
 
 // bestimmten http parameter auslesen und adresse zurueckgeben
@@ -279,7 +262,7 @@ e500:
         reply = malloc( numwant*6+128 ); // peerlist + seeder, peers and lametta n*6+81 a.t.m.
         if( reply )
           reply_size = return_peers_for_torrent( torrent, numwant, reply );
-        if( !reply || ( reply_size < 0 ) ) {
+        if( !reply || ( reply_size <= 0 ) ) {
           if( reply ) free( reply );
           goto e500;
         }
@@ -301,12 +284,9 @@ e404:
       goto bailout;
     }
 
-    c=h->hdrbuf=(char*)malloc(80);
-    c+=fmt_str(c,"HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nContent-Length: ");
-    c+=fmt_ulonglong(c, reply_size );
-    c+=fmt_str(c,"\r\n\r\n");
-    iob_addbuf(&h->iob,h->hdrbuf,c - h->hdrbuf);
-    if( reply && reply_size ) iob_addbuf_free(&h->iob,reply, reply_size );
+    c=(char*)malloc(80);
+    iob_addbuf_free( &h->iob, c, sprintf( c, "HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %ld\r\n\r\n", (long)reply_size ));
+    if( reply && reply_size ) iob_addbuf_free(&h->iob, reply, reply_size );
 
 bailout:
     io_dontwantread(s);
@@ -388,7 +368,7 @@ int main()
                     {
                         array_reset(&h->r);
                         iob_reset(&h->iob);
-                        free(h->hdrbuf); h->hdrbuf=0;
+                        free(h);
                     }
                     io_close(i);
                 }
@@ -421,15 +401,14 @@ emerge:
             struct http_data* h=io_getcookie(i);
 
             int64 r=iob_send(i,&h->iob);
-
             if (r==-1)
                 io_eagain(i);
             else
-                if (r<=0)
+                if ((r<=0)||(h->iob.bytesleft==0))
                 {
-                    array_trunc(&h->r);
+                    array_reset(&h->r);
                     iob_reset(&h->iob);
-                    free(h->hdrbuf); h->hdrbuf=0; free(h);
+                    free(h);
                     io_close(i);
                 }
         }
