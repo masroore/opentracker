@@ -409,6 +409,7 @@ emerge:
                     array_reset(&h->r);
                     iob_reset(&h->iob);
                     free(h);
+                    shutdown(i, SHUT_RDWR);
                     io_close(i);
                 }
         }
