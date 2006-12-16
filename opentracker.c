@@ -94,7 +94,7 @@ const char* http_header(struct http_data* r,const char* h)
 
 void httpresponse(struct http_data* h,int64 s)
 {
-    char       *c, *d, *data, *reply = NULL;
+    char       *c, *data, *reply = NULL;
     ot_peer     peer;
     ot_torrent *torrent;
     ot_hash    *hash = NULL;
@@ -113,10 +113,10 @@ e400:
     }
 
     c+=4;
-    for (d=c; *d!=' '&&*d!='\t'&&*d!='\n'&&*d!='\r'; ++d) ;
+    for (data=c; *data!=' '&&*data!='\t'&&*data!='\n'&&*data!='\r'; ++data) ;
 
-    if (*d!=' ') goto e400;
-    *d=0;
+    if (*data!=' ') goto e400;
+    *data=0;
     if (c[0]!='/') goto e404;
     while (*c=='/') ++c;
 
@@ -291,7 +291,21 @@ e404:
 
 bailout:
     io_dontwantread(s);
+    shutdown(s, SHUT_RD );
     io_wantwrite(s);
+
+    reply_size=iob_send(s,&h->iob);
+    if (reply_size==-1) {
+      io_eagain(s);
+    } else
+      if ((reply_size<=0)||(h->iob.bytesleft==0))
+      {
+        array_reset(&h->r);
+        iob_reset(&h->iob);
+        free(h);
+        shutdown(s, SHUT_RDWR);
+        io_close(s);
+      }
 }
 
 void graceful( int s ) {
