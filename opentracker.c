@@ -429,7 +429,7 @@ emerge:
                 {
                     array_trunc(&h->r);
                     iob_reset(&h->iob);
-                    free(h->hdrbuf); h->hdrbuf=0;
+                    free(h->hdrbuf); h->hdrbuf=0; free(h);
                     io_close(i);
                 }
         }
