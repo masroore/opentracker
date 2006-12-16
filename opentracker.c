@@ -64,7 +64,7 @@ void httperror(struct http_data* h,const char* title,const char* message)
     char* c = (char*)malloc(strlen(message)+strlen(title)+200);
     if( !c) iob_addbuf(&h->iob, "HTTP/1.0 500 internal error\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nout of memory\n", 90);
     else    iob_addbuf_free( &h->iob, c,
-              sprintf( c, "HTTP/1.0 %s\r\nContent-Type: text/html\r\nConnection: close\r\nContent-Length: %ld\r\n\r\n<title>%s</title>\n",
+              sprintf( c, "HTTP/1.0 %s\r\nContent-Type: text/html\r\nConnection: close\r\nContent-Length: %zd\r\n\r\n<title>%s</title>\n",
                        title, strlen(message)+strlen(title)+16-4,title+4) );
 }
 
