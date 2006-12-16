@@ -301,13 +301,10 @@ e404:
       goto bailout;
     }
 
-    c=h->hdrbuf=(char*)malloc(500);
-    c+=fmt_str(c,"HTTP/1.1 200 OK\r\nContent-Type: text/plain");
-    c+=fmt_str(c,"\r\nContent-Length: ");
+    c=h->hdrbuf=(char*)malloc(80);
+    c+=fmt_str(c,"HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nContent-Length: ");
     c+=fmt_ulonglong(c, reply_size );
-    c+=fmt_str(c,"\r\nLast-Modified: ");
-    c+=fmt_httpdate(c,time(0));
-    c+=fmt_str(c,"\r\nConnection: close\r\n\r\n");
+    c+=fmt_str(c,"\r\n\r\n");
     iob_addbuf(&h->iob,h->hdrbuf,c - h->hdrbuf);
     if( reply && reply_size ) iob_addbuf_free(&h->iob,reply, reply_size );
 
@@ -331,7 +328,7 @@ int main()
     uint16 port;
 
     ot_start_time = time( NULL );
-    if (socket_bind4_reuse(s,NULL,9090)==-1)
+    if (socket_bind4_reuse(s,NULL,6969)==-1)
         panic("socket_bind4_reuse");
 
     if (socket_listen(s,16)==-1)
