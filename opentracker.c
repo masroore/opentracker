@@ -23,6 +23,7 @@
 
 static unsigned int ot_overall_connections = 0;
 static time_t ot_start_time;
+static const unsigned int SUCCESS_HTTP_HEADER_LENGTH = 80;
 
 static void carp(const char* routine) {
   buffer_puts(buffer_2,routine);
@@ -160,9 +161,9 @@ e400:
       }
 
       // Enough for http header + whole scrape string
-      reply = malloc( 208 );
+      reply = malloc( SUCCESS_HTTP_HEADER_LENGTH + 128 );
       if( reply )
-        reply_size = return_scrape_for_torrent( hash, 80 + reply );
+        reply_size = return_scrape_for_torrent( hash, SUCCESS_HTTP_HEADER_LENGTH + reply );
       if( !reply || ( reply_size < 0 ) ) {
         if( reply ) free( reply );
         goto e500;
@@ -251,10 +252,10 @@ e400:
 
       if( OT_FLAG( &peer ) & PEER_FLAG_STOPPED ) {
         remove_peer_from_torrent( hash, &peer );
-        reply = malloc( 106 );
+        reply = malloc( SUCCESS_HTTP_HEADER_LENGTH + 26 );
         if( !reply )
           goto e500;
-        MEMMOVE( reply + 80, "d15:warning message4:Okaye", reply_size = 26 );
+        MEMMOVE( reply + SUCCESS_HTTP_HEADER_LENGTH, "d15:warning message4:Okaye", reply_size = 26 );
       } else {
         torrent = add_peer_to_torrent( hash, &peer );
         if( !torrent ) {
@@ -262,9 +263,9 @@ e500:
           httperror(h,"500 Internal Server Error","A server error has occured. Please retry later.");
           goto bailout;
         }
-        reply = malloc( 80+numwant*6+128 ); // http header + peerlist + seeder, peers and lametta 80 + n*6+81 a.t.m.
+        reply = malloc( SUCCESS_HTTP_HEADER_LENGTH + numwant*6 + 128 ); // http header + peerlist + seeder, peers and lametta 80 + n*6+81 a.t.m.
         if( reply )
-          reply_size = return_peers_for_torrent( torrent, numwant, 80 + reply );
+          reply_size = return_peers_for_torrent( torrent, numwant, SUCCESS_HTTP_HEADER_LENGTH + reply );
         if( !reply || ( reply_size <= 0 ) ) {
           if( reply ) free( reply );
           goto e500;
@@ -274,11 +275,13 @@ e500:
     case 11:
       if( byte_diff(data,11,"mrtg_scrape"))
         goto e404;
-      reply = malloc( 256 );
+      reply = malloc( SUCCESS_HTTP_HEADER_LENGTH + 128 );
       { 
         unsigned long seconds_elapsed = time( NULL ) - ot_start_time;
-        reply_size = sprintf( 80+reply, "%d\n%d\nUp: %ld seconds (%ld hours)\nPretuned by german engineers, currently handling %li connections per second.",
-        ot_overall_connections, ot_overall_connections, seconds_elapsed, seconds_elapsed / 3600, ot_overall_connections / ( seconds_elapsed ? seconds_elapsed : 1 ) );
+        reply_size = sprintf( reply + SUCCESS_HTTP_HEADER_LENGTH, 
+                              "%d\n%d\nUp: %ld seconds (%ld hours)\nPretuned by german engineers, currently handling %li connections per second.",
+                              ot_overall_connections, ot_overall_connections, seconds_elapsed,
+                              seconds_elapsed / 3600, ot_overall_connections / ( seconds_elapsed ? seconds_elapsed : 1 ) );
       }
       break;
     default: /* neither *scrape nor announce */
@@ -288,9 +291,9 @@ e404:
     }
 
     if( reply && reply_size ) {
-      MEMMOVE( reply, "HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nContent-Length: X                \r\n\r\n", 80 );
-      fmt_ulonglong( reply+59, (long long)reply_size );
-      iob_addbuf_free(&h->iob, reply, 80+reply_size );
+      MEMMOVE( reply, "HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nContent-Length: X                \r\n\r\n", SUCCESS_HTTP_HEADER_LENGTH );
+                                                                       fmt_ulonglong( reply+59, (long long)reply_size );
+      iob_addbuf_free(&h->iob, reply, SUCCESS_HTTP_HEADER_LENGTH + reply_size );
     }
 
 bailout:
