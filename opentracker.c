@@ -70,7 +70,6 @@ void httperror(struct http_data* h,const char* title,const char* message)
 }
 
 // bestimmten http parameter auslesen und adresse zurueckgeben
-
 const char* http_header(struct http_data* r,const char* h)
 {
     long i;
@@ -160,10 +159,10 @@ e400:
         goto bailout;
       }
 
-      // Enough for whole scrape string
-      reply = malloc( 128 );
+      // Enough for http header + whole scrape string
+      reply = malloc( 208 );
       if( reply )
-        reply_size = return_scrape_for_torrent( hash, reply );
+        reply_size = return_scrape_for_torrent( hash, 80 + reply );
       if( !reply || ( reply_size < 0 ) ) {
         if( reply ) free( reply );
         goto e500;
@@ -252,7 +251,10 @@ e400:
 
       if( OT_FLAG( &peer ) & PEER_FLAG_STOPPED ) {
         remove_peer_from_torrent( hash, &peer );
-        reply = strdup( "d15:warning message4:Okaye" ); reply_size = 26;
+        reply = malloc( 106 );
+        if( !reply )
+          goto e500;
+        MEMMOVE( reply + 80, "d15:warning message4:Okaye", reply_size = 26 );
       } else {
         torrent = add_peer_to_torrent( hash, &peer );
         if( !torrent ) {
@@ -260,9 +262,9 @@ e500:
           httperror(h,"500 Internal Server Error","A server error has occured. Please retry later.");
           goto bailout;
         }
-        reply = malloc( numwant*6+128 ); // peerlist + seeder, peers and lametta n*6+81 a.t.m.
+        reply = malloc( 80+numwant*6+128 ); // http header + peerlist + seeder, peers and lametta 80 + n*6+81 a.t.m.
         if( reply )
-          reply_size = return_peers_for_torrent( torrent, numwant, reply );
+          reply_size = return_peers_for_torrent( torrent, numwant, 80 + reply );
         if( !reply || ( reply_size <= 0 ) ) {
           if( reply ) free( reply );
           goto e500;
@@ -272,10 +274,10 @@ e500:
     case 11:
       if( byte_diff(data,11,"mrtg_scrape"))
         goto e404;
-      reply = malloc( 128 );
+      reply = malloc( 256 );
       { 
         unsigned long seconds_elapsed = time( NULL ) - ot_start_time;
-        reply_size = sprintf( reply, "%d\n%d\nUp: %ld seconds (%ld hours)\nPretuned by german engineers, currently handling %li connections per second.",
+        reply_size = sprintf( 80+reply, "%d\n%d\nUp: %ld seconds (%ld hours)\nPretuned by german engineers, currently handling %li connections per second.",
         ot_overall_connections, ot_overall_connections, seconds_elapsed, seconds_elapsed / 3600, ot_overall_connections / ( seconds_elapsed ? seconds_elapsed : 1 ) );
       }
       break;
@@ -285,9 +287,11 @@ e404:
       goto bailout;
     }
 
-    c=(char*)malloc(80);
-    iob_addbuf_free( &h->iob, c, sprintf( c, "HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %ld\r\n\r\n", (long)reply_size ));
-    if( reply && reply_size ) iob_addbuf_free(&h->iob, reply, reply_size );
+    if( reply && reply_size ) {
+      MEMMOVE( reply, "HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nContent-Length: X                \r\n\r\n", 80 );
+      fmt_ulonglong( reply+59, (long long)reply_size );
+      iob_addbuf_free(&h->iob, reply, 80+reply_size );
+    }
 
 bailout:
     io_dontwantread(s);
