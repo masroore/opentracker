@@ -15,11 +15,19 @@
 #include "scan.h"
 #include "byte.h"
 
+// GLOBAL VARIABLES
+//
+static ot_vector all_torrents[256];
+
 // Helper functions for binary_find
 //
 int compare_hash( const void *hash1, const void *hash2 ) { return memcmp( hash1, hash2, sizeof( ot_hash )); }
 int compare_ip_port( const void *peer1, const void *peer2 ) { return memcmp( peer1, peer2, 6 ); }
 
+// This function gives us a binary search that returns a pointer, even if
+// no exact match is found. In that case it sets exactmatch 0 and gives
+// calling functions the chance to insert data
+//
 static void *binary_search( const void *key, const void *base,
   unsigned long member_count, const unsigned long member_size,
   int (*compar) (const void *, const void *),
@@ -48,9 +56,6 @@ static void *binary_search( const void *key, const void *base,
 //
 char ths[1+2*20];char*to_hex(ot_byte*s){char*m="0123456789ABCDEF";char*e=ths+40;char*t=ths;while(t<e){*t++=m[*s>>4];*t++=m[*s++&15];}*t=0;return ths;}
 
-// GLOBAL VARIABLES
-//
-static ot_vector all_torrents[256];
 
 static void *vector_find_or_insert( ot_vector *vector, void *key, size_t member_size, int(*compare_func)(const void*, const void*), int *exactmatch ) {
   ot_byte *match = BINARY_FIND( key, vector->data, vector->size, member_size, compare_func, exactmatch );
@@ -58,14 +63,15 @@ static void *vector_find_or_insert( ot_vector *vector, void *key, size_t member_
   if( *exactmatch ) return match;
 
   if( vector->size + 1 >= vector->space ) {
-    ot_byte *new_data = realloc( vector->data, vector->space ? 2 * vector->space : 1024 );
+    size_t   new_space = vector->space ? OT_VECTOR_GROW_RATIO * vector->space : OT_VECTOR_MIN_MEMBERS;
+    ot_byte *new_data = realloc( vector->data, new_space * member_size );
     if( !new_data ) return NULL;
 
     // Adjust pointer if it moved by realloc
     match = match - (ot_byte*)vector->data + new_data;
 
     vector->data = new_data;
-    vector->space = vector->space ? vector->space * 2 : 1024;
+    vector->space = new_space;;
   }
   MEMMOVE( match + member_size, match, ((ot_byte*)vector->data) + member_size * vector->size - match );
   vector->size++;
@@ -74,6 +80,7 @@ static void *vector_find_or_insert( ot_vector *vector, void *key, size_t member_
 	
 static int vector_remove_peer( ot_vector *vector, ot_peer *peer ) {
   int exactmatch;
+  ot_peer *end = ((ot_peer*)vector->data) + vector->size;
   ot_peer *match;
 
   if( !vector->size ) return 0;
@@ -81,8 +88,11 @@ static int vector_remove_peer( ot_vector *vector, ot_peer *peer ) {
 
   if( !exactmatch ) return 0;
   exactmatch = OT_FLAG( match ) & PEER_FLAG_SEEDING ? 2 : 1;
-  MEMMOVE( match, match + 1, ((ot_peer*)vector->data) + vector->size - match - 1 );
-  vector->size--;
+  MEMMOVE( match, match + 1, end - match - 1 );
+  if( ( --vector->size * OT_VECTOR_SHRINK_THRESH < vector->space ) && ( vector->space > OT_VECTOR_MIN_MEMBERS ) ) {
+    vector->space /= OT_VECTOR_SHRINK_RATIO;
+    realloc( vector->data, vector->space * sizeof( ot_peer ) );
+  }
   return exactmatch;
 }
 
@@ -97,17 +107,19 @@ static void free_peerlist( ot_peerlist *peer_list ) {
 static int vector_remove_torrent( ot_vector *vector, ot_hash *hash ) {
   int exactmatch;
   ot_torrent *end = ((ot_torrent*)vector->data) + vector->size;
-  ot_torrent *match = BINARY_FIND( hash, vector->data, vector->size, sizeof( ot_torrent ), compare_hash, &exactmatch );
+  ot_torrent *match;
 
-  if( !exactmatch ) return -1;
+  if( !vector->size ) return 0;
+  match = BINARY_FIND( hash, vector->data, vector->size, sizeof( ot_torrent ), compare_hash, &exactmatch );
+
+  if( !exactmatch ) return 0;
   free_peerlist( match->peer_list );
   MEMMOVE( match, match + 1, end - match - 1 );
-  vector->size--;
-  if( ( 3*vector->size < vector->space ) && ( vector->space > 1024 ) ) {
-    realloc( vector->data, vector->space >> 1 );
-    vector->space >>= 1;
+  if( ( --vector->size * OT_VECTOR_SHRINK_THRESH < vector->space ) && ( vector->space > OT_VECTOR_MIN_MEMBERS ) ) {
+    vector->space /= OT_VECTOR_SHRINK_RATIO;
+    realloc( vector->data, vector->space * sizeof( ot_torrent ) );
   }
-  return 0;
+  return 1;
 }
 
 // Returns 1, if torrent is gone, 0 otherwise
@@ -253,14 +265,18 @@ void remove_peer_from_torrent( ot_hash *hash, ot_peer *peer ) {
   
   if( !exactmatch ) return;
   
+  // Maybe this does the job
+  if( clean_peerlist( torrent->peer_list ) ) {
+    vector_remove_torrent( torrents_list, hash );
+    return;
+  }
+
   for( i=0; i<OT_POOLS_COUNT; ++i )
     switch( vector_remove_peer( &torrent->peer_list->peers[i], peer ) ) {
       case 0: continue;
       case 2: torrent->peer_list->seed_count[i]--;
       case 1: default: return;
     }
-
-  clean_peerlist( torrent->peer_list );
 }
 
 void cleanup_torrents( void ) {

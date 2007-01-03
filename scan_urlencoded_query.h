@@ -15,6 +15,13 @@ size_t scan_urlencoded_query(char **string, char *deststring, int flags);
 // data       pointer to len chars of string
 // len        length of chars in data to parse
 // number     number to receive result
+// returns    number of bytes not parsed, mostly !=0 means fail
 size_t scan_fixed_int( char *data, size_t len, int *number );
+
+// data       pointer to len chars of string
+// len        length of chars in data to parse
+// ip         buffer to receive result
+// returns    number of bytes not parsed, mostly !=0 means fail
+size_t scan_fixed_ip( char *data, size_t len, unsigned char ip[4] );
 
 #endif

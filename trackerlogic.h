@@ -32,6 +32,10 @@ typedef time_t         ot_time;
 #define OT_POOLS_TIMEOUT 300
 #define NOW              (time(NULL)/OT_POOLS_TIMEOUT)
 
+#define OT_VECTOR_MIN_MEMBERS   128
+#define OT_VECTOR_GROW_RATIO    2
+#define OT_VECTOR_SHRINK_THRESH 3
+#define OT_VECTOR_SHRINK_RATIO  2
 typedef struct {
   void   *data;
   size_t  size;

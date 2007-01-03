@@ -186,6 +186,17 @@ e400:
           break;
         case -1: /* error */
           goto e404;
+#ifdef WANT_IP_FROM_QUERY_STRING
+        case 2:
+          if(!byte_diff(data,2,"ip")) {
+            size_t len = scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE );
+            unsigned char ip[4];
+            if( ( len <= 0 ) || scan_fixed_ip( data, len, ip ) ) goto e404;
+            OT_SETIP ( &peer, ip );
+         } else
+            scan_urlencoded_query( &c, NULL, SCAN_SEARCHPATH_VALUE );
+         break;
+#endif
         case 4:
           if(!byte_diff(data,4,"port")) {
             size_t len = scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE );
@@ -263,7 +274,7 @@ e500:
           httperror(h,"500 Internal Server Error","A server error has occured. Please retry later.");
           goto bailout;
         }
-        reply = malloc( SUCCESS_HTTP_HEADER_LENGTH + numwant*6 + 128 ); // http header + peerlist + seeder, peers and lametta 80 + n*6+81 a.t.m.
+        reply = malloc( SUCCESS_HTTP_HEADER_LENGTH + numwant * 6 + 128 ); // http header + peerlist + seeder, peers and lametta 80 + n*6+81 a.t.m.
         if( reply )
           reply_size = return_peers_for_torrent( torrent, numwant, SUCCESS_HTTP_HEADER_LENGTH + reply );
         if( !reply || ( reply_size <= 0 ) ) {

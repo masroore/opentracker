@@ -18,13 +18,13 @@ size_t scan_urlencoded_query(char **string, char *deststring, int flags) {
   unsigned char *d = (unsigned char*)deststring;
   register unsigned char b, c;
 
-  while ( is_unreserved( c = *s++) ) {
-    if (c=='%') {
+  while( is_unreserved( c = *s++) ) {
+    if( c=='%') {
       if( ( c = scan_fromhex(*s++) ) == 0xff ) return -1;
       if( ( b = scan_fromhex(*s++) ) == 0xff ) return -1;
       c=(c<<4)|b;
     }
-    if(d) *d++ = c;
+    if( d ) *d++ = c;
   }
 
   switch( c ) {
@@ -53,5 +53,23 @@ size_t scan_urlencoded_query(char **string, char *deststring, int flags) {
 size_t scan_fixed_int( char *data, size_t len, int *tmp ) {
   *tmp = 0;
   while( (len > 0) && (*data >= '0') && (*data <= '9') ) { --len; *tmp = 10**tmp + *data++-'0'; }
+  return len;
+}
+
+size_t scan_fixed_ip( char *data, size_t len, unsigned char ip[4] ) {
+  int u, i;
+
+  for( i=0; i<4; ++i ) {
+    register unsigned int j;
+    j = scan_fixed_int( data, len, &u );
+    if( j == len ) return len;
+    ip[i] = u;
+    data += len - j;
+    len = j;
+    if ( i<3 ) {
+      if( !len || *data != '.') return -1;
+      --len; ++data;
+    }
+  }
   return len;
 }
