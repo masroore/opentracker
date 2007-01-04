@@ -53,6 +53,9 @@ static const ot_byte PEER_FLAG_STOPPED   = 0x20;
 #define OT_SETPORT( peer, port ) MEMMOVE(((ot_byte*)peer)+4,(port),2);
 #define OT_FLAG(peer) (((ot_byte*)(peer))[6])
 
+#define OT_PEER_COMPARE_SIZE ((size_t)6)
+#define OT_HASH_COMPARE_SIZE (sizeof(ot_hash))
+
 typedef struct {
   ot_time        base;
   unsigned long  seed_count[ OT_POOLS_COUNT ];

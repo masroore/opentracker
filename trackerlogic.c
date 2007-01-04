@@ -19,25 +19,17 @@
 //
 static ot_vector all_torrents[256];
 
-// Helper functions for binary_find
-//
-int compare_hash( const void *hash1, const void *hash2 ) { return memcmp( hash1, hash2, sizeof( ot_hash )); }
-int compare_ip_port( const void *peer1, const void *peer2 ) { return memcmp( peer1, peer2, 6 ); }
-
 // This function gives us a binary search that returns a pointer, even if
 // no exact match is found. In that case it sets exactmatch 0 and gives
 // calling functions the chance to insert data
 //
-static void *binary_search( const void *key, const void *base,
-  unsigned long member_count, const unsigned long member_size,
-  int (*compar) (const void *, const void *),
-  int *exactmatch )
-{
+static void *binary_search( const void *key, const void *base, unsigned long member_count, const unsigned long member_size,
+                            int compare_size, int *exactmatch ) {
   ot_byte *lookat = ((ot_byte*)base) + member_size * (member_count >> 1);
   *exactmatch = 1;
 
   while( member_count ) {
-    int cmp = compar((void*)lookat, key);
+    int cmp = memcmp( lookat, key, compare_size);
     if (cmp == 0) return (void *)lookat;
     if (cmp < 0) {
       base = (void*)(lookat + member_size);
@@ -48,7 +40,6 @@ static void *binary_search( const void *key, const void *base,
   }
   *exactmatch = 0;
   return (void*)lookat;
-
 }
 
 // Converter function from memory to human readable hex strings
@@ -56,9 +47,8 @@ static void *binary_search( const void *key, const void *base,
 //
 char ths[1+2*20];char*to_hex(ot_byte*s){char*m="0123456789ABCDEF";char*e=ths+40;char*t=ths;while(t<e){*t++=m[*s>>4];*t++=m[*s++&15];}*t=0;return ths;}
 
-
-static void *vector_find_or_insert( ot_vector *vector, void *key, size_t member_size, int(*compare_func)(const void*, const void*), int *exactmatch ) {
-  ot_byte *match = BINARY_FIND( key, vector->data, vector->size, member_size, compare_func, exactmatch );
+static void *vector_find_or_insert( ot_vector *vector, void *key, size_t member_size, int compare_size, int *exactmatch ) {
+  ot_byte *match = BINARY_FIND( key, vector->data, vector->size, member_size, compare_size, exactmatch );
 
   if( *exactmatch ) return match;
 
@@ -84,7 +74,7 @@ static int vector_remove_peer( ot_vector *vector, ot_peer *peer ) {
   ot_peer *match;
 
   if( !vector->size ) return 0;
-  match = BINARY_FIND( peer, vector->data, vector->size, sizeof( ot_peer ), compare_ip_port, &exactmatch );
+  match = BINARY_FIND( peer, vector->data, vector->size, sizeof( ot_peer ), OT_PEER_COMPARE_SIZE, &exactmatch );
 
   if( !exactmatch ) return 0;
   exactmatch = OT_FLAG( match ) & PEER_FLAG_SEEDING ? 2 : 1;
@@ -110,7 +100,7 @@ static int vector_remove_torrent( ot_vector *vector, ot_hash *hash ) {
   ot_torrent *match;
 
   if( !vector->size ) return 0;
-  match = BINARY_FIND( hash, vector->data, vector->size, sizeof( ot_torrent ), compare_hash, &exactmatch );
+  match = BINARY_FIND( hash, vector->data, vector->size, sizeof( ot_torrent ), OT_HASH_COMPARE_SIZE, &exactmatch );
 
   if( !exactmatch ) return 0;
   free_peerlist( match->peer_list );
@@ -149,7 +139,7 @@ ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer ) {
   ot_peer    *peer_dest;
   ot_vector  *torrents_list = &all_torrents[*hash[0]], *peer_pool;
 
-  torrent = vector_find_or_insert( torrents_list, (void*)hash, sizeof( ot_torrent ), compare_hash, &exactmatch );
+  torrent = vector_find_or_insert( torrents_list, (void*)hash, sizeof( ot_torrent ), OT_HASH_COMPARE_SIZE, &exactmatch );
   if( !torrent ) return NULL;
 
   if( !exactmatch ) {
@@ -167,7 +157,7 @@ ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer ) {
     clean_peerlist( torrent->peer_list );
 
   peer_pool = &torrent->peer_list->peers[0];
-  peer_dest = vector_find_or_insert( peer_pool, (void*)peer, sizeof( ot_peer ), compare_ip_port, &exactmatch );
+  peer_dest = vector_find_or_insert( peer_pool, (void*)peer, sizeof( ot_peer ), OT_PEER_COMPARE_SIZE, &exactmatch );
 
   // If we hadn't had a match in current pool, create peer there and
   // remove it from all older pools
@@ -242,7 +232,7 @@ size_t return_scrape_for_torrent( ot_hash *hash, char *reply ) {
   char        *r = reply;
   int          exactmatch, peers = 0, seeds = 0, i;
   ot_vector   *torrents_list = &all_torrents[*hash[0]];
-  ot_torrent  *torrent = BINARY_FIND( hash, torrents_list->data, torrents_list->size, sizeof( ot_torrent ), compare_hash, &exactmatch );
+  ot_torrent  *torrent = BINARY_FIND( hash, torrents_list->data, torrents_list->size, sizeof( ot_torrent ), OT_HASH_COMPARE_SIZE, &exactmatch );
 
   if( !exactmatch ) return 0;
   clean_peerlist( torrent->peer_list );
@@ -261,7 +251,7 @@ size_t return_scrape_for_torrent( ot_hash *hash, char *reply ) {
 void remove_peer_from_torrent( ot_hash *hash, ot_peer *peer ) {
   int          exactmatch, i;
   ot_vector   *torrents_list = &all_torrents[*hash[0]];
-  ot_torrent  *torrent = BINARY_FIND( hash, torrents_list->data, torrents_list->size, sizeof( ot_torrent ), compare_hash, &exactmatch );
+  ot_torrent  *torrent = BINARY_FIND( hash, torrents_list->data, torrents_list->size, sizeof( ot_torrent ), OT_HASH_COMPARE_SIZE, &exactmatch );
   
   if( !exactmatch ) return;
   
@@ -278,6 +268,24 @@ void remove_peer_from_torrent( ot_hash *hash, ot_peer *peer ) {
       case 1: default: return;
     }
 }
+
+#if 0
+void dump_knowledge( void ) {
+  int ati, tli, pli;
+  for( ati = 0; ati<256; ++ati ) {
+    ot_vector *torrent_list = &all_torrents[ati];
+    for( tli = 0; tli<torrent_list->size; ++tli ) {
+      ot_torrent *torrent = &torrent_list->data[tli];
+      for( pool = 0; pool<OT_POOLS_COUNT; ++pool ) {
+        for( pli=0; pli<torrent->peer_list->peers[pool].size; ++pli ) {
+
+
+        }
+      }
+    }
+  }
+}
+#endif
 
 void cleanup_torrents( void ) {
 
