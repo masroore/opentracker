@@ -32,6 +32,7 @@ static ot_torrent* const OT_TORRENT_NOT_ON_WHITELIST = (ot_torrent*)1;
 #endif
 
 #ifdef WANT_BLACKLIST
+int g_check_blacklist = 1;
 static ot_torrent* const OT_TORRENT_ON_BLACKLIST = (ot_torrent*)2;
 #endif
 

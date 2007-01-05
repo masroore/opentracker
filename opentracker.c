@@ -342,10 +342,37 @@ void graceful( int s ) {
 void usage( char *name ) {
   fprintf( stderr, "Usage: %s [-i serverip] [-p serverport] [-d serverdirectory]"
 #ifdef WANT_CLOSED_TRACKER
-  " [-o|c]"
+  " [-oc]"
+#endif
+#ifdef WANT_BLACKLIST
+  " [-bB]"
 #endif
   "\n", name );
-  exit(1);
+}
+
+void help( char *name ) {
+  usage( name );
+  fprintf( stderr, "\t-i serverip\tspecify ip to bind to (default: *)\n"
+                   "\t-p serverport\tspecify port to bind to (default: 6969)\n"
+                   "\t-d serverdir\tspecify directory containing white- or black listed torrent info_hashes (default: \".\")\n"
+#ifdef WANT_CLOSED_TRACKER
+                   "\t-o\t\tmake tracker an open tracker, e.g. do not check for white list (default: off)\n"
+                   "\t-c\t\tmake tracker a closed tracker, e.g. check each announced torrent against white list (default: on)\n"
+#endif
+#ifdef WANT_BLACKLIST
+                   "\t-b\t\tmake tracker check its black list, e.g. check each announced torrent against black list (default: on)\n"
+                   "\t-B\t\tmake tracker check its black list, e.g. check each announced torrent against black list (default: off)\n"
+#endif
+#ifdef WANT_CLOSED_TRACKER
+                   "\n* To white list a torrent, touch a file inside serverdir with info_hash hex string.\n"
+#endif
+#ifdef WANT_BLACKLIST
+#ifndef WANT_CLOSED_TRACKER
+                   "\n"
+#endif
+                   "* To white list a torrent, touch a file inside serverdir with info_hash hex string, preprended by '-'.\n"
+#endif
+);
 }
 
 int main( int argc, char **argv ) {
@@ -356,17 +383,22 @@ int main( int argc, char **argv ) {
     uint16 port = 6969;
 
     while( 1 ) {
-      switch( getopt(argc,argv,":i:p:d:") ) {
+      switch( getopt(argc,argv,":i:p:d:ocbBh") ) {
         case -1: goto allparsed;
         case 'i': serverip = optarg; break;
         case 'p': port = (uint16)atol( optarg ); break;
         case 'd': serverdir = optarg; break;
+        case 'h': help( argv[0]); exit(0);
 #ifdef WANT_CLOSED_TRACKER
-        case 'o': g_closedtracker = 0;
-        case 'c': g_closedtracker = 1;
+        case 'o': g_closedtracker = 0; break;
+        case 'c': g_closedtracker = 1; break;
+#endif
+#ifdef WANT_BLACKLIST
+        case 'b': g_check_blacklist = 1; break;
+        case 'B': g_check_blacklist = 0; break;
 #endif
         default:
-        case '?': usage( argv[0] );
+        case '?': usage( argv[0] ); exit(1);
       }
     }
 
