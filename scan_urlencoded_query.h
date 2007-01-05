@@ -1,3 +1,6 @@
+/* This software was written by Dirk Engling <erdgeist@erdgeist.org> 
+   It is considered beerware. Prost. Skol. Cheers or whatever. */
+
 #ifndef __SCAN_URLENCODED_QUERY_H__
 #define __SCAN_URLENCODED_QUERY_H__
 

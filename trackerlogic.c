@@ -1,3 +1,6 @@
+/* This software was written by Dirk Engling <erdgeist@erdgeist.org>
+   It is considered beerware. Prost. Skol. Cheers or whatever. */
+
 #include "trackerlogic.h"
 
 #include <stdlib.h>
@@ -269,63 +272,16 @@ void remove_peer_from_torrent( ot_hash *hash, ot_peer *peer ) {
     }
 }
 
-#if 0
-void dump_knowledge( void ) {
-  int ati, tli, pli;
-  for( ati = 0; ati<256; ++ati ) {
-    ot_vector *torrent_list = &all_torrents[ati];
-    for( tli = 0; tli<torrent_list->size; ++tli ) {
-      ot_torrent *torrent = &torrent_list->data[tli];
-      for( pool = 0; pool<OT_POOLS_COUNT; ++pool ) {
-        for( pli=0; pli<torrent->peer_list->peers[pool].size; ++pli ) {
-
-
-        }
-      }
-    }
-  }
-}
-#endif
-
 void cleanup_torrents( void ) {
 
 }
 
-int init_logic( char *directory ) {
-  glob_t globber;
-  int i;
-
-  if( directory ) {
-   if( chdir( directory ))
-     return -1;
-  }
-
+int init_logic( ) {
   srandom( time(NULL));
 
   // Initialize control structures
   byte_zero( all_torrents, sizeof (all_torrents));
 
-  // Scan directory for filenames in the form [0-9A-F]{20}
-  // * I know this looks ugly, but I've seen A-F to match umlauts as well in strange locales
-  // * lower case for .. better being safe than sorry, this is not expensive here :)
-  if( !glob(
-    "[0-9ABCDEFabcdef][0-9ABCDEFabcdef][0-9ABCDEFabcdef][0-9ABCDEFabcdef]"
-    "[0-9ABCDEFabcdef][0-9ABCDEFabcdef][0-9ABCDEFabcdef][0-9ABCDEFabcdef]"
-    "[0-9ABCDEFabcdef][0-9ABCDEFabcdef][0-9ABCDEFabcdef][0-9ABCDEFabcdef]"
-    "[0-9ABCDEFabcdef][0-9ABCDEFabcdef][0-9ABCDEFabcdef][0-9ABCDEFabcdef]"
-    "[0-9ABCDEFabcdef][0-9ABCDEFabcdef][0-9ABCDEFabcdef][0-9ABCDEFabcdef]"
-    "[0-9ABCDEFabcdef][0-9ABCDEFabcdef][0-9ABCDEFabcdef][0-9ABCDEFabcdef]"
-    "[0-9ABCDEFabcdef][0-9ABCDEFabcdef][0-9ABCDEFabcdef][0-9ABCDEFabcdef]"
-    "[0-9ABCDEFabcdef][0-9ABCDEFabcdef][0-9ABCDEFabcdef][0-9ABCDEFabcdef]"
-    "[0-9ABCDEFabcdef][0-9ABCDEFabcdef][0-9ABCDEFabcdef][0-9ABCDEFabcdef]"
-    "[0-9ABCDEFabcdef][0-9ABCDEFabcdef][0-9ABCDEFabcdef][0-9ABCDEFabcdef]"
-    , GLOB_NOCHECK, 0, &globber) )
-  {
-    for( i=0; i<globber.gl_matchc; ++i )
-      printf( "Found: %s\n", globber.gl_pathv[i] );
-  }
-
-  globfree( &globber );
   return 0;
 }
 

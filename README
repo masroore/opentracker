@@ -1,0 +1,21 @@
+This is opentracker. An open bittorrent tracker.
+
+You need libowfat (http://www.fefe.de/libowfat/).
+
+Steps to go:
+
+fetch http://dl.fefe.de/libowfat-0.24.tar.bz2
+tar xjf libowfat-0.24.tar.bz2
+cd libowfat
+make
+cd ..
+fetch http://erdgeist.org/arts/software/opentracker/opentracker-1.0.tar.bz2
+tar xjf opentracker-1.0.tar.bz2
+cd opentracker-1.0
+make
+./opentracker
+
+This tracker is open in a sense that everyone announcing a torrent is welcome to do so and will be informed about anyone else announcing the same torrent. Unless 
+-DWANT_IP_FROM_QUERY_STRING is enabled (which is meant for debugging purposes only), only source IPs are accepted. The tracker implements a minimal set of 
+essential features only but was able respond to far more than 10000 requests per second on a Sun Fire 2200 M2 (thats where we found no more clients able to fire 
+more of our testsuite.sh script).

@@ -1,3 +1,6 @@
+/* This software was written by Dirk Engling <erdgeist@erdgeist.org> 
+   It is considered beerware. Prost. Skol. Cheers or whatever. */
+
 #ifndef __TRACKERLOGIC_H__
 #define __TRACKERLOGIC_H__
 
@@ -72,7 +75,7 @@ typedef struct {
 // Exported functions
 //
 
-int  init_logic( char *chdir_directory );
+int  init_logic( );
 void deinit_logic( );
 
 ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer );

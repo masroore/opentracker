@@ -1,3 +1,6 @@
+/* This software was written by Dirk Engling <erdgeist@erdgeist.org> 
+   It is considered beerware. Prost. Skol. Cheers or whatever. */
+
 #include "scan.h"
 #include "scan_urlencoded_query.h"
 

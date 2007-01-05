@@ -1,3 +1,8 @@
+/* This software was written by Dirk Engling <erdgeist@erdgeist.org> 
+   It is considered beerware. Prost. Skol. Cheers or whatever.
+   Some of the stuff below is stolen from Fefes example libowfat httpd.
+*/
+
 #include "socket.h"
 #include "io.h"
 #include "buffer.h"
@@ -351,7 +356,7 @@ int main()
         panic("io_fd");
 
     signal( SIGINT, graceful );
-    if( init_logic( "." ) == -1 )
+    if( init_logic( ) == -1 )
       panic("Logic not started");
 
     io_wantread(s);
