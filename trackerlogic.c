@@ -18,9 +18,22 @@
 #include "scan.h"
 #include "byte.h"
 
+#if defined( WANT_CLOSED_TRACKER ) || defined( WANT_BLACKLIST )
+#include <sys/stat.h>
+#endif
+
 // GLOBAL VARIABLES
 //
 static ot_vector all_torrents[256];
+
+#ifdef WANT_CLOSED_TRACKER
+int g_closedtracker = 1;
+static ot_torrent* const OT_TORRENT_NOT_ON_WHITELIST = (ot_torrent*)1;
+#endif
+
+#ifdef WANT_BLACKLIST
+static ot_torrent* const OT_TORRENT_ON_BLACKLIST = (ot_torrent*)2;
+#endif
 
 // This function gives us a binary search that returns a pointer, even if
 // no exact match is found. In that case it sets exactmatch 0 and gives
@@ -48,7 +61,7 @@ static void *binary_search( const void *key, const void *base, unsigned long mem
 // Converter function from memory to human readable hex strings
 // * definitely not thread safe!!!
 //
-char ths[1+2*20];char*to_hex(ot_byte*s){char*m="0123456789ABCDEF";char*e=ths+40;char*t=ths;while(t<e){*t++=m[*s>>4];*t++=m[*s++&15];}*t=0;return ths;}
+char ths[2+2*20]="-";char*to_hex(ot_byte*s){char*m="0123456789ABCDEF";char*e=ths+41;char*t=ths+1;while(t<e){*t++=m[*s>>4];*t++=m[*s++&15];}*t=0;return ths+1;}
 
 static void *vector_find_or_insert( ot_vector *vector, void *key, size_t member_size, int compare_size, int *exactmatch ) {
   ot_byte *match = BINARY_FIND( key, vector->data, vector->size, member_size, compare_size, exactmatch );
@@ -141,6 +154,20 @@ ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer ) {
   ot_torrent *torrent;
   ot_peer    *peer_dest;
   ot_vector  *torrents_list = &all_torrents[*hash[0]], *peer_pool;
+#if defined( WANT_CLOSED_TRACKER ) || defined( WANT_BLACKLIST )
+  struct stat dummy_sb;
+  char       *fn = to_hex( (ot_byte*)hash );
+#endif
+
+#ifdef WANT_CLOSED_TRACKER
+  if( g_closedtracker && stat( fn, &dummy_sb ) )
+    return OT_TORRENT_NOT_ON_WHITELIST;
+#endif
+
+#ifdef WANT_BLACKLIST
+  if( stat( fn - 1, &dummy_sb ) )
+    return OT_TORRENT_ON_BLACKLIST;
+#endif
 
   torrent = vector_find_or_insert( torrents_list, (void*)hash, sizeof( ot_torrent ), OT_HASH_COMPARE_SIZE, &exactmatch );
   if( !torrent ) return NULL;
@@ -199,6 +226,18 @@ size_t return_peers_for_torrent( ot_torrent *torrent, unsigned long amount, char
   unsigned long  peer_count, seed_count, index;
   signed   long  pool_offset = -1, pool_index = 0;
   signed   long  wert = -1;
+
+#ifdef WANT_CLOSED_TRACKER
+  if( torrent == OT_TORRENT_NOT_ON_WHITELIST ) {
+    return( FORMAT_FORMAT_STRING( reply, "d14:failure reason43:This torrent is not served by this tracker.e" ) );
+  }
+#endif
+
+#ifdef WANT_BLACKLIST
+  if( torrent == OT_TORRENT_ON_BLACKLIST ) {
+    return( FORMAT_FORMAT_STRING( reply, "d14:failure reason29:This torrent is black listed.e" ) );
+  }
+#endif
 
   for( peer_count=seed_count=index=0; index<OT_POOLS_COUNT; ++index) {
     peer_count += torrent->peer_list->peers[index].size;
@@ -260,6 +299,9 @@ void remove_peer_from_torrent( ot_hash *hash, ot_peer *peer ) {
   
   // Maybe this does the job
   if( clean_peerlist( torrent->peer_list ) ) {
+#ifdef WANT_CLOSED_TRACKER
+    if( !g_closedtracker ) 
+#endif
     vector_remove_torrent( torrents_list, hash );
     return;
   }
@@ -276,7 +318,12 @@ void cleanup_torrents( void ) {
 
 }
 
-int init_logic( ) {
+int init_logic( char *serverdir ) {
+  if( serverdir && chdir( serverdir ) ) {
+    fprintf( stderr, "Could not chdir() to %s\n", serverdir );
+    return -1;
+  }
+
   srandom( time(NULL));
 
   // Initialize control structures

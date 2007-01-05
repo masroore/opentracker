@@ -1,5 +1,5 @@
 CC?=gcc
-CFLAGS+=-I../libowfat -Wall -pipe -Os # -DWANT_IP_FROM_QUERY_STRING -g -ggdb
+CFLAGS+=-I../libowfat -Wall -pipe -Os -DWANT_BLACKLIST -DWANT_CLOSED_TRACKER # -DWANT_IP_FROM_QUERY_STRING -g -ggdb
 LDFLAGS+=-L../libowfat/ -lowfat -s -lm
 
 HEADERS=trackerlogic.h scan_urlencoded_query.h

@@ -339,14 +339,40 @@ void graceful( int s ) {
   }
 }
 
-int main()
-{
+void usage( char *name ) {
+  fprintf( stderr, "Usage: %s [-i serverip] [-p serverport] [-d serverdirectory]"
+#ifdef WANT_CLOSED_TRACKER
+  " [-o|c]"
+#endif
+  "\n", name );
+  exit(1);
+}
+
+int main( int argc, char **argv ) {
     int s=socket_tcp4();
     unsigned long ip;
-    uint16 port;
+    char *serverip = NULL;
+    char *serverdir = ".";
+    uint16 port = 6969;
 
+    while( 1 ) {
+      switch( getopt(argc,argv,":i:p:d:") ) {
+        case -1: goto allparsed;
+        case 'i': serverip = optarg; break;
+        case 'p': port = (uint16)atol( optarg ); break;
+        case 'd': serverdir = optarg; break;
+#ifdef WANT_CLOSED_TRACKER
+        case 'o': g_closedtracker = 0;
+        case 'c': g_closedtracker = 1;
+#endif
+        default:
+        case '?': usage( argv[0] );
+      }
+    }
+
+allparsed:
     ot_start_time = time( NULL );
-    if (socket_bind4_reuse(s,NULL,6969)==-1)
+    if (socket_bind4_reuse(s,serverip,port)==-1)
         panic("socket_bind4_reuse");
 
     if (socket_listen(s,16)==-1)
@@ -356,7 +382,7 @@ int main()
         panic("io_fd");
 
     signal( SIGINT, graceful );
-    if( init_logic( ) == -1 )
+    if( init_logic( serverdir ) == -1 )
       panic("Logic not started");
 
     io_wantread(s);

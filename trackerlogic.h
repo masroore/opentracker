@@ -75,8 +75,12 @@ typedef struct {
 // Exported functions
 //
 
-int  init_logic( );
+int  init_logic( char *serverdir );
 void deinit_logic( );
+
+#ifdef WANT_CLOSED_TRACKER
+extern int g_closedtracker;
+#endif
 
 ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer );
 size_t return_peers_for_torrent( ot_torrent *torrent, unsigned long amount, char *reply );
