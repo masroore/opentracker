@@ -166,7 +166,7 @@ ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer ) {
 #endif
 
 #ifdef WANT_BLACKLIST
-  if( g_check_blacklist && stat( fn - 1, &dummy_sb ) )
+  if( g_check_blacklist && !stat( fn - 1, &dummy_sb ) )
     return OT_TORRENT_ON_BLACKLIST;
 #endif
 
