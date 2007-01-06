@@ -233,6 +233,7 @@ e400:
           if(!byte_diff(data,7,"numwant")) {
             size_t len = scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE );
             if( ( len <= 0 ) || scan_fixed_int( data, len, &numwant ) ) goto e404;
+            if( numwant > 200 ) numwant = 200;
           } else if(!byte_diff(data,7,"compact")) {
             size_t len = scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE );
             if( ( len <= 0 ) || scan_fixed_int( data, len, &tmp ) ) goto e404;
