@@ -315,7 +315,6 @@ e404:
 
 bailout:
     io_dontwantread(s);
-    shutdown(s, SHUT_RD );
     io_wantwrite(s);
 
     reply_size=iob_send(s,&h->iob);
@@ -327,7 +326,6 @@ bailout:
         array_reset(&h->r);
         iob_reset(&h->iob);
         free(h);
-        shutdown(s, SHUT_RDWR);
         io_close(s);
       }
 }
@@ -506,7 +504,6 @@ emerge:
                     array_reset(&h->r);
                     iob_reset(&h->iob);
                     free(h);
-                    shutdown(i, SHUT_RDWR);
                     io_close(i);
                 }
         }
