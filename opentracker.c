@@ -26,6 +26,8 @@
 #include "trackerlogic.h"
 #include "scan_urlencoded_query.h"
 
+unsigned long const OT_CLIENT_TIMEOUT = 15;
+
 static unsigned int ot_overall_connections = 0;
 static time_t ot_start_time;
 static const unsigned int SUCCESS_HTTP_HEADER_LENGTH = 80;
@@ -376,6 +378,7 @@ void help( char *name ) {
 
 int main( int argc, char **argv ) {
     int s=socket_tcp4();
+    tai6464 t;
     unsigned long ip;
     char *serverip = NULL;
     char *serverdir = ".";
@@ -439,6 +442,9 @@ allparsed:
                         {
                             byte_zero(h,sizeof(struct http_data));
                             h->ip=ip;
+                            taia_now(&t);
+                            taia_addsec(&t,&t,OT_CLIENT_TIMEOUT);
+                            io_timeout(n,t);
                             io_setcookie(n,h);
                             ++ot_overall_connections;
                         } else
