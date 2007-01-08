@@ -342,130 +342,121 @@ void help( char *name ) {
 }
 
 int main( int argc, char **argv ) {
-    int s=socket_tcp4();
-    tai6464 t;
-    unsigned long ip;
-    char *serverip = NULL;
-    char *serverdir = ".";
-    uint16 port = 6969;
+  int s=socket_tcp4();
+  tai6464 t;
+  unsigned long ip;
+  char *serverip = NULL;
+  char *serverdir = ".";
+  uint16 port = 6969;
 
-    while( 1 ) {
-      switch( getopt(argc,argv,":i:p:d:ocbBh") ) {
-        case -1: goto allparsed;
-        case 'i': serverip = optarg; break;
-        case 'p': port = (uint16)atol( optarg ); break;
-        case 'd': serverdir = optarg; break;
-        case 'h': help( argv[0]); exit(0);
+  while( 1 ) {
+    switch( getopt(argc,argv,":i:p:d:ocbBh") ) {
+      case -1: goto allparsed;
+      case 'i': serverip = optarg; break;
+      case 'p': port = (uint16)atol( optarg ); break;
+      case 'd': serverdir = optarg; break;
+      case 'h': help( argv[0]); exit(0);
 #ifdef WANT_CLOSED_TRACKER
-        case 'o': g_closedtracker = 0; break;
-        case 'c': g_closedtracker = 1; break;
+      case 'o': g_closedtracker = 0; break;
+      case 'c': g_closedtracker = 1; break;
 #endif
 #ifdef WANT_BLACKLIST
-        case 'b': g_check_blacklist = 1; break;
-        case 'B': g_check_blacklist = 0; break;
+      case 'b': g_check_blacklist = 1; break;
+      case 'B': g_check_blacklist = 0; break;
 #endif
-        default:
-        case '?': usage( argv[0] ); exit(1);
+      default:
+      case '?': usage( argv[0] ); exit(1);
+    }
+  }
+
+allparsed:
+  ot_start_time = time( NULL );
+  if (socket_bind4_reuse(s,serverip,port)==-1)
+    panic("socket_bind4_reuse");
+
+  if (socket_listen(s,16)==-1)
+    panic("socket_listen");
+
+  if (!io_fd(s))
+    panic("io_fd");
+
+  signal( SIGINT, graceful );
+  if( init_logic( serverdir ) == -1 )
+    panic("Logic not started");
+
+  io_wantread(s);
+
+  for (;;) {
+    int64 i;
+    io_wait();
+
+    while ((i=io_canread())!=-1) {
+      if (i==s) { // ist es der serversocket?
+        int n;
+        while ((n=socket_accept4(s,(void*)&ip,&port))!=-1) {
+          if (io_fd(n)) {
+            struct http_data* h=(struct http_data*)malloc(sizeof(struct http_data));
+            io_wantread(n);
+
+            if (h) {
+              byte_zero(h,sizeof(struct http_data));
+              h->ip=ip;
+              taia_now(&t);
+              taia_addsec(&t,&t,OT_CLIENT_TIMEOUT);
+              io_timeout(n,t);
+              io_setcookie(n,h);
+              ++ot_overall_connections;
+            } else
+              io_close(n);
+          } else
+            io_close(n);
+        }
+        if( errno==EAGAIN )
+          io_eagain(s);
+        else
+          carp("socket_accept4");
+      } else {
+        char buf[8192];
+        struct http_data* h=io_getcookie(i);
+
+        int l=io_tryread(i,buf,sizeof buf);
+        if( l <= 0 ) {
+          if( h ) {
+            array_reset(&h->r);
+            free(h);
+          }
+          io_close(i);
+        } else {
+          array_catb(&h->r,buf,l);
+
+          if( array_failed(&h->r))
+            httperror(i,h,"500 Server Error","Request too long.");
+          else if (array_bytes(&h->r)>8192)
+            httperror(i,h,"500 request too long","You sent too much headers");
+          else if ((l=header_complete(h)))
+            httpresponse(i,h);
+          else {
+            taia_now(&t);
+            taia_addsec(&t,&t,OT_CLIENT_TIMEOUT);
+            io_timeout(i,t);
+          }
+        }
       }
     }
 
-allparsed:
-    ot_start_time = time( NULL );
-    if (socket_bind4_reuse(s,serverip,port)==-1)
-        panic("socket_bind4_reuse");
+    while ((i=io_canwrite())!=-1) {
+      struct http_data* h=io_getcookie(i);
 
-    if (socket_listen(s,16)==-1)
-        panic("socket_listen");
-
-    if (!io_fd(s))
-        panic("io_fd");
-
-    signal( SIGINT, graceful );
-    if( init_logic( serverdir ) == -1 )
-      panic("Logic not started");
-
-    io_wantread(s);
-
-    for (;;)
-    {
-        int64 i;
-        io_wait();
-
-        while ((i=io_canread())!=-1)
-        {
-            if (i==s)    // ist es der serversocket?
-            {
-                int n;
-                while ((n=socket_accept4(s,(void*)&ip,&port))!=-1)
-                {
-                    if (io_fd(n))
-                    {
-                        struct http_data* h=(struct http_data*)malloc(sizeof(struct http_data));
-                        io_wantread(n);
-
-                        if (h)
-                        {
-                            byte_zero(h,sizeof(struct http_data));
-                            h->ip=ip;
-                            taia_now(&t);
-                            taia_addsec(&t,&t,OT_CLIENT_TIMEOUT);
-                            io_timeout(n,t);
-                            io_setcookie(n,h);
-                            ++ot_overall_connections;
-                        } else
-                            io_close(n);
-                    } else
-                        io_close(n);
-                }
-                if (errno==EAGAIN)
-                    io_eagain(s);
-                else
-                    carp("socket_accept4");
-            }
-            else
-            {
-                char buf[8192];
-                struct http_data* h=io_getcookie(i);
-
-                int l=io_tryread(i,buf,sizeof buf);
-                if (l<=0)
-                {
-                    if (h)
-                    {
-                        array_reset(&h->r);
-                        free(h);
-                    }
-                    io_close(i);
-                }
-                else
-                {
-                    array_catb(&h->r,buf,l);
-
-                    if (array_failed(&h->r))
-                        httperror(i,h,"500 Server Error","Request too long.");
-                    else if (array_bytes(&h->r)>8192)
-                        httperror(i,h,"500 request too long","You sent too much headers");
-                    else if ((l=header_complete(h)))
-                        httpresponse(i,h);
-                }
-            }
+      int64 r=iob_send(i,&h->iob);
+      if (r==-1)
+        io_eagain(i);
+      else
+        if ((r<=0)||(h->iob.bytesleft==0)) {
+          iob_reset(&h->iob);
+          free(h);
+          io_close(i);
         }
-
-        while ((i=io_canwrite())!=-1)
-        {
-            struct http_data* h=io_getcookie(i);
-
-            int64 r=iob_send(i,&h->iob);
-            if (r==-1)
-                io_eagain(i);
-            else
-                if ((r<=0)||(h->iob.bytesleft==0))
-                {
-                    iob_reset(&h->iob);
-                    free(h);
-                    io_close(i);
-                }
-        }
-    }
-    return 0;
+      }
+  }
+  return 0;
 }
