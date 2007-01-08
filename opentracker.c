@@ -391,7 +391,9 @@ allparsed:
 
   for (;;) {
     int64 i;
-    io_wait();
+    taia_now(&t);
+    taia_addsec(&t,&t,OT_CLIENT_TIMEOUT_CHECKINTERVAL);
+    io_waituntil(t);
 
     taia_now(&t);
     if( taia_less( &next_timeout_check, &t ) ) {
