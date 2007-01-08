@@ -27,6 +27,7 @@
 #include "scan_urlencoded_query.h"
 
 unsigned long const OT_CLIENT_TIMEOUT = 15;
+unsigned long const OT_CLIENT_TIMEOUT_CHECKINTERVAL = 5;
 
 static unsigned int ot_overall_connections = 0;
 static time_t ot_start_time;
@@ -343,7 +344,7 @@ void help( char *name ) {
 
 int main( int argc, char **argv ) {
   int s=socket_tcp4();
-  tai6464 t;
+  tai6464 t, next_timeout_check;
   unsigned long ip;
   char *serverip = NULL;
   char *serverdir = ".";
@@ -384,17 +385,33 @@ allparsed:
   if( init_logic( serverdir ) == -1 )
     panic("Logic not started");
 
-  io_wantread(s);
+  io_wantread( s );
+  taia_now( &next_timeout_check );
+  taia_addsec( &next_timeout_check, &next_timeout_check, OT_CLIENT_TIMEOUT_CHECKINTERVAL );
 
   for (;;) {
     int64 i;
     io_wait();
 
-    while ((i=io_canread())!=-1) {
-      if (i==s) { // ist es der serversocket?
+    taia_now(&t);
+    if( taia_less( &next_timeout_check, &t ) ) {
+      while( ( i = io_timeouted() ) != -1 ) {
+        struct http_data* h=io_getcookie(i);
+        if( h ) {
+          array_reset( &h->r );
+          free( h );
+        }
+        io_close(i);
+      }
+      taia_now(&next_timeout_check);
+      taia_addsec(&next_timeout_check,&next_timeout_check,OT_CLIENT_TIMEOUT_CHECKINTERVAL);
+    }
+
+    while( ( i = io_canread() ) != -1 ) {
+      if( i == s ) { // ist es der serversocket?
         int n;
-        while ((n=socket_accept4(s,(void*)&ip,&port))!=-1) {
-          if (io_fd(n)) {
+        while( ( n = socket_accept4( s, (void*)&ip, &port) ) != -1 ) {
+          if( io_fd( n ) ) {
             struct http_data* h=(struct http_data*)malloc(sizeof(struct http_data));
             io_wantread(n);
 
