@@ -31,6 +31,8 @@ unsigned long const OT_CLIENT_TIMEOUT = 15;
 static unsigned int ot_overall_connections = 0;
 static time_t ot_start_time;
 static const unsigned int SUCCESS_HTTP_HEADER_LENGTH = 80;
+static char reply[8192];
+static size_t reply_size;
 
 static void carp(const char* routine) {
   buffer_puts(buffer_2,routine);
@@ -50,36 +52,40 @@ struct http_data {
   unsigned long ip;
 };
 
-int header_complete(struct http_data* r)
-{
-    long i;
+int header_complete(struct http_data* r) {
+  long l = array_bytes(&r->r);
+  const char* c = array_start(&r->r);
+  long i;
 
-    long l = array_bytes(&r->r);
-    const char* c = array_start(&r->r);
-
-    for (i=0; i+1<l; ++i)
-    {
-        if (c[i]=='\n' && c[i+1]=='\n')
-            return i+2;
-
-        if (i+3<l && c[i]=='\r' && c[i+1]=='\n' && c[i+2]=='\r' && c[i+3]=='\n')
-            return i+4;
-    }
-    return 0;
+  for (i=0; i+1<l; ++i) {
+    if (c[i]=='\n' && c[i+1]=='\n') return i+2;
+    if (i+3<l && c[i]=='\r' && c[i+1]=='\n' && c[i+2]=='\r' && c[i+3]=='\n') return i+4;
+  }
+  return 0;
 }
 
-void httperror(struct http_data* h,const char* title,const char* message)
-{
-    char* c = (char*)malloc(strlen(message)+strlen(title)+200);
-    if( !c) iob_addbuf(&h->iob, "HTTP/1.0 500 internal error\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nout of memory\n", 90);
-    else    iob_addbuf_free( &h->iob, c,
-              sprintf( c, "HTTP/1.0 %s\r\nContent-Type: text/html\r\nConnection: close\r\nContent-Length: %zd\r\n\r\n<title>%s</title>\n",
-                       title, strlen(message)+strlen(title)+16-4,title+4) );
+// whoever sends data is not interested in its input-array
+void senddata(int64 s,struct http_data* h) {
+  size_t written_size;
+
+  if( h ) array_reset(&h->r);
+  written_size = write( s, reply, reply_size );
+  if( ( written_size < 0 ) || ( written_size == reply_size ) ) {
+    free(h); io_close( s );
+  } else {
+    fprintf( stderr, "Should have handled this.\n" );
+    free(h); io_close( s );
+  }
+}
+
+void httperror(int64 s,struct http_data* h,const char* title,const char* message) {
+  reply_size = sprintf( reply, "HTTP/1.0 %s\r\nContent-Type: text/html\r\nConnection: close\r\nContent-Length: %zd\r\n\r\n<title>%s</title>\n",
+                        title, strlen(message)+strlen(title)+16-4,title+4);
+  senddata(s,h);
 }
 
 // bestimmten http parameter auslesen und adresse zurueckgeben
-const char* http_header(struct http_data* r,const char* h)
-{
+const char* http_header(struct http_data* r,const char* h) {
     long i;
 
     long l = array_bytes(&r->r);
@@ -99,24 +105,23 @@ const char* http_header(struct http_data* r,const char* h)
     return 0;
 }
 
-void httpresponse(struct http_data* h,int64 s)
+void httpresponse(int64 s,struct http_data* h)
 {
-    char       *c, *data, *reply = NULL;
+    char       *c, *data; // must be enough
     ot_peer     peer;
     ot_torrent *torrent;
     ot_hash    *hash = NULL;
     int         numwant, tmp, scanon;
     unsigned short port = htons(6881);
-    size_t      reply_size = 0;
 
+    reply_size = 0;
     array_cat0(&h->r);
 
     c = array_start(&h->r);
 
     if (byte_diff(c,4,"GET ")) {
 e400:
-        httperror(h,"400 Invalid Request","This server only understands GET.");
-        goto bailout;
+        return httperror(s,h,"400 Invalid Request","This server only understands GET.");
     }
 
     c+=4;
@@ -147,14 +152,12 @@ e400:
             continue;
           }
           /* ignore this, when we have less than 20 bytes */
-          switch( scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE ) ) {
-          case -1:
-            goto e404;
-          case 20:
-            hash = (ot_hash*)data; /* Fall through intended */
-          default:
-            continue;
+          if( scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE ) != 20 ) {
+e400_param:
+            return httperror(s,h,"400 Invalid Request","Invalid parameter");
           }
+          hash = (ot_hash*)data; /* Fall through intended */
+          break;
         default:
           scan_urlencoded_query( &c, NULL, SCAN_SEARCHPATH_VALUE );
           break;
@@ -162,19 +165,12 @@ e400:
       }
 
       /* Scanned whole query string, wo */
-      if( !hash ) {
-        httperror(h,"400 Invalid Request","This server only serves specific scrapes.");
-        goto bailout;
-      }
+      if( !hash )
+        return httperror(s,h,"400 Invalid Request","This server only serves specific scrapes.");
 
       // Enough for http header + whole scrape string
-      reply = malloc( SUCCESS_HTTP_HEADER_LENGTH + 128 );
-      if( reply )
-        reply_size = return_scrape_for_torrent( hash, SUCCESS_HTTP_HEADER_LENGTH + reply );
-      if( !reply || ( reply_size < 0 ) ) {
-        if( reply ) free( reply );
+      if( ( reply_size = return_scrape_for_torrent( hash, SUCCESS_HTTP_HEADER_LENGTH + reply ) ) <= 0 )
         goto e500;
-      }
       break;
     case 8: 
       if( byte_diff(data,8,"announce"))
@@ -198,7 +194,7 @@ e400:
           if(!byte_diff(data,2,"ip")) {
             size_t len = scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE );
             unsigned char ip[4];
-            if( ( len <= 0 ) || scan_fixed_ip( data, len, ip ) ) goto e404;
+            if( ( len <= 0 ) || scan_fixed_ip( data, len, ip ) ) goto e400_param;
             OT_SETIP ( &peer, ip );
          } else
             scan_urlencoded_query( &c, NULL, SCAN_SEARCHPATH_VALUE );
@@ -207,11 +203,11 @@ e400:
         case 4:
           if(!byte_diff(data,4,"port")) {
             size_t len = scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE );
-            if( ( len <= 0 ) || scan_fixed_int( data, len, &tmp ) || ( tmp > 0xffff ) ) goto e404;
+            if( ( len <= 0 ) || scan_fixed_int( data, len, &tmp ) || ( tmp > 0xffff ) ) goto e400_param;
             port = htons( tmp ); OT_SETPORT ( &peer, &port );
           } else if(!byte_diff(data,4,"left")) {
             size_t len = scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE );
-            if( ( len <= 0 ) || scan_fixed_int( data, len, &tmp ) ) goto e404;
+            if( ( len <= 0 ) || scan_fixed_int( data, len, &tmp ) ) goto e400_param;
             if( !tmp ) OT_FLAG( &peer ) |= PEER_FLAG_SEEDING;
           } else
             scan_urlencoded_query( &c, NULL, SCAN_SEARCHPATH_VALUE );
@@ -221,7 +217,7 @@ e400:
             scan_urlencoded_query( &c, NULL, SCAN_SEARCHPATH_VALUE );
           else switch( scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE ) ) {
           case -1:
-            goto e404;
+            goto e400_param;
           case 7:
             if(!byte_diff(data,7,"stopped")) OT_FLAG( &peer ) |= PEER_FLAG_STOPPED;
             break;
@@ -234,15 +230,13 @@ e400:
         case 7:
           if(!byte_diff(data,7,"numwant")) {
             size_t len = scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE );
-            if( ( len <= 0 ) || scan_fixed_int( data, len, &numwant ) ) goto e404;
+            if( ( len <= 0 ) || scan_fixed_int( data, len, &numwant ) ) goto e400_param;
             if( numwant > 200 ) numwant = 200;
           } else if(!byte_diff(data,7,"compact")) {
             size_t len = scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE );
-            if( ( len <= 0 ) || scan_fixed_int( data, len, &tmp ) ) goto e404;
-            if( !tmp ) {
-              httperror(h,"400 Invalid Request","This server only delivers compact results.");
-              goto bailout;
-            }
+            if( ( len <= 0 ) || scan_fixed_int( data, len, &tmp ) ) goto e400_param;
+            if( !tmp )
+              return httperror(s,h,"400 Invalid Request","This server only delivers compact results.");
           } else
             scan_urlencoded_query( &c, NULL, SCAN_SEARCHPATH_VALUE );
           break;
@@ -252,14 +246,10 @@ e400:
             continue;
           }
           /* ignore this, when we have less than 20 bytes */
-          switch( scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE ) ) {
-          case -1:
-            goto e404;
-          case 20:
-            hash = (ot_hash*)data;
-          default: // Fall through intended
-            continue;
-          }
+          if( scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE ) != 20 )
+            goto e400;
+          hash = (ot_hash*)data;
+          break;
         default:
           scan_urlencoded_query( &c, NULL, SCAN_SEARCHPATH_VALUE );
           break;
@@ -267,34 +257,24 @@ e400:
       }
 
       /* Scanned whole query string */
-      if( !hash ) goto e404;
+      if( !hash ) goto e400;
 
       if( OT_FLAG( &peer ) & PEER_FLAG_STOPPED ) {
         remove_peer_from_torrent( hash, &peer );
-        reply = malloc( SUCCESS_HTTP_HEADER_LENGTH + 26 );
-        if( !reply )
-          goto e500;
         MEMMOVE( reply + SUCCESS_HTTP_HEADER_LENGTH, "d15:warning message4:Okaye", reply_size = 26 );
       } else {
         torrent = add_peer_to_torrent( hash, &peer );
         if( !torrent ) {
 e500:
-          httperror(h,"500 Internal Server Error","A server error has occured. Please retry later.");
-          goto bailout;
+          return httperror(s,h,"500 Internal Server Error","A server error has occured. Please retry later.");
         }
-        reply = malloc( SUCCESS_HTTP_HEADER_LENGTH + numwant * 6 + 128 ); // http header + peerlist + seeder, peers and lametta 80 + n*6+81 a.t.m.
-        if( reply )
-          reply_size = return_peers_for_torrent( torrent, numwant, SUCCESS_HTTP_HEADER_LENGTH + reply );
-        if( !reply || ( reply_size <= 0 ) ) {
-          if( reply ) free( reply );
+        if( ( reply_size = return_peers_for_torrent( torrent, numwant, SUCCESS_HTTP_HEADER_LENGTH + reply ) ) <= 0 )
           goto e500;
-        }
       }
       break;
     case 11:
       if( byte_diff(data,11,"mrtg_scrape"))
         goto e404;
-      reply = malloc( SUCCESS_HTTP_HEADER_LENGTH + 128 );
       { 
         unsigned long seconds_elapsed = time( NULL ) - ot_start_time;
         reply_size = sprintf( reply + SUCCESS_HTTP_HEADER_LENGTH, 
@@ -305,31 +285,16 @@ e500:
       break;
     default: /* neither *scrape nor announce */
 e404:
-      httperror(h,"404 Not Found","No such file or directory.");
-      goto bailout;
+      return httperror(s,h,"404 Not Found","No such file or directory.");
     }
 
-    if( reply && reply_size ) {
+    if( reply_size ) {
       MEMMOVE( reply, "HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nContent-Length: X                \r\n\r\n", SUCCESS_HTTP_HEADER_LENGTH );
                                                                        fmt_ulonglong( reply+59, (long long)reply_size );
-      iob_addbuf_free(&h->iob, reply, SUCCESS_HTTP_HEADER_LENGTH + reply_size );
     }
-
-bailout:
+    reply_size += SUCCESS_HTTP_HEADER_LENGTH;
     io_dontwantread(s);
-    io_wantwrite(s);
-
-    reply_size=iob_send(s,&h->iob);
-    if (reply_size==-1) {
-      io_eagain(s);
-    } else
-      if ((reply_size<=0)||(h->iob.bytesleft==0))
-      {
-        array_reset(&h->r);
-        iob_reset(&h->iob);
-        free(h);
-        io_close(s);
-      }
+    senddata(s,h);
 }
 
 void graceful( int s ) {
@@ -468,7 +433,6 @@ allparsed:
                     if (h)
                     {
                         array_reset(&h->r);
-                        iob_reset(&h->iob);
                         free(h);
                     }
                     io_close(i);
@@ -478,21 +442,11 @@ allparsed:
                     array_catb(&h->r,buf,l);
 
                     if (array_failed(&h->r))
-                    {
-                        httperror(h,"500 Server Error","request too long.");
-emerge:
-                        io_dontwantread(i);
-                        io_wantwrite(i);
-                    }
+                        httperror(i,h,"500 Server Error","Request too long.");
                     else if (array_bytes(&h->r)>8192)
-                    {
-                        httperror(h,"500 request too long","You sent too much headers");
-                        goto emerge;
-                    }
+                        httperror(i,h,"500 request too long","You sent too much headers");
                     else if ((l=header_complete(h)))
-                    {
-                        httpresponse(h,i);
-                    }
+                        httpresponse(i,h);
                 }
             }
         }
@@ -507,7 +461,6 @@ emerge:
             else
                 if ((r<=0)||(h->iob.bytesleft==0))
                 {
-                    array_reset(&h->r);
                     iob_reset(&h->iob);
                     free(h);
                     io_close(i);
