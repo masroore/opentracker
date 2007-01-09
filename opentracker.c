@@ -10,7 +10,6 @@
 #include "array.h"
 #include "case.h"
 #include "fmt.h"
-#include "iob.h"
 #include "str.h"
 #include <string.h>
 #include <sys/types.h>
@@ -32,8 +31,9 @@ unsigned long const OT_CLIENT_TIMEOUT_CHECKINTERVAL = 5;
 static unsigned int ot_overall_connections = 0;
 static time_t ot_start_time;
 static const unsigned int SUCCESS_HTTP_HEADER_LENGTH = 80;
-static char reply[8192];
-static size_t reply_size;
+static const unsigned int SUCCESS_HTTP_SIZE_OFF = 17;
+// To always have space for error messages
+static char static_reply[8192];
 
 static void carp(const char* routine) {
   buffer_puts(buffer_2,routine);
@@ -49,7 +49,6 @@ static void panic(const char* routine) {
 
 struct http_data {
   array r;
-  io_batch iob;
   unsigned long ip;
 };
 
@@ -66,23 +65,24 @@ int header_complete(struct http_data* r) {
 }
 
 // whoever sends data is not interested in its input-array
-void senddata(int64 s,struct http_data* h) {
+void senddata(int64 s, struct http_data* h, char *buffer, size_t size ) {
   size_t written_size;
 
   if( h ) array_reset(&h->r);
-  written_size = write( s, reply, reply_size );
-  if( ( written_size < 0 ) || ( written_size == reply_size ) ) {
+  written_size = write( s, buffer, size );
+  if( ( written_size < 0 ) || ( written_size == size ) ) {
     free(h); io_close( s );
   } else {
+    // here we would take a copy of the buffer and remember it
     fprintf( stderr, "Should have handled this.\n" );
     free(h); io_close( s );
   }
 }
 
 void httperror(int64 s,struct http_data* h,const char* title,const char* message) {
-  reply_size = sprintf( reply, "HTTP/1.0 %s\r\nContent-Type: text/html\r\nConnection: close\r\nContent-Length: %zd\r\n\r\n<title>%s</title>\n",
+  size_t reply_size = sprintf( static_reply, "HTTP/1.0 %s\r\nContent-Type: text/html\r\nConnection: close\r\nContent-Length: %zd\r\n\r\n<title>%s</title>\n",
                         title, strlen(message)+strlen(title)+16-4,title+4);
-  senddata(s,h);
+  senddata(s,h,static_reply,reply_size);
 }
 
 // bestimmten http parameter auslesen und adresse zurueckgeben
@@ -114,10 +114,9 @@ void httpresponse(int64 s,struct http_data* h)
     ot_hash    *hash = NULL;
     int         numwant, tmp, scanon;
     unsigned short port = htons(6881);
+    size_t      reply_size = 0;
 
-    reply_size = 0;
     array_cat0(&h->r);
-
     c = array_start(&h->r);
 
     if (byte_diff(c,4,"GET ")) {
@@ -170,7 +169,7 @@ e400_param:
         return httperror(s,h,"400 Invalid Request","This server only serves specific scrapes.");
 
       // Enough for http header + whole scrape string
-      if( ( reply_size = return_scrape_for_torrent( hash, SUCCESS_HTTP_HEADER_LENGTH + reply ) ) <= 0 )
+      if( ( reply_size = return_scrape_for_torrent( hash, SUCCESS_HTTP_HEADER_LENGTH + static_reply ) ) <= 0 )
         goto e500;
       break;
     case 8: 
@@ -262,14 +261,14 @@ e400_param:
 
       if( OT_FLAG( &peer ) & PEER_FLAG_STOPPED ) {
         remove_peer_from_torrent( hash, &peer );
-        MEMMOVE( reply + SUCCESS_HTTP_HEADER_LENGTH, "d15:warning message4:Okaye", reply_size = 26 );
+        MEMMOVE( static_reply + SUCCESS_HTTP_HEADER_LENGTH, "d15:warning message4:Okaye", reply_size = 26 );
       } else {
         torrent = add_peer_to_torrent( hash, &peer );
         if( !torrent ) {
 e500:
           return httperror(s,h,"500 Internal Server Error","A server error has occured. Please retry later.");
         }
-        if( ( reply_size = return_peers_for_torrent( torrent, numwant, SUCCESS_HTTP_HEADER_LENGTH + reply ) ) <= 0 )
+        if( ( reply_size = return_peers_for_torrent( torrent, numwant, SUCCESS_HTTP_HEADER_LENGTH + static_reply ) ) <= 0 )
           goto e500;
       }
       break;
@@ -278,7 +277,7 @@ e500:
         goto e404;
       { 
         unsigned long seconds_elapsed = time( NULL ) - ot_start_time;
-        reply_size = sprintf( reply + SUCCESS_HTTP_HEADER_LENGTH, 
+        reply_size = sprintf( static_reply + SUCCESS_HTTP_HEADER_LENGTH, 
                               "%d\n%d\nUp: %ld seconds (%ld hours)\nPretuned by german engineers, currently handling %li connections per second.",
                               ot_overall_connections, ot_overall_connections, seconds_elapsed,
                               seconds_elapsed / 3600, ot_overall_connections / ( seconds_elapsed ? seconds_elapsed : 1 ) );
@@ -290,12 +289,14 @@ e404:
     }
 
     if( reply_size ) {
-      MEMMOVE( reply, "HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nContent-Length: X                \r\n\r\n", SUCCESS_HTTP_HEADER_LENGTH );
-                                                                       fmt_ulonglong( reply+59, (long long)reply_size );
+      size_t reply_off = SUCCESS_HTTP_SIZE_OFF - snprintf( static_reply, 0, "%zd", reply_size );
+      reply_size += 1 + sprintf( static_reply + reply_off, "HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %zd\r\n\r", reply_size );
+      static_reply[ SUCCESS_HTTP_HEADER_LENGTH - 1 ] = '\n';
+      senddata( s, h, static_reply + reply_off, reply_size );
+    } else {
+      if( h ) array_reset(&h->r);
+      free( h ); io_close( s );
     }
-    reply_size += SUCCESS_HTTP_HEADER_LENGTH;
-    io_dontwantread(s);
-    senddata(s,h);
 }
 
 void graceful( int s ) {
@@ -462,20 +463,6 @@ allparsed:
         }
       }
     }
-
-    while ((i=io_canwrite())!=-1) {
-      struct http_data* h=io_getcookie(i);
-
-      int64 r=iob_send(i,&h->iob);
-      if (r==-1)
-        io_eagain(i);
-      else
-        if ((r<=0)||(h->iob.bytesleft==0)) {
-          iob_reset(&h->iob);
-          free(h);
-          io_close(i);
-        }
-      }
   }
   return 0;
 }

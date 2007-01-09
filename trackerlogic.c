@@ -75,10 +75,10 @@ static void *vector_find_or_insert( ot_vector *vector, void *key, size_t member_
     if( !new_data ) return NULL;
 
     // Adjust pointer if it moved by realloc
-    match = match - (ot_byte*)vector->data + new_data;
+    match = new_data + (match - (ot_byte*)vector->data);
 
     vector->data = new_data;
-    vector->space = new_space;;
+    vector->space = new_space;
   }
   MEMMOVE( match + member_size, match, ((ot_byte*)vector->data) + member_size * vector->size - match );
   vector->size++;
@@ -94,11 +94,11 @@ static int vector_remove_peer( ot_vector *vector, ot_peer *peer ) {
   match = BINARY_FIND( peer, vector->data, vector->size, sizeof( ot_peer ), OT_PEER_COMPARE_SIZE, &exactmatch );
 
   if( !exactmatch ) return 0;
-  exactmatch = OT_FLAG( match ) & PEER_FLAG_SEEDING ? 2 : 1;
-  MEMMOVE( match, match + 1, end - match - 1 );
+  exactmatch = ( OT_FLAG( match ) & PEER_FLAG_SEEDING ) ? 2 : 1;
+  MEMMOVE( match, match + 1, sizeof(ot_peer) * ( end - match - 1 ) );
   if( ( --vector->size * OT_VECTOR_SHRINK_THRESH < vector->space ) && ( vector->space > OT_VECTOR_MIN_MEMBERS ) ) {
     vector->space /= OT_VECTOR_SHRINK_RATIO;
-    realloc( vector->data, vector->space * sizeof( ot_peer ) );
+    vector->data = realloc( vector->data, vector->space * sizeof( ot_peer ) );
   }
   return exactmatch;
 }
@@ -120,11 +120,15 @@ static int vector_remove_torrent( ot_vector *vector, ot_hash *hash ) {
   match = BINARY_FIND( hash, vector->data, vector->size, sizeof( ot_torrent ), OT_HASH_COMPARE_SIZE, &exactmatch );
 
   if( !exactmatch ) return 0;
-  free_peerlist( match->peer_list );
-  MEMMOVE( match, match + 1, end - match - 1 );
+
+  // If this is being called after a unsuccessful malloc() for peer_list
+  // in add_peer_to_torrent, match->peer_list actually might be NULL
+  if( match->peer_list) free_peerlist( match->peer_list );
+
+  MEMMOVE( match, match + 1, sizeof(ot_torrent) * ( end - match - 1 ) );
   if( ( --vector->size * OT_VECTOR_SHRINK_THRESH < vector->space ) && ( vector->space > OT_VECTOR_MIN_MEMBERS ) ) {
     vector->space /= OT_VECTOR_SHRINK_RATIO;
-    realloc( vector->data, vector->space * sizeof( ot_torrent ) );
+    vector->data = realloc( vector->data, vector->space * sizeof( ot_torrent ) );
   }
   return 1;
 }
@@ -175,12 +179,13 @@ ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer ) {
 
   if( !exactmatch ) {
     // Create a new torrent entry, then
+    MEMMOVE( &torrent->hash, hash, sizeof( ot_hash ) );
+
     torrent->peer_list = malloc( sizeof (ot_peerlist) );
     if( !torrent->peer_list ) {
       vector_remove_torrent( torrents_list, hash );
       return NULL;
     }
-    MEMMOVE( &torrent->hash, hash, sizeof( ot_hash ) );
 
     byte_zero( torrent->peer_list, sizeof( ot_peerlist ));
     torrent->peer_list->base = NOW;
