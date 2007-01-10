@@ -382,6 +382,7 @@ allparsed:
   if (!io_fd(s))
     panic("io_fd");
 
+  signal( SIGPIPE, SIG_IGN );
   signal( SIGINT, graceful );
   if( init_logic( serverdir ) == -1 )
     panic("Logic not started");
