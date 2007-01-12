@@ -256,7 +256,7 @@ size_t return_peers_for_torrent( ot_torrent *torrent, unsigned int amount, char 
   r += sprintf( r, "d8:completei%ie10:incompletei%ie8:intervali600e5:peers%i:", seed_count, peer_count-seed_count, 6*amount );
   for( index = 0; index < amount; ++index ) {
     double step = 1.8*((double)( peer_count - wert - 1 ))/((double)( amount - index ));
-    int off = random() % (int)floor( step );
+    int off = random() % (int)step;
     off = 1 + ( off % ( peer_count - wert - 1 ));
     wert += off; pool_offset += off;
 
