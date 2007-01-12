@@ -4,8 +4,8 @@ You need libowfat (http://www.fefe.de/libowfat/).
 
 Steps to go:
 
-fetch http://dl.fefe.de/libowfat-0.24.tar.bz2
-tar xjf libowfat-0.24.tar.bz2
+fetch http://dl.fefe.de/libowfat-0.25.tar.bz2
+tar xjf libowfat-0.25.tar.bz2
 cd libowfat
 make
 cd ..
