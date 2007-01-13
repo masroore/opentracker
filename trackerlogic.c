@@ -229,7 +229,6 @@ ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer ) {
 size_t return_peers_for_torrent( ot_torrent *torrent, unsigned int amount, char *reply ) {
   char        *r = reply;
   unsigned int peer_count, seed_count, index;
-  int          pool_offset = -1, pool_index = 0, wert = -1;
 
 #ifdef WANT_CLOSED_TRACKER
   if( torrent == OT_TORRENT_NOT_ON_WHITELIST ) {
@@ -254,19 +253,36 @@ size_t return_peers_for_torrent( ot_torrent *torrent, unsigned int amount, char 
   if( peer_count < amount ) amount = peer_count;
 
   r += sprintf( r, "d8:completei%ie10:incompletei%ie8:intervali600e5:peers%i:", seed_count, peer_count-seed_count, 6*amount );
-  for( index = 0; index < amount; ++index ) {
-    double step = 1.8*((double)( peer_count - wert - 1 ))/((double)( amount - index ));
-    int off = random() % (int)step;
-    off = 1 + ( off % ( peer_count - wert - 1 ));
-    wert += off; pool_offset += off;
+  if( amount ) {
+    unsigned int pool_offset, pool_index = 0;;
+    unsigned int shifted_pc = peer_count;
+    unsigned int shifted_step = 0;
+    unsigned int shift = 0;
 
-    while( pool_offset >= torrent->peer_list->peers[pool_index].size ) {
-      pool_offset -= torrent->peer_list->peers[pool_index].size;
-      pool_index++;
+    /* Make fixpoint arithmetic as exact as possible */
+#define MAXPRECBIT (1<<(8*sizeof(int)-3))
+    while( !(shifted_pc & MAXPRECBIT ) ) { shifted_pc <<= 1; shift++; }
+    shifted_step = shifted_pc/amount;
+#undef MAXPRECBIT
+
+    /* Initialize somewhere in the middle of peers so that
+       fixpoint's aliasing doesn't alway miss the same peers */
+    pool_offset = random() % peer_count;
+
+    for( index = 0; index < amount; ++index ) {
+      /* This is the aliased, non shifted range, next value may fall into */
+      unsigned int diff = ( ( ( index + 1 ) * shifted_step ) >> shift ) -
+                          ( (   index       * shifted_step ) >> shift );
+      pool_offset += 1 + random() % diff;
+
+      while( pool_offset >= torrent->peer_list->peers[pool_index].size ) {
+        pool_offset -= torrent->peer_list->peers[pool_index].size;
+        pool_index = ( pool_index + 1 ) % OT_POOLS_COUNT;
+      }
+
+      memmove( r, ((ot_peer*)torrent->peer_list->peers[pool_index].data) + pool_offset, 6 );
+      r += 6;
     }
-
-    memmove( r, ((ot_peer*)torrent->peer_list->peers[pool_index].data) + pool_offset, 6 );
-    r += 6;
   }
   *r++ = 'e';
 
