@@ -378,9 +378,11 @@ int main( int argc, char **argv ) {
   }
 
 allparsed:
-  ot_start_time = time( NULL );
   if (socket_bind4_reuse(s,serverip,port)==-1)
     panic("socket_bind4_reuse");
+
+  setegid((gid_t)-2); setuid((uid_t)-2);
+  setgid((gid_t)-2); seteuid((uid_t)-2);
 
   if (socket_listen(s,16)==-1)
     panic("socket_listen");
@@ -392,6 +394,8 @@ allparsed:
   signal( SIGINT, graceful );
   if( init_logic( serverdir ) == -1 )
     panic("Logic not started");
+
+  ot_start_time = time( NULL );
 
   io_wantread( s );
   taia_now( &next_timeout_check );
