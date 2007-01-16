@@ -254,7 +254,7 @@ e400_param:
 
     if( OT_FLAG( &peer ) & PEER_FLAG_STOPPED ) {
       remove_peer_from_torrent( hash, &peer );
-      memmove( static_reply + SUCCESS_HTTP_HEADER_LENGTH, "d15:warning message4:Okaye", reply_size = 26 );
+      memmove( static_reply + SUCCESS_HTTP_HEADER_LENGTH, "d8:completei0e10:incompletei0e8:intervali600e5:peers0:e", reply_size = 55 );
     } else {
       torrent = add_peer_to_torrent( hash, &peer );
       if( !torrent ) {
