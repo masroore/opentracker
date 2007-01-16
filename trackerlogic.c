@@ -321,6 +321,7 @@ size_t return_stats_for_tracker( char *reply ) {
     torrent_count += torrents_list->size;
     for( j=0; j<torrents_list->size; ++j ) {
       ot_peerlist *peer_list = (  ((ot_torrent*)(torrents_list->data))[j] ).peer_list;
+      clean_peerlist( peer_list );
       for( k=0; k<OT_POOLS_COUNT; ++k ) {
         peer_count += peer_list->peers[k].size;
         seed_count += peer_list->seed_count[k];
