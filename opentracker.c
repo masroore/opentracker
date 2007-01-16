@@ -127,6 +127,13 @@ e400:
   while (*c=='/') ++c;
 
   switch( scan_urlencoded_query( &c, data = c, SCAN_PATH ) ) {
+  case 5: /* scrape ? */
+    if (byte_diff(data,5,"stats"))
+      goto e404;
+    /* Enough for http header + whole scrape string */
+    if( ( reply_size = return_stats_for_tracker( SUCCESS_HTTP_HEADER_LENGTH + static_reply ) ) <= 0 )	
+      goto e500;
+    break;
   case 6: /* scrape ? */
     if (byte_diff(data,6,"scrape"))
       goto e404;

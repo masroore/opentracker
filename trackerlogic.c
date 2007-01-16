@@ -310,6 +310,28 @@ size_t return_scrape_for_torrent( ot_hash *hash, char *reply ) {
   return r - reply;
 }
 
+/* Fetches stats from tracker */
+size_t return_stats_for_tracker( char *reply ) {
+  int torrent_count = 0, peer_count = 0, seed_count = 0;
+  char *r  = reply;
+  int i,j,k;
+
+  for( i=0; i<256; ++i ) {
+    ot_vector *torrents_list = &all_torrents[i];
+    torrent_count += torrents_list->size;
+    for( j=0; j<torrents_list->size; ++j ) {
+      ot_peerlist *peer_list = (  ((ot_torrent*)(torrents_list->data))[j] ).peer_list;
+      for( k=0; k<OT_POOLS_COUNT; ++k ) {
+        peer_count += peer_list->peers[k].size;
+        seed_count += peer_list->seed_count[k];
+      }
+    }
+  }
+  r += sprintf( r, "%i\n%i\nopentracker serving %i torrents\nSomething else.", peer_count, seed_count, torrent_count );
+
+  return r - reply;
+}
+
 void remove_peer_from_torrent( ot_hash *hash, ot_peer *peer ) {
   int          exactmatch, i;
   ot_vector   *torrents_list = &all_torrents[*hash[0]];
