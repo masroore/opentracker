@@ -133,9 +133,10 @@ static int vector_remove_torrent( ot_vector *vector, ot_hash *hash ) {
   return 1;
 }
 
-/* Returns 1, if torrent is gone, 0 otherwise */
-static int clean_peerlist( ot_peerlist *peer_list ) {
-  int i, timedout = (int)( NOW - peer_list->base );
+/* Returns 1, if torrent is gone, 0 otherwise
+   We expect NOW as a parameter since calling time() may be expensive*/
+static int clean_peerlist( time_t time_now, ot_peerlist *peer_list ) {
+  int i, timedout = (int)( time_now - peer_list->base );
 
   if( !timedout ) return 0;
   if( timedout > OT_POOLS_COUNT ) timedout = OT_POOLS_COUNT;
@@ -189,7 +190,7 @@ ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer ) {
     byte_zero( torrent->peer_list, sizeof( ot_peerlist ));
     torrent->peer_list->base = NOW;
   } else
-    clean_peerlist( torrent->peer_list );
+    clean_peerlist( NOW, torrent->peer_list );
 
   peer_pool = &torrent->peer_list->peers[0];
   peer_dest = vector_find_or_insert( peer_pool, (void*)peer, sizeof( ot_peer ), OT_PEER_COMPARE_SIZE, &exactmatch );
@@ -297,7 +298,7 @@ size_t return_scrape_for_torrent( ot_hash *hash, char *reply ) {
   ot_torrent  *torrent = binary_search( hash, torrents_list->data, torrents_list->size, sizeof( ot_torrent ), OT_HASH_COMPARE_SIZE, &exactmatch );
 
   if( !exactmatch ) return 0;
-  clean_peerlist( torrent->peer_list );
+  clean_peerlist( NOW, torrent->peer_list );
 
   for( i=0; i<OT_POOLS_COUNT; ++i ) {
     peers += torrent->peer_list->peers[i].size;
@@ -312,6 +313,7 @@ size_t return_scrape_for_torrent( ot_hash *hash, char *reply ) {
 
 /* Fetches stats from tracker */
 size_t return_stats_for_tracker( char *reply ) {
+  time_t time_now = NOW;
   int torrent_count = 0, peer_count = 0, seed_count = 0;
   char *r  = reply;
   int i,j,k;
@@ -321,7 +323,7 @@ size_t return_stats_for_tracker( char *reply ) {
     torrent_count += torrents_list->size;
     for( j=0; j<torrents_list->size; ++j ) {
       ot_peerlist *peer_list = (  ((ot_torrent*)(torrents_list->data))[j] ).peer_list;
-      clean_peerlist( peer_list );
+      clean_peerlist( time_now, peer_list );
       for( k=0; k<OT_POOLS_COUNT; ++k ) {
         peer_count += peer_list->peers[k].size;
         seed_count += peer_list->seed_count[k];
@@ -341,7 +343,7 @@ void remove_peer_from_torrent( ot_hash *hash, ot_peer *peer ) {
   if( !exactmatch ) return;
   
   /* Maybe this does the job */
-  if( clean_peerlist( torrent->peer_list ) ) {
+  if( clean_peerlist( NOW, torrent->peer_list ) ) {
 #ifdef WANT_CLOSED_TRACKER
     if( !g_closedtracker ) 
 #endif
