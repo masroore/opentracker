@@ -273,7 +273,7 @@ e500:
       reply_size = sprintf( static_reply + SUCCESS_HTTP_HEADER_LENGTH, 
                             "%i\n%i\nUp: %i seconds (%i hours)\nPretuned by german engineers, currently handling %i connections per second.",
                             ot_overall_connections, ot_overall_connections, (int)seconds_elapsed,
-                            (int)(seconds_elapsed / 3600), ot_overall_connections / ( seconds_elapsed ? seconds_elapsed : 1 ) );
+                            (int)(seconds_elapsed / 3600), (int)ot_overall_connections / ( (int)seconds_elapsed ? (int)seconds_elapsed : 1 ) );
     }
     break;
   default: /* neither *scrape nor announce */
@@ -399,7 +399,6 @@ allparsed:
 
   io_wantread( s );
   taia_now( &next_timeout_check );
-  taia_addsec( &next_timeout_check, &next_timeout_check, OT_CLIENT_TIMEOUT_CHECKINTERVAL );
 
   for (;;) {
     int64 i;
