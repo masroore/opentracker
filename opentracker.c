@@ -106,7 +106,7 @@ void httpresponse(int64 s,struct http_data* h)
   ot_peer     peer;
   ot_torrent *torrent;
   ot_hash    *hash = NULL;
-  int         numwant, tmp, scanon;
+  int         numwant, tmp, scanon, mode;
   unsigned short port = htons(6881);
   size_t      reply_size = 0;
 
@@ -130,8 +130,37 @@ e400:
   case 5: /* scrape ? */
     if (byte_diff(data,5,"stats"))
       goto e404;
+    scanon = 1;
+    mode = STATS_MRTG;
+
+    while( scanon ) {
+      switch( scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_PARAM ) ) {
+      case -2: /* terminator */
+        scanon = 0;
+        break;
+      case -1: /* error */
+        goto e404;
+      case 4:
+        if(byte_diff(data,4,"mode")) {
+          scan_urlencoded_query( &c, NULL, SCAN_SEARCHPATH_VALUE );
+          continue;
+        }
+        size_t len = scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE );
+        if( len <= 0 ) goto e400_param;
+        if( !byte_diff(data,4,"mrtg"))
+          mode = STATS_MRTG;
+        else if( !byte_diff(data,4,"top5"))
+          mode = STATS_TOP5;
+        else
+          goto e400_param;
+      default:
+        scan_urlencoded_query( &c, NULL, SCAN_SEARCHPATH_VALUE );
+        break;
+      }
+    }
+
     /* Enough for http header + whole scrape string */
-    if( ( reply_size = return_stats_for_tracker( SUCCESS_HTTP_HEADER_LENGTH + static_reply ) ) <= 0 )	
+    if( ( reply_size = return_stats_for_tracker( SUCCESS_HTTP_HEADER_LENGTH + static_reply, mode ) ) <= 0 )	
       goto e500;
     break;
   case 6: /* scrape ? */

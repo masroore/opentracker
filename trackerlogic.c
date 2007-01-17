@@ -311,26 +311,60 @@ size_t return_scrape_for_torrent( ot_hash *hash, char *reply ) {
   return r - reply;
 }
 
+typedef struct { int val; ot_torrent * torrent; } ot_record;
+
 /* Fetches stats from tracker */
-size_t return_stats_for_tracker( char *reply ) {
+size_t return_stats_for_tracker( char *reply, int mode ) {
   time_t time_now = NOW;
   int torrent_count = 0, peer_count = 0, seed_count = 0;
+  ot_record top5s[5], top5c[5];
   char *r  = reply;
   int i,j,k;
+
+  byte_zero( top5s, sizeof( top5s ) );
+  byte_zero( top5c, sizeof( top5c ) );
 
   for( i=0; i<256; ++i ) {
     ot_vector *torrents_list = &all_torrents[i];
     torrent_count += torrents_list->size;
     for( j=0; j<torrents_list->size; ++j ) {
-      ot_peerlist *peer_list = (  ((ot_torrent*)(torrents_list->data))[j] ).peer_list;
+      ot_peerlist *peer_list = ( ((ot_torrent*)(torrents_list->data))[j] ).peer_list;
+      int local_peers = 0, local_seeds = 0;
       clean_peerlist( time_now, peer_list );
       for( k=0; k<OT_POOLS_COUNT; ++k ) {
-        peer_count += peer_list->peers[k].size;
-        seed_count += peer_list->seed_count[k];
+        local_peers += peer_list->peers[k].size;
+        local_seeds += peer_list->seed_count[k];
       }
+      if( mode == STATS_TOP5 ) {
+        int idx = 4; while( (idx >= 0) && ( local_peers > top5c[idx].val ) ) --idx;
+        if ( idx++ != 4 ) {
+          memmove( top5c + idx + 1, top5c + idx, ( 4 - idx ) * sizeof( ot_record ) );
+          top5c[idx].val = local_peers;
+          top5c[idx].torrent = (ot_torrent*)(torrents_list->data) + j;
+        }
+        idx = 4; while( (idx >= 0) && ( local_seeds > top5s[idx].val ) ) --idx;
+        if ( idx++ != 4 ) {
+          memmove( top5s + idx + 1, top5s + idx, ( 4 - idx ) * sizeof( ot_record ) );
+          top5s[idx].val = local_seeds;
+          top5s[idx].torrent = (ot_torrent*)(torrents_list->data) + j;
+        }
+      }
+      peer_count += local_peers; seed_count += local_seeds;
     }
   }
-  r += sprintf( r, "%i\n%i\nopentracker serving %i torrents\nSomething else.", peer_count, seed_count, torrent_count );
+  if( mode == STATS_TOP5 ) {
+    int idx;
+    r += sprintf( r, "Top5 torrents by peers:\n" );
+    for( idx=0; idx<5; ++idx )
+      if( top5c[idx].torrent )
+        r += sprintf( r, "\t%i\t%s\n", top5c[idx].val, to_hex(top5c[idx].torrent->hash) );
+    r += sprintf( r, "Top5 torrents by seeds:\n" );
+    for( idx=0; idx<5; ++idx )
+      if( top5s[idx].torrent )
+        r += sprintf( r, "\t%i\t%s\n", top5s[idx].val, to_hex(top5s[idx].torrent->hash) );
+  } else {
+    r += sprintf( r, "%i\n%i\nopentracker serving %i torrents\nSomething else.", peer_count, seed_count, torrent_count );
+  }
 
   return r - reply;
 }
