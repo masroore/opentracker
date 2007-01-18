@@ -385,21 +385,12 @@ void help( char *name ) {
 );
 }
 
-void handle_read( int64 clientsocket, int afteraccept ) {
+void handle_read( int64 clientsocket ) {
   struct http_data* h = io_getcookie( clientsocket );
   int l = io_tryread( clientsocket, static_scratch, sizeof static_scratch );
   tai6464 t;
 
-  taia_now(&t);
-  taia_addsec(&t,&t,OT_CLIENT_TIMEOUT);
-  io_timeout(clientsocket,t);
-
   if( l <= 0 ) {
-    // getting 0 bytes doesn't mean connection closed,
-    // when we try the shortcut read() after accept()
-    // and nothing is there yet
-    if( afteraccept && ( errno == EAGAIN ) )
-      return;
     if( h ) {
       array_reset(&h->r);
       free(h);
@@ -416,68 +407,82 @@ void handle_read( int64 clientsocket, int afteraccept ) {
     httperror(clientsocket,h,"500 request too long","You sent too much headers");
   else if ((l=header_complete(h)))
     httpresponse(clientsocket,h);
+  else {
+    taia_now(&t);
+    taia_addsec(&t,&t,OT_CLIENT_TIMEOUT);
+    io_timeout(clientsocket,t);
+  }
+}
+
+void handle_accept( int64 serversocket ) {
+  struct http_data* h;
+  unsigned char ip[4];
+  uint16 port;
+  tai6464 t;
+  int64 i;
+
+  while( ( i = socket_accept4( serversocket, (char*)ip, &port) ) != -1 ) {
+
+    if( !io_fd( i ) ||
+        !(h = (struct http_data*)malloc(sizeof(struct http_data))) ) {
+      io_close( i );
+      continue;
+    }
+
+    io_wantread( i );
+
+    byte_zero(h,sizeof(struct http_data));
+    memmove(h->ip,ip,sizeof(ip));
+    io_setcookie(i,h);
+    ++ot_overall_connections;
+    taia_now(&t);
+    taia_addsec(&t,&t,OT_CLIENT_TIMEOUT);
+    io_timeout(i,t);
+  }
+
+  if( errno==EAGAIN )
+    io_eagain( serversocket );
+  else
+    carp( "socket_accept4" );
+}
+
+void handle_timeouted( ) {
+  int64 i;
+  while( ( i = io_timeouted() ) != -1 ) {
+    struct http_data* h=io_getcookie(i);
+    if( h ) {
+      array_reset( &h->r );
+      free( h );
+    }
+    io_close(i);
+  }
 }
 
 void server_mainloop( int64 serversocket ) {
   tai6464 t, next_timeout_check;
-  unsigned char ip[4];
-  uint16 port;
 
   io_wantread( serversocket );
   taia_now( &next_timeout_check );
 
   for (;;) {
     int64 i;
-    int handled_connections = 1024;
 
     taia_now(&t);
     taia_addsec(&t,&t,OT_CLIENT_TIMEOUT_CHECKINTERVAL);
     io_waituntil(t);
 
-    taia_now(&t);
-    if( taia_less( &next_timeout_check, &t ) ) {
-      while( ( i = io_timeouted() ) != -1 ) {
-        struct http_data* h=io_getcookie(i);
-        if( h ) {
-          array_reset( &h->r );
-          free( h );
-        }
-        io_close(i);
-      }
-      taia_now(&next_timeout_check);
-      taia_addsec(&next_timeout_check,&next_timeout_check,OT_CLIENT_TIMEOUT_CHECKINTERVAL);
+    while( ( i = io_canread() ) != -1 ) {
+      if( i == serversocket )
+        handle_accept( i );
+      else
+        handle_read( i );
     }
 
-    while( --handled_connections && ( ( i = io_canread() ) != -1 ) ) {
-
-      if( i != serversocket ) {
-       handle_read( i, 0 );
-       continue;
-      }
-
-      // Attention, i changes from what io_canread() returned to
-      // what socket_accept4 returns as new socket
-      while( ( i = socket_accept4( serversocket, (char*)ip, &port) ) != -1 ) {
-        if( io_fd( i ) ) {
-          struct http_data* h=(struct http_data*)malloc(sizeof(struct http_data));
-          io_wantread( i );
-
-          if (h) {
-            byte_zero(h,sizeof(struct http_data));
-            memmove(h->ip,ip,sizeof(ip));
-            io_setcookie(i,h);
-            ++ot_overall_connections;
-            handle_read(i,1);
-          } else
-            io_close(i);
-        } else
-          io_close(i);
-      }
-
-      if( errno==EAGAIN )
-        io_eagain( serversocket );
-      else
-        carp( "socket_accept4" );
+    taia_now(&t);
+    if( taia_less( &next_timeout_check, &t ) ) {
+      handle_timeouted( );
+      taia_now(&next_timeout_check);
+      taia_addsec(&next_timeout_check,&next_timeout_check,OT_CLIENT_TIMEOUT_CHECKINTERVAL);
     }
   }
 }
