@@ -408,8 +408,6 @@ void handle_read( int64 clientsocket, int afteraccept ) {
     return;
   }
 
-  if( afteraccept ) fprintf( stderr, "*" );
-
   array_catb(&h->r,static_scratch,l);
 
   if( array_failed(&h->r))
@@ -430,6 +428,8 @@ void server_mainloop( int64 serversocket ) {
 
   for (;;) {
     int64 i;
+    int handled_connections = 1024;
+
     taia_now(&t);
     taia_addsec(&t,&t,OT_CLIENT_TIMEOUT_CHECKINTERVAL);
     io_waituntil(t);
@@ -448,7 +448,7 @@ void server_mainloop( int64 serversocket ) {
       taia_addsec(&next_timeout_check,&next_timeout_check,OT_CLIENT_TIMEOUT_CHECKINTERVAL);
     }
 
-    while( ( i = io_canread() ) != -1 ) {
+    while( --handled_connections && ( ( i = io_canread() ) != -1 ) ) {
 
       if( i != serversocket ) {
        handle_read( i, 0 );
