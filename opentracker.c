@@ -388,7 +388,6 @@ void help( char *name ) {
 void handle_read( int64 clientsocket ) {
   struct http_data* h = io_getcookie( clientsocket );
   int l = io_tryread( clientsocket, static_scratch, sizeof static_scratch );
-  tai6464 t;
 
   if( l <= 0 ) {
     if( h ) {
@@ -407,11 +406,6 @@ void handle_read( int64 clientsocket ) {
     httperror(clientsocket,h,"500 request too long","You sent too much headers");
   else if ((l=header_complete(h)))
     httpresponse(clientsocket,h);
-  else {
-    taia_now(&t);
-    taia_addsec(&t,&t,OT_CLIENT_TIMEOUT);
-    io_timeout(clientsocket,t);
-  }
 }
 
 void handle_accept( int64 serversocket ) {

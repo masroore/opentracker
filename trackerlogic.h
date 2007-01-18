@@ -86,6 +86,5 @@ size_t return_peers_for_torrent( ot_torrent *torrent, unsigned int amount, char 
 size_t return_scrape_for_torrent( ot_hash *hash, char *reply );
 size_t return_stats_for_tracker( char *reply, int mode );
 void  remove_peer_from_torrent( ot_hash *hash, ot_peer *peer );
-void cleanup_torrents( void );
 
 #endif

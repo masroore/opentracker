@@ -393,10 +393,6 @@ void remove_peer_from_torrent( ot_hash *hash, ot_peer *peer ) {
     }
 }
 
-void cleanup_torrents( void ) {
-
-}
-
 int init_logic( char *serverdir ) {
   if( serverdir && chdir( serverdir ) ) {
     fprintf( stderr, "Could not chdir() to %s\n", serverdir );
