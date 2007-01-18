@@ -33,7 +33,7 @@ static time_t ot_start_time;
 static const size_t SUCCESS_HTTP_HEADER_LENGTH = 80;
 static const size_t SUCCESS_HTTP_SIZE_OFF = 17;
 /* To always have space for error messages ;) */
-static char static_reply[8192];
+static char static_scratch[8192];
 
 static void carp(const char* routine) {
   buffer_puts(buffer_2,routine);
@@ -79,9 +79,9 @@ void senddata(int64 s, struct http_data* h, char *buffer, size_t size ) {
 }
 
 void httperror(int64 s,struct http_data* h,const char* title,const char* message) {
-  size_t reply_size = sprintf( static_reply, "HTTP/1.0 %s\r\nContent-Type: text/html\r\nConnection: close\r\nContent-Length: %zd\r\n\r\n<title>%s</title>\n",
+  size_t reply_size = sprintf( static_scratch, "HTTP/1.0 %s\r\nContent-Type: text/html\r\nConnection: close\r\nContent-Length: %zd\r\n\r\n<title>%s</title>\n",
                         title, strlen(message)+strlen(title)+16-4,title+4);
-  senddata(s,h,static_reply,reply_size);
+  senddata(s,h,static_scratch,reply_size);
 }
 
 const char* http_header(struct http_data* r,const char* h) {
@@ -160,7 +160,7 @@ e400:
     }
 
     /* Enough for http header + whole scrape string */
-    if( ( reply_size = return_stats_for_tracker( SUCCESS_HTTP_HEADER_LENGTH + static_reply, mode ) ) <= 0 )	
+    if( ( reply_size = return_stats_for_tracker( SUCCESS_HTTP_HEADER_LENGTH + static_scratch, mode ) ) <= 0 )	
       goto e500;
     break;
   case 6: /* scrape ? */
@@ -198,7 +198,7 @@ e400_param:
       return httperror(s,h,"400 Invalid Request","This server only serves specific scrapes.");
 
     /* Enough for http header + whole scrape string */
-    if( ( reply_size = return_scrape_for_torrent( hash, SUCCESS_HTTP_HEADER_LENGTH + static_reply ) ) <= 0 )
+    if( ( reply_size = return_scrape_for_torrent( hash, SUCCESS_HTTP_HEADER_LENGTH + static_scratch ) ) <= 0 )
       goto e500;
     break;
   case 8: 
@@ -290,14 +290,14 @@ e400_param:
 
     if( OT_FLAG( &peer ) & PEER_FLAG_STOPPED ) {
       remove_peer_from_torrent( hash, &peer );
-      memmove( static_reply + SUCCESS_HTTP_HEADER_LENGTH, "d8:completei0e10:incompletei0e8:intervali600e5:peers0:e", reply_size = 55 );
+      memmove( static_scratch + SUCCESS_HTTP_HEADER_LENGTH, "d8:completei0e10:incompletei0e8:intervali600e5:peers0:e", reply_size = 55 );
     } else {
       torrent = add_peer_to_torrent( hash, &peer );
       if( !torrent ) {
 e500:
         return httperror(s,h,"500 Internal Server Error","A server error has occured. Please retry later.");
       }
-      if( ( reply_size = return_peers_for_torrent( torrent, numwant, SUCCESS_HTTP_HEADER_LENGTH + static_reply ) ) <= 0 )
+      if( ( reply_size = return_peers_for_torrent( torrent, numwant, SUCCESS_HTTP_HEADER_LENGTH + static_scratch ) ) <= 0 )
         goto e500;
     }
     break;
@@ -306,7 +306,7 @@ e500:
       goto e404;
     { 
       time_t seconds_elapsed = time( NULL ) - ot_start_time;
-      reply_size = sprintf( static_reply + SUCCESS_HTTP_HEADER_LENGTH, 
+      reply_size = sprintf( static_scratch + SUCCESS_HTTP_HEADER_LENGTH, 
                             "%i\n%i\nUp: %i seconds (%i hours)\nPretuned by german engineers, currently handling %i connections per second.",
                             ot_overall_connections, ot_overall_connections, (int)seconds_elapsed,
                             (int)(seconds_elapsed / 3600), (int)ot_overall_connections / ( (int)seconds_elapsed ? (int)seconds_elapsed : 1 ) );
@@ -325,16 +325,16 @@ e404:
        plus dynamic space needed to expand our Content-Length value. We reserve SUCCESS_HTTP_SIZE_OFF for it expansion and calculate
        the space NOT needed to expand in reply_off
     */
-    size_t reply_off = SUCCESS_HTTP_SIZE_OFF - snprintf( static_reply, 0, "%zd", reply_size );
+    size_t reply_off = SUCCESS_HTTP_SIZE_OFF - snprintf( static_scratch, 0, "%zd", reply_size );
 
     /* 2. Now we sprintf our header so that sprintf writes its terminating '\0' exactly one byte before content starts. Complete
        packet size is increased by size of header plus one byte '\n', we  will copy over '\0' in next step */
-    reply_size += 1 + sprintf( static_reply + reply_off, "HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %zd\r\n\r", reply_size );
+    reply_size += 1 + sprintf( static_scratch + reply_off, "HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %zd\r\n\r", reply_size );
 
     /* 3. Finally we join both blocks neatly */
-    static_reply[ SUCCESS_HTTP_HEADER_LENGTH - 1 ] = '\n';
+    static_scratch[ SUCCESS_HTTP_HEADER_LENGTH - 1 ] = '\n';
 
-    senddata( s, h, static_reply + reply_off, reply_size );
+    senddata( s, h, static_scratch + reply_off, reply_size );
   } else {
     if( h ) array_reset(&h->r);
     free( h ); io_close( s );
@@ -385,55 +385,47 @@ void help( char *name ) {
 );
 }
 
-int main( int argc, char **argv ) {
-  int s=socket_tcp4();
-  tai6464 t, next_timeout_check;
-  char *serverip = NULL;
-  char *serverdir = ".";
-  uint16 port = 6969;
-  unsigned char ip[4];
+void handle_read( int64 clientsocket, int afteraccept ) {
+  struct http_data* h = io_getcookie( clientsocket );
+  int l = io_tryread( clientsocket, static_scratch, sizeof static_scratch );
+  tai6464 t;
 
-  while( 1 ) {
-    switch( getopt(argc,argv,":i:p:d:ocbBh") ) {
-      case -1: goto allparsed;
-      case 'i': serverip = optarg; break;
-      case 'p': port = (uint16)atol( optarg ); break;
-      case 'd': serverdir = optarg; break;
-      case 'h': help( argv[0]); exit(0);
-#ifdef WANT_CLOSED_TRACKER
-      case 'o': g_closedtracker = 0; break;
-      case 'c': g_closedtracker = 1; break;
-#endif
-#ifdef WANT_BLACKLIST
-      case 'b': g_check_blacklist = 1; break;
-      case 'B': g_check_blacklist = 0; break;
-#endif
-      default:
-      case '?': usage( argv[0] ); exit(1);
+  taia_now(&t);
+  taia_addsec(&t,&t,OT_CLIENT_TIMEOUT);
+  io_timeout(clientsocket,t);
+
+  if( l <= 0 ) {
+    // getting 0 bytes doesn't mean connection closed,
+    // when we try the shortcut read() after accept()
+    // and nothing is there yet
+    if( afteraccept && ( errno == EAGAIN ) )
+      return;
+    if( h ) {
+      array_reset(&h->r);
+      free(h);
     }
+    io_close(clientsocket);
+    return;
   }
 
-allparsed:
-  if (socket_bind4_reuse(s,serverip,port)==-1)
-    panic("socket_bind4_reuse");
+  if( afteraccept ) fprintf( stderr, "*" );
 
-  setegid((gid_t)-2); setuid((uid_t)-2);
-  setgid((gid_t)-2); seteuid((uid_t)-2);
+  array_catb(&h->r,static_scratch,l);
 
-  if (socket_listen(s,16)==-1)
-    panic("socket_listen");
+  if( array_failed(&h->r))
+    httperror(clientsocket,h,"500 Server Error","Request too long.");
+  else if (array_bytes(&h->r)>8192)
+    httperror(clientsocket,h,"500 request too long","You sent too much headers");
+  else if ((l=header_complete(h)))
+    httpresponse(clientsocket,h);
+}
 
-  if (!io_fd(s))
-    panic("io_fd");
+void server_mainloop( int64 serversocket ) {
+  tai6464 t, next_timeout_check;
+  unsigned char ip[4];
+  uint16 port;
 
-  signal( SIGPIPE, SIG_IGN );
-  signal( SIGINT, graceful );
-  if( init_logic( serverdir ) == -1 )
-    panic("Logic not started");
-
-  ot_start_time = time( NULL );
-
-  io_wantread( s );
+  io_wantread( serversocket );
   taia_now( &next_timeout_check );
 
   for (;;) {
@@ -457,58 +449,86 @@ allparsed:
     }
 
     while( ( i = io_canread() ) != -1 ) {
-      if( i == s ) {
-        int n;
-        while( ( n = socket_accept4( s, (char*)ip, &port) ) != -1 ) {
-          if( io_fd( n ) ) {
-            struct http_data* h=(struct http_data*)malloc(sizeof(struct http_data));
-            io_wantread(n);
 
-            if (h) {
-              byte_zero(h,sizeof(struct http_data));
-              memmove(h->ip,ip,sizeof(ip));
-              taia_now(&t);
-              taia_addsec(&t,&t,OT_CLIENT_TIMEOUT);
-              io_timeout(n,t);
-              io_setcookie(n,h);
-              ++ot_overall_connections;
-            } else
-              io_close(n);
-          } else
-            io_close(n);
-        }
-        if( errno==EAGAIN )
-          io_eagain(s);
-        else
-          carp("socket_accept4");
-      } else {
-        /* unsigned (sic!) */ char buf[8192];
-        struct http_data* h=io_getcookie(i);
-
-        int l=io_tryread(i,buf,sizeof buf);
-        if( l <= 0 ) {
-          if( h ) {
-            array_reset(&h->r);
-            free(h);
-          }
-          io_close(i);
-        } else {
-          array_catb(&h->r,buf,l);
-
-          if( array_failed(&h->r))
-            httperror(i,h,"500 Server Error","Request too long.");
-          else if (array_bytes(&h->r)>8192)
-            httperror(i,h,"500 request too long","You sent too much headers");
-          else if ((l=header_complete(h)))
-            httpresponse(i,h);
-          else {
-            taia_now(&t);
-            taia_addsec(&t,&t,OT_CLIENT_TIMEOUT);
-            io_timeout(i,t);
-          }
-        }
+      if( i != serversocket ) {
+       handle_read( i, 0 );
+       continue;
       }
+
+      // Attention, i changes from what io_canread() returned to
+      // what socket_accept4 returns as new socket
+      while( ( i = socket_accept4( serversocket, (char*)ip, &port) ) != -1 ) {
+        if( io_fd( i ) ) {
+          struct http_data* h=(struct http_data*)malloc(sizeof(struct http_data));
+          io_wantread( i );
+
+          if (h) {
+            byte_zero(h,sizeof(struct http_data));
+            memmove(h->ip,ip,sizeof(ip));
+            io_setcookie(i,h);
+            ++ot_overall_connections;
+            handle_read(i,1);
+          } else
+            io_close(i);
+        } else
+          io_close(i);
+      }
+
+      if( errno==EAGAIN )
+        io_eagain( serversocket );
+      else
+        carp( "socket_accept4" );
     }
   }
+}
+
+int main( int argc, char **argv ) {
+  int64 s = socket_tcp4( );
+  char *serverip = NULL;
+  char *serverdir = ".";
+  uint16 port = 6969;
+  int scanon = 1;
+
+  while( scanon ) {
+    switch( getopt(argc,argv,":i:p:d:ocbBh") ) {
+      case -1 : scanon = 0; break;
+      case 'i': serverip = optarg; break;
+      case 'p': port = (uint16)atol( optarg ); break;
+      case 'd': serverdir = optarg; break;
+      case 'h': help( argv[0]); exit(0);
+#ifdef WANT_CLOSED_TRACKER
+      case 'o': g_closedtracker = 0; break;
+      case 'c': g_closedtracker = 1; break;
+#endif
+#ifdef WANT_BLACKLIST
+      case 'b': g_check_blacklist = 1; break;
+      case 'B': g_check_blacklist = 0; break;
+#endif
+      default:
+      case '?': usage( argv[0] ); exit(1);
+    }
+  }
+
+  if (socket_bind4_reuse(s,serverip,port)==-1)
+    panic("socket_bind4_reuse");
+
+  setegid((gid_t)-2); setuid((uid_t)-2);
+  setgid((gid_t)-2); seteuid((uid_t)-2);
+
+  if (socket_listen(s,SOMAXCONN)==-1)
+    panic("socket_listen");
+
+  if (!io_fd(s))
+    panic("io_fd");
+
+  signal( SIGPIPE, SIG_IGN );
+  signal( SIGINT, graceful );
+  if( init_logic( serverdir ) == -1 )
+    panic("Logic not started");
+
+  ot_start_time = time( NULL );
+
+  server_mainloop(s);
+
   return 0;
 }
