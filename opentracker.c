@@ -35,6 +35,10 @@ static const size_t SUCCESS_HTTP_SIZE_OFF = 17;
 /* To always have space for error messages ;) */
 static char static_scratch[8192];
 
+#ifdef _DEBUG_FDS
+static char fd_debug_space[0x10000];
+#endif
+
 static void carp(const char* routine) {
   buffer_puts(buffer_2,routine);
   buffer_puts(buffer_2,": ");
@@ -70,10 +74,18 @@ void senddata(int64 s, struct http_data* h, char *buffer, size_t size ) {
   if( h ) array_reset(&h->r);
   written_size = write( s, buffer, size );
   if( ( written_size < 0 ) || ( written_size == size ) ) {
+#ifdef _DEBUG_FDS
+  if( !fd_debug_space[s] ) fprintf( stderr, "close on non-open fd\n" );
+  fd_debug_space[s] = 0;
+#endif
     free(h); io_close( s );
   } else {
     /* here we would take a copy of the buffer and remember it */
     fprintf( stderr, "Should have handled this.\n" );
+#ifdef _DEBUG_FDS
+  if( !fd_debug_space[s] ) fprintf( stderr, "close on non-open fd\n" );
+  fd_debug_space[s] = 0;
+#endif
     free(h); io_close( s );
   }
 }
@@ -337,6 +349,10 @@ e404:
     senddata( s, h, static_scratch + reply_off, reply_size );
   } else {
     if( h ) array_reset(&h->r);
+#ifdef _DEBUG_FDS
+    if( !fd_debug_space[s] ) fprintf( stderr, "close on non-open fd\n" );
+    fd_debug_space[s] = 0;
+#endif
     free( h ); io_close( s );
   }
 }
@@ -348,6 +364,15 @@ void graceful( int s ) {
     exit( 0 );
   }
 }
+
+#ifdef _DEBUG_FDS
+void count_fds( int s ) {
+  int i, count = 0;
+  for( i=0; i<sizeof(fd_debug_space); ++i )
+    if( fd_debug_space[i] ) ++count;
+  fprintf( stderr, "Open fds here: %i\n", count );
+}
+#endif
 
 void usage( char *name ) {
   fprintf( stderr, "Usage: %s [-i serverip] [-p serverport] [-d serverdirectory]"
@@ -394,6 +419,10 @@ void handle_read( int64 clientsocket ) {
       array_reset(&h->r);
       free(h);
     }
+#ifdef _DEBUG_FDS
+    if( !fd_debug_space[clientsocket] ) fprintf( stderr, "close on non-open fd\n" );
+    fd_debug_space[clientsocket] = 0;
+#endif
     io_close(clientsocket);
     return;
   }
@@ -423,6 +452,11 @@ void handle_accept( int64 serversocket ) {
       continue;
     }
 
+#ifdef _DEBUG_FDS
+  if( fd_debug_space[i] ) fprintf( stderr, "double use of fd: %i\n", (int)i );
+  fd_debug_space[i] = 1;
+#endif
+
     io_wantread( i );
 
     byte_zero(h,sizeof(struct http_data));
@@ -448,6 +482,10 @@ void handle_timeouted( ) {
       array_reset( &h->r );
       free( h );
     }
+#ifdef _DEBUG_FDS
+    if( !fd_debug_space[i] ) fprintf( stderr, "close on non-open fd\n" );
+    fd_debug_space[i] = 0;
+#endif
     io_close(i);
   }
 }
@@ -521,7 +559,10 @@ int main( int argc, char **argv ) {
     panic("io_fd");
 
   signal( SIGPIPE, SIG_IGN );
-  signal( SIGINT, graceful );
+  signal( SIGINT,  graceful );
+#ifdef _DEBUG_FDS
+  signal( SIGINFO, count_fds );
+#endif
   if( init_logic( serverdir ) == -1 )
     panic("Logic not started");
 
