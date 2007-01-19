@@ -290,7 +290,7 @@ e400_param:
 
     if( OT_FLAG( &peer ) & PEER_FLAG_STOPPED ) {
       remove_peer_from_torrent( hash, &peer );
-      memmove( static_scratch + SUCCESS_HTTP_HEADER_LENGTH, "d8:completei0e10:incompletei0e8:intervali1800e5:peers0:e", reply_size = 55 );
+      memmove( static_scratch + SUCCESS_HTTP_HEADER_LENGTH, "d8:completei0e10:incompletei0e8:intervali1800e5:peers0:e", reply_size = 56 );
     } else {
       torrent = add_peer_to_torrent( hash, &peer );
       if( !torrent ) {
