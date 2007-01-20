@@ -26,3 +26,7 @@ sysctl kern.ipc.somaxconn=1024
 sysctl kern.ipc.nmbclusters=32768
 sysctl net.inet.tcp.msl=10000
 sysctl kern.maxfiles=10240
+
+License information:
+
+Although the libowfat library is under GPL, Felix von Leitner aggreed that the compiled binary may be distributed under the same beer ware license as the source code for opentracker. However, we like to hear from happy customers.

@@ -5,6 +5,7 @@
 
 #include "socket.h"
 #include "io.h"
+#include "iob.h"
 #include "buffer.h"
 #include "array.h"
 #include "byte.h"
@@ -52,7 +53,10 @@ static void panic(const char* routine) {
 }
 
 struct http_data {
-  array r;
+  union {
+    array    r;
+    io_batch batch;
+  };
   unsigned char ip[4];
 };
 
@@ -81,12 +85,24 @@ void senddata(int64 s, struct http_data* h, char *buffer, size_t size ) {
     free(h); io_close( s );
   } else {
     /* here we would take a copy of the buffer and remember it */
-    fprintf( stderr, "Should have handled this.\n" );
+    char * outbuf = malloc( size - written_size );
+    tai6464 t;
+
+    if( !outbuf ) {
 #ifdef _DEBUG_FDS
-  if( !fd_debug_space[s] ) fprintf( stderr, "close on non-open fd\n" );
-  fd_debug_space[s] = 0;
+      if( !fd_debug_space[s] ) fprintf( stderr, "close on non-open fd\n" );
+      fd_debug_space[s] = 0;
 #endif
-    free(h); io_close( s );
+      free(h); io_close( s );
+      return;
+    }
+
+    iob_reset( &h->batch );
+    memmove( outbuf, buffer + written_size, size - written_size );
+    iob_addbuf_free( &h->batch, outbuf, size - written_size );
+
+    // writeable sockets just have a tcp timeout
+    taia_uint(&t,0); io_timeout( s, t );
   }
 }
 
@@ -437,6 +453,16 @@ void handle_read( int64 clientsocket ) {
     httpresponse(clientsocket,h);
 }
 
+void handle_write( int64 clientsocket ) {
+  struct http_data* h=io_getcookie(clientsocket);
+  if( !h ) return;
+  if( iob_send( clientsocket, &h->batch ) <= 0 ) {
+    iob_reset( &h->batch );
+    io_close( clientsocket );
+    free( h );
+  }
+}
+
 void handle_accept( int64 serversocket ) {
   struct http_data* h;
   unsigned char ip[4];
@@ -509,6 +535,9 @@ void server_mainloop( int64 serversocket ) {
       else
         handle_read( i );
     }
+
+    while( ( i = io_canwrite() ) != -1 )
+      handle_write( i );
 
     taia_now(&t);
     if( taia_less( &next_timeout_check, &t ) ) {
