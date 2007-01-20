@@ -290,6 +290,42 @@ size_t return_peers_for_torrent( ot_torrent *torrent, unsigned int amount, char 
   return r - reply;
 }
 
+/* Fetch full scrape info for all torrents */
+size_t return_fullscrape_for_tracker( char **reply ) {
+  int torrent_count = 0, i, j, k;
+  char* r;
+  time_t time_now = NOW;
+
+  for( i=0; i<256; ++i ) {
+    ot_vector *torrents_list = &all_torrents[i];
+    torrent_count += torrents_list->size;
+  }
+
+  r = *reply = malloc( 128*torrent_count );
+  if( !reply ) return 0;
+  
+  memmove( r, "d5:filesd", 9 ); r += 9;
+  for( i=0; i<256; ++i ) {
+    ot_vector *torrents_list = &all_torrents[i];
+    for( j=0; j<torrents_list->size; ++j ) {
+      ot_peerlist *peer_list = ( ((ot_torrent*)(torrents_list->data))[j] ).peer_list;
+      ot_hash     *hash      =&( ((ot_torrent*)(torrents_list->data))[j] ).hash;
+      int peers = 0, seeds = 0;
+      clean_peerlist( time_now, peer_list );
+      for( k=0; k<OT_POOLS_COUNT; ++k ) {
+        peers += peer_list->peers[k].size;
+        seeds += peer_list->seed_count[k];
+      }
+      memmove( r, "20:", 3 ); r+=3;
+      memmove( r, hash, 20 ); r+=20;
+      r += sprintf( r, "d8:completei%de10:downloadedi%de10:incompletei%de", seeds, peer_list->downloaded, peers-seeds );
+    }
+  }
+
+  *r++='e'; *r++='e';
+  return r - *reply;
+}
+
 /* Fetches scrape info for a specific torrent */
 size_t return_scrape_for_torrent( ot_hash *hash, char *reply ) {
   char        *r = reply;

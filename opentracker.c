@@ -71,6 +71,29 @@ int header_complete(struct http_data* r) {
   return 0;
 }
 
+void sendmallocdata( int64 s, struct http_data *h, char * buffer, size_t size ) {
+  tai6464 t;
+  char *header;
+  size_t header_size;
+
+  if( !h ) { free( buffer); return; }
+  array_reset(&h->r);
+
+  header = malloc( SUCCESS_HTTP_HEADER_LENGTH );
+  if( !header ) { free( buffer ); return; }
+
+  header_size = sprintf( header, "HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %zd\r\n\r\n", size );
+
+  iob_reset( &h->batch );
+  iob_addbuf_free( &h->batch, header, header_size );
+  iob_addbuf_free( &h->batch, buffer, size );
+
+  // writeable sockets just have a tcp timeout
+  taia_uint(&t,0); io_timeout( s, t );
+  io_dontwantread( s );
+  io_wantwrite( s );
+}
+
 /* whoever sends data is not interested in its input-array */
 void senddata(int64 s, struct http_data* h, char *buffer, size_t size ) {
   size_t written_size;
@@ -84,7 +107,6 @@ void senddata(int64 s, struct http_data* h, char *buffer, size_t size ) {
 #endif
     free(h); io_close( s );
   } else {
-    /* here we would take a copy of the buffer and remember it */
     char * outbuf = malloc( size - written_size );
     tai6464 t;
 
@@ -103,6 +125,8 @@ void senddata(int64 s, struct http_data* h, char *buffer, size_t size ) {
 
     // writeable sockets just have a tcp timeout
     taia_uint(&t,0); io_timeout( s, t );
+    io_dontwantread( s );
+    io_wantwrite( s );
   }
 }
 
@@ -221,13 +245,20 @@ e400_param:
       }
     }
 
-    /* Scanned whole query string, wo */
-    if( !hash )
-      return httperror(s,h,"400 Invalid Request","This server only serves specific scrapes.");
+    /* Scanned whole query string, no hash means full scrape... you might want to limit that */
+    if( !hash ) {
+      char * reply;
 
-    /* Enough for http header + whole scrape string */
-    if( ( reply_size = return_scrape_for_torrent( hash, SUCCESS_HTTP_HEADER_LENGTH + static_scratch ) ) <= 0 )
+      reply_size = return_fullscrape_for_tracker( &reply );
+      if( reply_size )
+        return sendmallocdata( s, h, reply, reply_size );
+
       goto e500;
+    } else {
+      /* Enough for http header + whole scrape string */
+      if( ( reply_size = return_scrape_for_torrent( hash, SUCCESS_HTTP_HEADER_LENGTH + static_scratch ) ) <= 0 )
+        goto e500;
+    }
     break;
   case 8: 
     if( byte_diff(data,8,"announce"))
