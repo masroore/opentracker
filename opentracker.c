@@ -489,6 +489,10 @@ void handle_write( int64 clientsocket ) {
   if( !h ) return;
   if( iob_send( clientsocket, &h->batch ) <= 0 ) {
     iob_reset( &h->batch );
+#ifdef _DEBUG_FDS
+    if( !fd_debug_space[clientsocket] ) fprintf( stderr, "close on non-open fd\n" );
+    fd_debug_space[clientsocket] = 0;
+#endif
     io_close( clientsocket );
     free( h );
   }
