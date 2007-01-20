@@ -26,7 +26,7 @@
 #include "trackerlogic.h"
 #include "scan_urlencoded_query.h"
 
-unsigned int const OT_CLIENT_TIMEOUT = 15;
+unsigned int const OT_CLIENT_TIMEOUT = 30;
 unsigned int const OT_CLIENT_TIMEOUT_CHECKINTERVAL = 5;
 
 static unsigned int ot_overall_connections = 0;
