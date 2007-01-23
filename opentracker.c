@@ -30,6 +30,7 @@ unsigned int const OT_CLIENT_TIMEOUT = 30;
 unsigned int const OT_CLIENT_TIMEOUT_CHECKINTERVAL = 5;
 
 static unsigned int ot_overall_connections = 0;
+static unsigned int ot_overall_successfulannounces = 0;
 static time_t ot_start_time;
 static const size_t SUCCESS_HTTP_HEADER_LENGTH = 80;
 static const size_t SUCCESS_HTTP_SIZE_OFF = 17;
@@ -359,6 +360,7 @@ e500:
       if( ( reply_size = return_peers_for_torrent( torrent, numwant, SUCCESS_HTTP_HEADER_LENGTH + static_scratch ) ) <= 0 )
         goto e500;
     }
+    ot_overall_successfulannounces++;
     break;
   case 11:
     if( byte_diff(data,11,"mrtg_scrape"))
@@ -367,7 +369,7 @@ e500:
       time_t seconds_elapsed = time( NULL ) - ot_start_time;
       reply_size = sprintf( static_scratch + SUCCESS_HTTP_HEADER_LENGTH, 
                             "%i\n%i\nUp: %i seconds (%i hours)\nPretuned by german engineers, currently handling %i connections per second.",
-                            ot_overall_connections, ot_overall_connections, (int)seconds_elapsed,
+                            ot_overall_connections, ot_overall_successfulannounces, (int)seconds_elapsed,
                             (int)(seconds_elapsed / 3600), (int)ot_overall_connections / ( (int)seconds_elapsed ? (int)seconds_elapsed : 1 ) );
     }
     break;
