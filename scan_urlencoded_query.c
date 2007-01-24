@@ -21,6 +21,7 @@ size_t scan_urlencoded_query(char **string, char *deststring, int flags) {
   unsigned char *d = (unsigned char*)deststring;
   register unsigned char b, c;
 
+retry_parsing:
   while( is_unreserved( c = *s++) ) {
     if( c=='%') {
       if( ( c = scan_fromhex(*s++) ) == 0xff ) return -1;
@@ -36,7 +37,9 @@ size_t scan_urlencoded_query(char **string, char *deststring, int flags) {
     --s;
     break;
   case '?':
-    if( flags != SCAN_PATH ) return -1;
+    if( flags == SCAN_PATH ) goto found_terminator;
+    *d++ = c;
+    goto retry_parsing;
     break;
   case '=':
     if( flags != SCAN_SEARCHPATH_PARAM ) return -1;
@@ -49,6 +52,7 @@ size_t scan_urlencoded_query(char **string, char *deststring, int flags) {
     return -1;
   }
 
+found_terminator:
   *string = (char *)s;
   return d - (unsigned char*)deststring;
 }
