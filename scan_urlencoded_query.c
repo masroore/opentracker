@@ -10,8 +10,13 @@
          unreserved    = alphanum | mark
          mark          = "-" | "_" | "." | "!" | "~" | "*" | "'" | "(" | ")"
    we add '%' to the matrix to not stop at encoded chars.
+   After losing too many requests to being too strict, add the following characters to reserved matrix
+         relax         = "+" | "," | "/" | ";" | "<" | ">"
+
+static const unsigned char reserved_matrix_strict[] = { 0xA2, 0x67, 0xFF, 0x03, 0xFE, 0xFF, 0xFF, 0x87, 0xFE, 0xFF, 0xFF, 0x47};
 */
-static const unsigned char reserved_matrix[] = { 0xA2, 0x67, 0xFF, 0x03, 0xFE, 0xFF, 0xFF, 0x87, 0xFE, 0xFF, 0xFF, 0x47};
+static const unsigned char reserved_matrix[] = { 0xA2, 0xFF, 0xFF, 0x5B, 0xFE, 0xFF, 0xFF, 0x87, 0xFE, 0xFF, 0xFF, 0x47};
+
 static int is_unreserved( unsigned char c ) {
   if( ( c <= 32 ) || ( c >= 127 ) ) return 0; return 1&(reserved_matrix[(c-32)>>3]>>(c&7));
 }
