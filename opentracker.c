@@ -134,6 +134,9 @@ void senddata(int64 s, struct http_data* h, char *buffer, size_t size ) {
 void httperror(int64 s,struct http_data* h,const char* title,const char* message) {
   size_t reply_size = sprintf( static_scratch, "HTTP/1.0 %s\r\nContent-Type: text/html\r\nConnection: close\r\nContent-Length: %zd\r\n\r\n<title>%s</title>\n",
                         title, strlen(message)+strlen(title)+16-4,title+4);
+#ifdef _DEBUG_HTTPERROR
+  fprintf( stderr, "DEBUG: invalid request was: %s\n", (char*)array_start( &h->r ) );
+#endif
   senddata(s,h,static_scratch,reply_size);
 }
 
