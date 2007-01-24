@@ -40,6 +40,9 @@ static char static_scratch[8192];
 #ifdef _DEBUG_FDS
 static char fd_debug_space[0x10000];
 #endif
+#ifdef _DEBUG_HTTPERROR
+static char debug_request[8192];
+#endif
 
 static void carp(const char* routine) {
   buffer_puts(buffer_2,routine);
@@ -135,7 +138,7 @@ void httperror(int64 s,struct http_data* h,const char* title,const char* message
   size_t reply_size = sprintf( static_scratch, "HTTP/1.0 %s\r\nContent-Type: text/html\r\nConnection: close\r\nContent-Length: %zd\r\n\r\n<title>%s</title>\n",
                         title, strlen(message)+strlen(title)+16-4,title+4);
 #ifdef _DEBUG_HTTPERROR
-  fprintf( stderr, "DEBUG: invalid request was: %s\n", (char*)array_start( &h->r ) );
+  fprintf( stderr, "DEBUG: invalid request was: %s\n", debug_request );
 #endif
   senddata(s,h,static_scratch,reply_size);
 }
@@ -168,6 +171,10 @@ void httpresponse(int64 s,struct http_data* h)
 
   array_cat0(&h->r);
   c = array_start(&h->r);
+
+#ifdef _DEBUG_HTTPERROR
+  memcpy( debug_request, array_start(&h->r), array_bytes(&h->r) );
+#endif
 
   if (byte_diff(c,4,"GET ")) {
 e400:
@@ -480,6 +487,10 @@ void handle_read( int64 clientsocket ) {
   }
 
   array_catb(&h->r,static_scratch,l);
+
+#ifdef _DEBUG_HTTPERROR
+  memcpy( debug_request, "500!\0", 5 );
+#endif
 
   if( array_failed(&h->r))
     httperror(clientsocket,h,"500 Server Error","Request too long.");
