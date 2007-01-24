@@ -306,7 +306,8 @@ e400_param:
           port = htons( tmp ); OT_SETPORT ( &peer, &port );
         } else if(!byte_diff(data,4,"left")) {
           size_t len = scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE );
-          if( ( len <= 0 ) || scan_fixed_int( data, len, &tmp ) ) goto e400_param;
+          if( len <= 0 ) goto e400_param;
+          if( scan_fixed_int( data, len, &tmp ) ) tmp = 0;
           if( !tmp ) OT_FLAG( &peer ) |= PEER_FLAG_SEEDING;
         } else
           scan_urlencoded_query( &c, NULL, SCAN_SEARCHPATH_VALUE );
@@ -547,8 +548,10 @@ void handle_accept( int64 serversocket ) {
 
   if( errno==EAGAIN )
     io_eagain( serversocket );
+/* 
   else
     carp( "socket_accept4" );
+*/
 }
 
 void handle_timeouted( ) {
