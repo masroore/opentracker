@@ -333,7 +333,7 @@ size_t return_scrape_for_torrent( ot_hash *hash, char *reply ) {
   ot_vector   *torrents_list = &all_torrents[*hash[0]];
   ot_torrent  *torrent = binary_search( hash, torrents_list->data, torrents_list->size, sizeof( ot_torrent ), OT_HASH_COMPARE_SIZE, &exactmatch );
 
-  if( !exactmatch ) return 0;
+  if( !exactmatch ) return sprintf( r, "d5:filesdee" );
   clean_peerlist( NOW, torrent->peer_list );
 
   for( i=0; i<OT_POOLS_COUNT; ++i ) {
