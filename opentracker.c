@@ -257,7 +257,7 @@ e400_param:
     }
 
     /* Scanned whole query string, no hash means full scrape... you might want to limit that */
-    if( !hash ) {
+    if( hash ) {
       char * reply;
 
       reply_size = return_fullscrape_for_tracker( &reply );
