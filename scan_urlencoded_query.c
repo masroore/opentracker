@@ -38,7 +38,7 @@ retry_parsing:
     break;
   case '?':
     if( flags == SCAN_PATH ) goto found_terminator;
-    *d++ = c;
+    if( d ) *d++ = c;
     goto retry_parsing;
     break;
   case '=':
