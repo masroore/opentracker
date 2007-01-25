@@ -18,6 +18,14 @@ typedef ot_byte        ot_hash[20];
 typedef ot_dword       ot_ip;
 typedef time_t         ot_time;
 
+/* Some tracker behaviour tunable */
+#define OT_CLIENT_TIMEOUT 30
+#define OT_CLIENT_TIMEOUT_CHECKINTERVAL 5
+#define OT_CLIENT_REQUEST_INTERVAL 1800
+#define OT_CLIENT_REQUEST_VARIATION 180
+
+#define OT_CLIENT_REQUEST_INTERVAL_RANDOM ( OT_CLIENT_REQUEST_INTERVAL + (int)( random( ) % OT_CLIENT_REQUEST_VARIATION ) )
+
 /* We maintain a list of 256 pointers to sorted list of ot_torrent structs
    Sort key is, of course, its hash */
 

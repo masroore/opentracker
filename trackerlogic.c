@@ -253,7 +253,7 @@ size_t return_peers_for_torrent( ot_torrent *torrent, unsigned int amount, char 
   }
   if( peer_count < amount ) amount = peer_count;
 
-  r += sprintf( r, "d8:completei%ie10:incompletei%ie8:intervali1800e5:peers%i:", seed_count, peer_count-seed_count, 6*amount );
+  r += sprintf( r, "d8:completei%ie10:incompletei%ie8:intervali%ie5:peers%i:", seed_count, peer_count-seed_count, OT_CLIENT_REQUEST_INTERVAL_RANDOM, 6*amount );
   if( amount ) {
     unsigned int pool_offset, pool_index = 0;;
     unsigned int shifted_pc = peer_count;

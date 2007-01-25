@@ -26,9 +26,6 @@
 #include "trackerlogic.h"
 #include "scan_urlencoded_query.h"
 
-unsigned int const OT_CLIENT_TIMEOUT = 30;
-unsigned int const OT_CLIENT_TIMEOUT_CHECKINTERVAL = 5;
-
 static unsigned int ot_overall_connections = 0;
 static unsigned int ot_overall_successfulannounces = 0;
 static time_t ot_start_time;
@@ -346,7 +343,7 @@ e400_param:
 
     if( OT_FLAG( &peer ) & PEER_FLAG_STOPPED ) {
       remove_peer_from_torrent( hash, &peer );
-      memmove( static_scratch + SUCCESS_HTTP_HEADER_LENGTH, "d8:completei0e10:incompletei0e8:intervali1800e5:peers0:e", reply_size = 56 );
+      reply_size = sprintf( static_scratch + SUCCESS_HTTP_HEADER_LENGTH, "d8:completei0e10:incompletei0e8:intervali%ie5:peers0:e", OT_CLIENT_REQUEST_INTERVAL_RANDOM );
     } else {
       torrent = add_peer_to_torrent( hash, &peer );
       if( !torrent ) {
@@ -511,7 +508,7 @@ void handle_accept( int64 serversocket ) {
   while( ( i = socket_accept4( serversocket, (char*)ip, &port) ) != -1 ) {
 
     if( !io_fd( i ) ||
-        !( h = (struct http_data*)malloc( sizeof struct http_data ) ) ) {
+        !( h = (struct http_data*)malloc( sizeof( struct http_data ) ) ) ) {
       io_close( i );
       continue;
     }
