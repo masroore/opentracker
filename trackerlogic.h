@@ -64,7 +64,7 @@ static const ot_byte PEER_FLAG_STOPPED   = 0x20;
 typedef struct {
   ot_time        base;
   size_t         seed_count[ OT_POOLS_COUNT ];
-  unsigned int   downloaded;
+  size_t         downloaded;
   ot_vector      peers[ OT_POOLS_COUNT ];
 } ot_peerlist;
 
@@ -77,8 +77,8 @@ typedef struct {
    Exported functions
 */
 
-int  init_logic( char *serverdir );
-void deinit_logic( );
+int  init_logic( const char * const serverdir );
+void deinit_logic( void );
 
 #ifdef WANT_CLOSED_TRACKER
 extern int g_closedtracker;
@@ -90,9 +90,10 @@ extern int g_check_blacklist;
 enum { STATS_MRTG, STATS_TOP5 };
 
 ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer );
-size_t return_peers_for_torrent( ot_torrent *torrent, unsigned int amount, char *reply );
+size_t return_peers_for_torrent( ot_torrent *torrent, size_t amount, char *reply );
 size_t return_fullscrape_for_tracker( char **reply );
 size_t return_scrape_for_torrent( ot_hash *hash, char *reply );
+size_t return_sync_for_torrent( ot_hash *hash, char **reply );
 size_t return_stats_for_tracker( char *reply, int mode );
 void  remove_peer_from_torrent( ot_hash *hash, ot_peer *peer );
 

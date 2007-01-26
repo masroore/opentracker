@@ -1,4 +1,4 @@
-/* This software was written by Dirk Engling <erdgeist@erdgeist.org> 
+/* This software was written by Dirk Engling <erdgeist@erdgeist.org>
    It is considered beerware. Prost. Skol. Cheers or whatever.
    Some of the stuff below is stolen from Fefes example libowfat httpd.
 */
@@ -26,6 +26,7 @@
 #include "trackerlogic.h"
 #include "scan_urlencoded_query.h"
 
+/* Globals */
 static unsigned int ot_overall_connections = 0;
 static unsigned int ot_overall_successfulannounces = 0;
 static time_t ot_start_time;
@@ -34,24 +35,9 @@ static const size_t SUCCESS_HTTP_SIZE_OFF = 17;
 /* To always have space for error messages ;) */
 static char static_scratch[8192];
 
-#ifdef _DEBUG_FDS
-static char fd_debug_space[0x10000];
-#endif
 #ifdef _DEBUG_HTTPERROR
 static char debug_request[8192];
 #endif
-
-static void carp(const char* routine ) {
-  buffer_puts( buffer_2, routine );
-  buffer_puts( buffer_2, ": " );
-  buffer_puterror( buffer_2 );
-  buffer_putnlflush( buffer_2 );
-}
-
-static void panic( const char* routine ) {
-  carp( routine );
-  exit( 111 );
-}
 
 struct http_data {
   union {
@@ -61,8 +47,52 @@ struct http_data {
   unsigned char ip[4];
 };
 
-int header_complete( struct http_data* h ) {
-  int l = array_bytes( &h->request ), i;
+/* Prototypes */
+
+int main( int argc, char **argv );
+
+static int  httpheader_complete( struct http_data *h );
+static void httperror( const int64 s, struct http_data *h, const char *title, const char *message );
+static void httpresponse( const int64 s, struct http_data *h);
+
+static void sendmallocdata( const int64 s, struct http_data *h, char *buffer, const size_t size );
+static void senddata( const int64 s, struct http_data *h, char *buffer, const size_t size );
+
+static void server_mainloop( const int64 serversocket );
+static void handle_timeouted( void );
+static void handle_accept( const int64 serversocket );
+static void handle_read( const int64 clientsocket );
+static void handle_write( const int64 clientsocket );
+
+static void usage( char *name );
+static void help( char *name );
+
+static void carp( const char *routine );
+static void panic( const char *routine );
+static void graceful( int s );
+
+#define HTTPERROR_400         return httperror( s, h, "400 Invalid Request",       "This server only understands GET." )
+#define HTTPERROR_400_PARAM   return httperror( s, h, "400 Invalid Request",       "Invalid parameter" )
+#define HTTPERROR_400_COMPACT return httperror( s, h, "400 Invalid Request",       "This server only delivers compact results." )
+#define HTTPERROR_404         return httperror( s, h, "404 Not Found",             "No such file or directory." )
+#define HTTPERROR_500         return httperror( s, h, "500 Internal Server Error", "A server error has occured. Please retry later." )
+
+/* End of prototypes */
+
+static void carp( const char *routine ) {
+  buffer_puts( buffer_2, routine );
+  buffer_puts( buffer_2, ": " );
+  buffer_puterror( buffer_2 );
+  buffer_putnlflush( buffer_2 );
+}
+
+static void panic( const char *routine ) {
+  carp( routine );
+  exit( 111 );
+}
+
+static int httpheader_complete( struct http_data *h ) {
+  size_t l = array_bytes( &h->request ), i;
   const char* c = array_start( &h->request );
 
   for( i=0; i+1<l; ++i) {
@@ -72,68 +102,7 @@ int header_complete( struct http_data* h ) {
   return 0;
 }
 
-void sendmallocdata( int64 s, struct http_data *h, char * buffer, size_t size ) {
-  tai6464 t;
-  char *header;
-  size_t header_size;
-
-  if( !h ) { free( buffer); return; }
-  array_reset( &h->request );
-
-  header = malloc( SUCCESS_HTTP_HEADER_LENGTH );
-  if( !header ) { free( buffer ); return; }
-
-  header_size = sprintf( header, "HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %zd\r\n\r\n", size );
-
-  iob_reset( &h->batch );
-  iob_addbuf_free( &h->batch, header, header_size );
-  iob_addbuf_free( &h->batch, buffer, size );
-
-  // writeable sockets just have a tcp timeout
-  taia_uint(&t,0); io_timeout( s, t );
-  io_dontwantread( s );
-  io_wantwrite( s );
-}
-
-void senddata(int64 s, struct http_data* h, char *buffer, size_t size ) {
-  size_t written_size;
-
-  /* whoever sends data is not interested in its input-array */
-  if( h )
-    array_reset( &h->request );
-
-  written_size = write( s, buffer, size );
-  if( ( written_size < 0 ) || ( written_size == size ) ) {
-#ifdef _DEBUG_FDS
-  if( !fd_debug_space[s] ) fprintf( stderr, "close on non-open fd\n" );
-  fd_debug_space[s] = 0;
-#endif
-    free( h ); io_close( s );
-  } else {
-    char * outbuf = malloc( size - written_size );
-    tai6464 t;
-
-    if( !outbuf ) {
-#ifdef _DEBUG_FDS
-      if( !fd_debug_space[s] ) fprintf( stderr, "close on non-open fd\n" );
-      fd_debug_space[s] = 0;
-#endif
-      free(h); io_close( s );
-      return;
-    }
-
-    iob_reset( &h->batch );
-    memmove( outbuf, buffer + written_size, size - written_size );
-    iob_addbuf_free( &h->batch, outbuf, size - written_size );
-
-    // writeable sockets just have a tcp timeout
-    taia_uint( &t, 0 ); io_timeout( s, t );
-    io_dontwantread( s );
-    io_wantwrite( s );
-  }
-}
-
-void httperror(int64 s,struct http_data* h,const char* title,const char* message) {
+static void httperror( const int64 s, struct http_data *h, const char *title, const char *message ) {
   size_t reply_size = sprintf( static_scratch, "HTTP/1.0 %s\r\nContent-Type: text/html\r\nConnection: close\r\nContent-Length: %zd\r\n\r\n<title>%s</title>\n",
                         title, strlen(message)+strlen(title)+16-4,title+4);
 #ifdef _DEBUG_HTTPERROR
@@ -142,13 +111,71 @@ void httperror(int64 s,struct http_data* h,const char* title,const char* message
   senddata(s,h,static_scratch,reply_size);
 }
 
-void httpresponse( int64 s, struct http_data* h) {
-  char       *c, *data;
+static void sendmallocdata( const int64 s, struct http_data *h, char *buffer, size_t size ) {
+  tai6464 t;
+  char *header;
+  size_t header_size;
+
+  if( !h )
+    return free( buffer);
+  array_reset( &h->request );
+
+  header = malloc( SUCCESS_HTTP_HEADER_LENGTH );
+  if( !header ) {
+    free( buffer );
+    HTTPERROR_500;
+  }
+
+  header_size = sprintf( header, "HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %zd\r\n\r\n", size );
+
+  iob_reset( &h->batch );
+  iob_addbuf_free( &h->batch, header, header_size );
+  iob_addbuf_free( &h->batch, buffer, size );
+
+  /* writeable sockets just have a tcp timeout */
+  taia_uint(&t,0); io_timeout( s, t );
+  io_dontwantread( s );
+  io_wantwrite( s );
+}
+
+static void senddata( const int64 s, struct http_data *h, char *buffer, size_t size ) {
+  size_t written_size;
+
+  /* whoever sends data is not interested in its input-array */
+  if( h )
+    array_reset( &h->request );
+
+  written_size = write( s, buffer, size );
+  if( ( written_size < 0 ) || ( written_size == size ) ) {
+    free( h ); io_close( s );
+  } else {
+    char * outbuf = malloc( size - written_size );
+    tai6464 t;
+
+    if( !outbuf ) {
+      free(h); io_close( s );
+      return;
+    }
+
+    iob_reset( &h->batch );
+    memmove( outbuf, buffer + written_size, size - written_size );
+    iob_addbuf_free( &h->batch, outbuf, size - written_size );
+
+    /* writeable sockets just have a tcp timeout */
+    taia_uint( &t, 0 ); io_timeout( s, t );
+    io_dontwantread( s );
+    io_wantwrite( s );
+  }
+}
+
+static void httpresponse( const int64 s, struct http_data *h) {
+  char       *c, *data, *reply;
   ot_peer     peer;
   ot_torrent *torrent;
   ot_hash    *hash = NULL;
   int         numwant, tmp, scanon, mode;
   unsigned short port = htons(6881);
+  time_t      t;
   size_t      reply_size = 0;
 
   array_cat0( &h->request );
@@ -158,78 +185,32 @@ void httpresponse( int64 s, struct http_data* h) {
   memcpy( debug_request, array_start( &h->request ), array_bytes( &h->request ) );
 #endif
 
-  if( byte_diff( c, 4, "GET ") ) {
-e400:
-    return httperror( s, h, "400 Invalid Request", "This server only understands GET." );
-  }
+  if( byte_diff( c, 4, "GET ") ) HTTPERROR_400;
 
   c+=4;
   for( data = c; *data!=' ' && *data != '\t' && *data != '\n' && *data != '\r'; ++data ) ;
 
-  if( *data != ' ' ) goto e400;
+  if( *data != ' ' ) HTTPERROR_400;
   *data = 0;
-  if( c[0] != '/' ) goto e404;
+  if( c[0] != '/' ) HTTPERROR_404;
   while( *c == '/' ) ++c;
 
   switch( scan_urlencoded_query( &c, data = c, SCAN_PATH ) ) {
-  case 5: /* stats ? */
-    if( byte_diff(data,5,"stats"))
-      goto e404;
-    scanon = 1;
-    mode = STATS_MRTG;
-
-    while( scanon ) {
-      switch( scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_PARAM ) ) {
-      case -2: /* terminator */
-        scanon = 0;
-        break;
-      case -1: /* error */
-        goto e404;
-      case 4:
-        if( byte_diff(data,4,"mode")) {
-          scan_urlencoded_query( &c, NULL, SCAN_SEARCHPATH_VALUE );
-          continue;
-        }
-        size_t len = scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE );
-        if( len <= 0 ) goto e400_param;
-        if( !byte_diff(data,4,"mrtg"))
-          mode = STATS_MRTG;
-        else if( !byte_diff(data,4,"top5"))
-          mode = STATS_TOP5;
-        else
-          goto e400_param;
-      default:
-        scan_urlencoded_query( &c, NULL, SCAN_SEARCHPATH_VALUE );
-        break;
-      }
-    }
-
-    /* Enough for http header + whole scrape string */
-    if( ( reply_size = return_stats_for_tracker( SUCCESS_HTTP_HEADER_LENGTH + static_scratch, mode ) ) <= 0 )	
-      goto e500;
-    break;
-  case 6: /* scrape ? */
-    if( byte_diff( data, 6, "scrape") )
-      goto e404;
+  case 4: /* sync ? */
+    if( byte_diff( data, 4, "sync") ) HTTPERROR_404;
     scanon = 1;
 
     while( scanon ) {
       switch( scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_PARAM ) ) {
-      case -2: /* terminator */
-        scanon = 0;
-        break;
-      case -1: /* error */
-        goto e404;
+      case -2: scanon = 0; break;   /* TERMINATOR */
+      case -1: HTTPERROR_400_PARAM; /* PARSE ERROR */
       case 9:
         if(byte_diff(data,9,"info_hash")) {
           scan_urlencoded_query( &c, NULL, SCAN_SEARCHPATH_VALUE );
           continue;
         }
         /* ignore this, when we have less than 20 bytes */
-        if( scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE ) != 20 ) {
-e400_param:
-          return httperror(s,h,"400 Invalid Request","Invalid parameter");
-        }
+        if( scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE ) != 20 ) HTTPERROR_400_PARAM;
         hash = (ot_hash*)data; /* Fall through intended */
         break;
       default:
@@ -238,24 +219,72 @@ e400_param:
       }
     }
 
+    if( !hash ) HTTPERROR_400_PARAM;
+    if( ( reply_size = return_sync_for_torrent( hash, &reply ) ) <= 0 ) HTTPERROR_500;
+
+    return sendmallocdata( s, h, reply, reply_size );
+  case 5: /* stats ? */
+    if( byte_diff(data,5,"stats")) HTTPERROR_404;
+    scanon = 1;
+    mode = STATS_MRTG;
+
+    while( scanon ) {
+      switch( scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_PARAM ) ) {
+      case -2: scanon = 0; break;   /* TERMINATOR */
+      case -1: HTTPERROR_400_PARAM; /* PARSE ERROR */
+      default: scan_urlencoded_query( &c, NULL, SCAN_SEARCHPATH_VALUE ); break;
+      case 4:
+        if( byte_diff(data,4,"mode")) {
+          scan_urlencoded_query( &c, NULL, SCAN_SEARCHPATH_VALUE );
+          continue;
+        }
+        size_t len = scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE );
+        if( len <= 0 ) HTTPERROR_400_PARAM;
+        if( !byte_diff(data,4,"mrtg"))
+          mode = STATS_MRTG;
+        else if( !byte_diff(data,4,"top5"))
+          mode = STATS_TOP5;
+        else
+          HTTPERROR_400_PARAM;
+      }
+    }
+
+    /* Enough for http header + whole scrape string */
+    if( ( reply_size = return_stats_for_tracker( SUCCESS_HTTP_HEADER_LENGTH + static_scratch, mode ) ) <= 0 ) HTTPERROR_500;
+
+    break;
+  case 6: /* scrape ? */
+    if( byte_diff( data, 6, "scrape") ) HTTPERROR_404;
+    scanon = 1;
+
+    while( scanon ) {
+      switch( scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_PARAM ) ) {
+      case -2: scanon = 0; break;   /* TERMINATOR */
+      case -1: HTTPERROR_400_PARAM; /* PARSE ERROR */
+      default: scan_urlencoded_query( &c, NULL, SCAN_SEARCHPATH_VALUE ); break;
+      case 9:
+        if(byte_diff(data,9,"info_hash")) {
+          scan_urlencoded_query( &c, NULL, SCAN_SEARCHPATH_VALUE );
+          continue;
+        }
+        /* ignore this, when we have less than 20 bytes */
+        if( scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE ) != 20 ) HTTPERROR_400_PARAM;
+        hash = (ot_hash*)data; /* Fall through intended */
+        break;
+      }
+    }
+
     /* Scanned whole query string, no hash means full scrape... you might want to limit that */
     if( !hash ) {
-      char * reply;
-
-      reply_size = return_fullscrape_for_tracker( &reply );
-      if( reply_size )
-        return sendmallocdata( s, h, reply, reply_size );
-
-      goto e500;
-    } else {
-      /* Enough for http header + whole scrape string */
-      if( ( reply_size = return_scrape_for_torrent( hash, SUCCESS_HTTP_HEADER_LENGTH + static_scratch ) ) <= 0 )
-        goto e500;
+      if( ( reply_size = return_fullscrape_for_tracker( &reply ) ) <= 0 ) HTTPERROR_500;
+      return sendmallocdata( s, h, reply, reply_size );
     }
+
+    /* Enough for http header + whole scrape string */
+    if( ( reply_size = return_scrape_for_torrent( hash, SUCCESS_HTTP_HEADER_LENGTH + static_scratch ) ) <= 0 ) HTTPERROR_500;
     break;
   case 8: 
-    if( byte_diff(data,8,"announce"))
-      goto e404;
+    if( byte_diff(data,8,"announce")) HTTPERROR_404;
 
     OT_SETIP( &peer, h->ip);
     OT_SETPORT( &peer, &port );
@@ -265,17 +294,15 @@ e400_param:
 
     while( scanon ) {
       switch( scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_PARAM ) ) {
-      case -2: /* terminator */
-        scanon = 0;
-        break;
-      case -1: /* error */
-        goto e404;
+      case -2: scanon = 0; break;   /* TERMINATOR */
+      case -1: HTTPERROR_400_PARAM; /* PARSE ERROR */
+      default: scan_urlencoded_query( &c, NULL, SCAN_SEARCHPATH_VALUE ); break;
 #ifdef WANT_IP_FROM_QUERY_STRING
       case 2:
         if(!byte_diff(data,2,"ip")) {
           size_t len = scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE );
           unsigned char ip[4];
-          if( ( len <= 0 ) || scan_fixed_ip( data, len, ip ) ) goto e400_param;
+          if( ( len <= 0 ) || scan_fixed_ip( data, len, ip ) ) HTTPERROR_400_PARAM;
           OT_SETIP( &peer, ip );
        } else
           scan_urlencoded_query( &c, NULL, SCAN_SEARCHPATH_VALUE );
@@ -284,11 +311,11 @@ e400_param:
       case 4:
         if(!byte_diff(data,4,"port")) {
           size_t len = scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE );
-          if( ( len <= 0 ) || scan_fixed_int( data, len, &tmp ) || ( tmp > 0xffff ) ) goto e400_param;
+          if( ( len <= 0 ) || scan_fixed_int( data, len, &tmp ) || ( tmp > 0xffff ) ) HTTPERROR_400_PARAM;
           port = htons( tmp ); OT_SETPORT( &peer, &port );
         } else if(!byte_diff(data,4,"left")) {
           size_t len = scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE );
-          if( len <= 0 ) goto e400_param;
+          if( len <= 0 ) HTTPERROR_400_PARAM;
           if( scan_fixed_int( data, len, &tmp ) ) tmp = 0;
           if( !tmp ) OT_FLAG( &peer ) |= PEER_FLAG_SEEDING;
         } else
@@ -299,7 +326,7 @@ e400_param:
           scan_urlencoded_query( &c, NULL, SCAN_SEARCHPATH_VALUE );
         else switch( scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE ) ) {
         case -1:
-          goto e400_param;
+          HTTPERROR_400_PARAM;
         case 7:
           if(!byte_diff(data,7,"stopped")) OT_FLAG( &peer ) |= PEER_FLAG_STOPPED;
           break;
@@ -312,13 +339,12 @@ e400_param:
       case 7:
         if(!byte_diff(data,7,"numwant")) {
           size_t len = scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE );
-          if( ( len <= 0 ) || scan_fixed_int( data, len, &numwant ) ) goto e400_param;
+          if( ( len <= 0 ) || scan_fixed_int( data, len, &numwant ) ) HTTPERROR_400_PARAM;
           if( numwant > 200 ) numwant = 200;
         } else if(!byte_diff(data,7,"compact")) {
           size_t len = scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE );
-          if( ( len <= 0 ) || scan_fixed_int( data, len, &tmp ) ) goto e400_param;
-          if( !tmp )
-            return httperror(s,h,"400 Invalid Request","This server only delivers compact results.");
+          if( ( len <= 0 ) || scan_fixed_int( data, len, &tmp ) ) HTTPERROR_400_PARAM;
+          if( !tmp ) HTTPERROR_400_COMPACT;
         } else
           scan_urlencoded_query( &c, NULL, SCAN_SEARCHPATH_VALUE );
         break;
@@ -328,79 +354,58 @@ e400_param:
           continue;
         }
         /* ignore this, when we have less than 20 bytes */
-        if( scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE ) != 20 )
-          goto e400;
+        if( scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE ) != 20 ) HTTPERROR_400_PARAM;
         hash = (ot_hash*)data;
-        break;
-      default:
-        scan_urlencoded_query( &c, NULL, SCAN_SEARCHPATH_VALUE );
         break;
       }
     }
 
     /* Scanned whole query string */
-    if( !hash ) goto e400;
+    if( !hash ) HTTPERROR_400_PARAM;
 
     if( OT_FLAG( &peer ) & PEER_FLAG_STOPPED ) {
       remove_peer_from_torrent( hash, &peer );
       reply_size = sprintf( static_scratch + SUCCESS_HTTP_HEADER_LENGTH, "d8:completei0e10:incompletei0e8:intervali%ie5:peers0:e", OT_CLIENT_REQUEST_INTERVAL_RANDOM );
     } else {
       torrent = add_peer_to_torrent( hash, &peer );
-      if( !torrent ) {
-e500:
-        return httperror(s,h,"500 Internal Server Error","A server error has occured. Please retry later.");
-      }
-      if( ( reply_size = return_peers_for_torrent( torrent, numwant, SUCCESS_HTTP_HEADER_LENGTH + static_scratch ) ) <= 0 )
-        goto e500;
+      if( !torrent || ( reply_size = return_peers_for_torrent( torrent, numwant, SUCCESS_HTTP_HEADER_LENGTH + static_scratch ) ) <= 0 ) HTTPERROR_500;
     }
     ot_overall_successfulannounces++;
     break;
   case 11:
-    if( byte_diff(data,11,"mrtg_scrape"))
-      goto e404;
-    { 
-      time_t seconds_elapsed = time( NULL ) - ot_start_time;
-      reply_size = sprintf( static_scratch + SUCCESS_HTTP_HEADER_LENGTH, 
-                            "%i\n%i\nUp: %i seconds (%i hours)\nPretuned by german engineers, currently handling %i connections per second.",
-                            ot_overall_connections, ot_overall_successfulannounces, (int)seconds_elapsed,
-                            (int)(seconds_elapsed / 3600), (int)ot_overall_connections / ( (int)seconds_elapsed ? (int)seconds_elapsed : 1 ) );
-    }
+    if( byte_diff(data,11,"mrtg_scrape")) HTTPERROR_404;
+
+    t = time( NULL ) - ot_start_time;
+    reply_size = sprintf( static_scratch + SUCCESS_HTTP_HEADER_LENGTH, 
+                          "%i\n%i\nUp: %i seconds (%i hours)\nPretuned by german engineers, currently handling %i connections per second.",
+                          ot_overall_connections, ot_overall_successfulannounces, (int)t, (int)(t / 3600), (int)ot_overall_connections / ( (int)t ? (int)t : 1 ) );
     break;
   default: /* neither *scrape nor announce */
-e404:
-    return httperror( s, h, "404 Not Found", "No such file or directory." );
+    HTTPERROR_404;
   }
 
-  if( reply_size ) {
-    /* This one is rather ugly, so I take you step by step through it.
+  if( reply_size <= 0 ) HTTPERROR_500;
 
-       1. In order to avoid having two buffers, one for header and one for content, we allow all above functions from trackerlogic to
-       write to a fixed location, leaving SUCCESS_HTTP_HEADER_LENGTH bytes in our static buffer, which is enough for the static string
-       plus dynamic space needed to expand our Content-Length value. We reserve SUCCESS_HTTP_SIZE_OFF for it expansion and calculate
-       the space NOT needed to expand in reply_off
-    */
-    size_t reply_off = SUCCESS_HTTP_SIZE_OFF - snprintf( static_scratch, 0, "%zd", reply_size );
+  /* This one is rather ugly, so I take you step by step through it.
 
-    /* 2. Now we sprintf our header so that sprintf writes its terminating '\0' exactly one byte before content starts. Complete
-       packet size is increased by size of header plus one byte '\n', we  will copy over '\0' in next step */
-    reply_size += 1 + sprintf( static_scratch + reply_off, "HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %zd\r\n\r", reply_size );
+     1. In order to avoid having two buffers, one for header and one for content, we allow all above functions from trackerlogic to
+     write to a fixed location, leaving SUCCESS_HTTP_HEADER_LENGTH bytes in our static buffer, which is enough for the static string
+     plus dynamic space needed to expand our Content-Length value. We reserve SUCCESS_HTTP_SIZE_OFF for it expansion and calculate
+     the space NOT needed to expand in reply_off
+  */
+  size_t reply_off = SUCCESS_HTTP_SIZE_OFF - snprintf( static_scratch, 0, "%zd", reply_size );
 
-    /* 3. Finally we join both blocks neatly */
-    static_scratch[ SUCCESS_HTTP_HEADER_LENGTH - 1 ] = '\n';
+  /* 2. Now we sprintf our header so that sprintf writes its terminating '\0' exactly one byte before content starts. Complete
+     packet size is increased by size of header plus one byte '\n', we  will copy over '\0' in next step */
+  reply_size += 1 + sprintf( static_scratch + reply_off, "HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %zd\r\n\r", reply_size );
 
-    senddata( s, h, static_scratch + reply_off, reply_size );
-  } else {
-    if( h )
-      array_reset( &h->request );
-#ifdef _DEBUG_FDS
-    if( !fd_debug_space[s] ) fprintf( stderr, "close on non-open fd\n" );
-    fd_debug_space[s] = 0;
-#endif
-    free( h ); io_close( s );
-  }
+  /* 3. Finally we join both blocks neatly */
+  static_scratch[ SUCCESS_HTTP_HEADER_LENGTH - 1 ] = '\n';
+
+  senddata( s, h, static_scratch + reply_off, reply_size );
 }
 
-void graceful( int s ) {
+static void graceful( int s ) {
   if( s == SIGINT ) {
     signal( SIGINT, SIG_IGN);
     deinit_logic();
@@ -408,16 +413,7 @@ void graceful( int s ) {
   }
 }
 
-#ifdef _DEBUG_FDS
-void count_fds( int s ) {
-  int i, count = 0;
-  for( i=0; i<sizeof(fd_debug_space); ++i )
-    if( fd_debug_space[i] ) ++count;
-  fprintf( stderr, "Open fds here: %i\n", count );
-}
-#endif
-
-void usage( char *name ) {
+static void usage( char *name ) {
   fprintf( stderr, "Usage: %s [-i serverip] [-p serverport] [-d serverdirectory]"
 #ifdef WANT_CLOSED_TRACKER
   " [-oc]"
@@ -428,7 +424,7 @@ void usage( char *name ) {
   "\n", name );
 }
 
-void help( char *name ) {
+static void help( char *name ) {
   usage( name );
   fprintf( stderr, "\t-i serverip\tspecify ip to bind to (default: *)\n"
                    "\t-p serverport\tspecify port to bind to (default: 6969)\n"
@@ -453,19 +449,15 @@ void help( char *name ) {
 );
 }
 
-void handle_read( int64 clientsocket ) {
+static void handle_read( const int64 clientsocket ) {
   struct http_data* h = io_getcookie( clientsocket );
-  int l = io_tryread( clientsocket, static_scratch, sizeof static_scratch );
+  size_t l;
 
-  if( l <= 0 ) {
+  if( ( l = io_tryread( clientsocket, static_scratch, sizeof static_scratch ) ) <= 0 ) {
     if( h ) {
       array_reset( &h->request );
       free( h );
     }
-#ifdef _DEBUG_FDS
-    if( !fd_debug_space[clientsocket] ) fprintf( stderr, "close on non-open fd\n" );
-    fd_debug_space[clientsocket] = 0;
-#endif
     io_close( clientsocket );
     return;
   }
@@ -480,26 +472,22 @@ void handle_read( int64 clientsocket ) {
     httperror( clientsocket, h, "500 Server Error", "Request too long.");
   else if( array_bytes( &h->request ) > 8192 )
     httperror( clientsocket, h, "500 request too long", "You sent too much headers");
-  else if( ( l = header_complete( h ) ) )
+  else if( ( l = httpheader_complete( h ) ) )
     httpresponse( clientsocket, h);
 }
 
-void handle_write( int64 clientsocket ) {
+static void handle_write( const int64 clientsocket ) {
   struct http_data* h=io_getcookie( clientsocket );
   if( !h ) return;
   if( iob_send( clientsocket, &h->batch ) <= 0 ) {
     iob_reset( &h->batch );
-#ifdef _DEBUG_FDS
-    if( !fd_debug_space[clientsocket] ) fprintf( stderr, "close on non-open fd\n" );
-    fd_debug_space[clientsocket] = 0;
-#endif
     io_close( clientsocket );
     free( h );
   }
 }
 
-void handle_accept( int64 serversocket ) {
-  struct http_data* h;
+static void handle_accept( const int64 serversocket ) {
+  struct http_data *h;
   unsigned char ip[4];
   uint16 port;
   tai6464 t;
@@ -512,11 +500,6 @@ void handle_accept( int64 serversocket ) {
       io_close( i );
       continue;
     }
-
-#ifdef _DEBUG_FDS
-  if( fd_debug_space[i] ) fprintf( stderr, "double use of fd: %i\n", (int)i );
-  fd_debug_space[i] = 1;
-#endif
 
     io_wantread( i );
 
@@ -531,13 +514,9 @@ void handle_accept( int64 serversocket ) {
 
   if( errno==EAGAIN )
     io_eagain( serversocket );
-/* 
-  else
-    carp( "socket_accept4" );
-*/
 }
 
-void handle_timeouted( ) {
+static void handle_timeouted( void ) {
   int64 i;
   while( ( i = io_timeouted() ) != -1 ) {
     struct http_data* h=io_getcookie( i );
@@ -545,15 +524,11 @@ void handle_timeouted( ) {
       array_reset( &h->request );
       free( h );
     }
-#ifdef _DEBUG_FDS
-    if( !fd_debug_space[i] ) fprintf( stderr, "close on non-open fd\n" );
-    fd_debug_space[i] = 0;
-#endif
     io_close(i);
   }
 }
 
-void server_mainloop( int64 serversocket ) {
+static void server_mainloop( const int64 serversocket ) {
   tai6464 t, next_timeout_check;
 
   io_wantread( serversocket );
@@ -626,9 +601,6 @@ int main( int argc, char **argv ) {
 
   signal( SIGPIPE, SIG_IGN );
   signal( SIGINT,  graceful );
-#ifdef _DEBUG_FDS
-  signal( SIGINFO, count_fds );
-#endif
   if( init_logic( serverdir ) == -1 )
     panic( "Logic not started" );
 
