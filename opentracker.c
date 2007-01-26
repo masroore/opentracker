@@ -176,7 +176,7 @@ static void httpresponse( const int64 s, struct http_data *h) {
   int         numwant, tmp, scanon, mode;
   unsigned short port = htons(6881);
   time_t      t;
-  size_t      reply_size = 0;
+  size_t      reply_size = 0, reply_off;
 
   array_cat0( &h->request );
   c = array_start( &h->request );
@@ -255,8 +255,10 @@ static void httpresponse( const int64 s, struct http_data *h) {
     break;
   case 6: /* scrape ? */
     if( byte_diff( data, 6, "scrape") ) HTTPERROR_404;
-    scanon = 1;
 
+SCRAPE_WORKAROUND:
+
+    scanon = 1;
     while( scanon ) {
       switch( scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_PARAM ) ) {
       case -2: scanon = 0; break;   /* TERMINATOR */
@@ -285,6 +287,8 @@ static void httpresponse( const int64 s, struct http_data *h) {
     break;
   case 8: 
     if( byte_diff(data,8,"announce")) HTTPERROR_404;
+
+ANNOUNCE_WORKAROUND:
 
     OT_SETIP( &peer, h->ip);
     OT_SETPORT( &peer, &port );
@@ -372,6 +376,9 @@ static void httpresponse( const int64 s, struct http_data *h) {
     }
     ot_overall_successfulannounces++;
     break;
+  case 10:
+    if( byte_diff(data,10,"scrape.php")) HTTPERROR_404;
+    goto SCRAPE_WORKAROUND;
   case 11:
     if( byte_diff(data,11,"mrtg_scrape")) HTTPERROR_404;
 
@@ -380,6 +387,9 @@ static void httpresponse( const int64 s, struct http_data *h) {
                           "%i\n%i\nUp: %i seconds (%i hours)\nPretuned by german engineers, currently handling %i connections per second.",
                           ot_overall_connections, ot_overall_successfulannounces, (int)t, (int)(t / 3600), (int)ot_overall_connections / ( (int)t ? (int)t : 1 ) );
     break;
+  case 12:
+    if( byte_diff(data,12,"announce.php")) HTTPERROR_404;
+    goto ANNOUNCE_WORKAROUND;
   default: /* neither *scrape nor announce */
     HTTPERROR_404;
   }
@@ -393,7 +403,7 @@ static void httpresponse( const int64 s, struct http_data *h) {
      plus dynamic space needed to expand our Content-Length value. We reserve SUCCESS_HTTP_SIZE_OFF for it expansion and calculate
      the space NOT needed to expand in reply_off
   */
-  size_t reply_off = SUCCESS_HTTP_SIZE_OFF - snprintf( static_scratch, 0, "%zd", reply_size );
+  reply_off = SUCCESS_HTTP_SIZE_OFF - snprintf( static_scratch, 0, "%zd", reply_size );
 
   /* 2. Now we sprintf our header so that sprintf writes its terminating '\0' exactly one byte before content starts. Complete
      packet size is increased by size of header plus one byte '\n', we  will copy over '\0' in next step */
