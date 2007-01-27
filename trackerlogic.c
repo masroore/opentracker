@@ -14,6 +14,7 @@
 #include <math.h>
 #include <glob.h>
 
+#include <assert.h>
 #include <errno.h>
 #include "scan.h"
 #include "byte.h"
@@ -205,11 +206,17 @@ ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer ) {
     memmove( peer_dest, peer, sizeof( ot_peer ) );
     if( OT_FLAG(peer) & PEER_FLAG_SEEDING )
       torrent->peer_list->seed_count[0]++;
+
+    assert( torrent->peer_list->seed_count[0] <= torrent->peer_list->peers[0].size );
+
     for( i=1; i<OT_POOLS_COUNT; ++i ) {
       switch( vector_remove_peer( &torrent->peer_list->peers[i], peer ) ) {
         case 0: continue;
         case 2: torrent->peer_list->seed_count[i]--;
-        case 1: default: return torrent;
+        case 1: default:
+          assert( torrent->peer_list->seed_count[i] > 0 );
+          assert( torrent->peer_list->seed_count[i] <= torrent->peer_list->peers[i].size );
+          return torrent;
       }
     }
   } else {
@@ -217,6 +224,9 @@ ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer ) {
       torrent->peer_list->seed_count[0]--;
     if( !(OT_FLAG(peer_dest) & PEER_FLAG_SEEDING ) && (OT_FLAG(peer) & PEER_FLAG_SEEDING ) )
       torrent->peer_list->seed_count[0]++;
+
+    assert( torrent->peer_list->seed_count[0] > 0 );
+    assert( torrent->peer_list->seed_count[0] <= torrent->peer_list->peers[0].size );
   }
 
   return torrent;
@@ -452,7 +462,10 @@ void remove_peer_from_torrent( ot_hash *hash, ot_peer *peer ) {
     switch( vector_remove_peer( &torrent->peer_list->peers[i], peer ) ) {
       case 0: continue;
       case 2: torrent->peer_list->seed_count[i]--;
-      case 1: default: return;
+      case 1: default:
+        assert( torrent->peer_list->seed_count[i] > 0 );
+        assert( torrent->peer_list->seed_count[i] <= torrent->peer_list->peers[i].size );
+        return;
     }
 }
 
