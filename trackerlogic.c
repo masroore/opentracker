@@ -224,6 +224,7 @@ ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer ) {
       torrent->peer_list->seed_count[0]--;
     if( !(OT_FLAG(peer_dest) & PEER_FLAG_SEEDING ) && (OT_FLAG(peer) & PEER_FLAG_SEEDING ) )
       torrent->peer_list->seed_count[0]++;
+    memmove( peer_dest, peer, sizeof( ot_peer ) );
 
     assert( torrent->peer_list->seed_count[0] >= 0 );
     assert( torrent->peer_list->seed_count[0] <= torrent->peer_list->peers[0].size );
