@@ -318,7 +318,7 @@ size_t return_fullscrape_for_tracker( char **reply ) {
       }
       memmove( r, "20:", 3 ); r+=3;
       memmove( r, hash, 20 ); r+=20;
-      r += sprintf( r, "d8:completei%zde10:downloadedi%zde10:incompletei%zde", seeds, peer_list->downloaded, peers-seeds );
+      r += sprintf( r, "d8:completei%zde10:downloadedi%zde10:incompletei%zdee", seeds, peer_list->downloaded, peers-seeds );
     }
   }
 
