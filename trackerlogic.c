@@ -214,7 +214,7 @@ ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer ) {
         case 0: continue;
         case 2: torrent->peer_list->seed_count[i]--;
         case 1: default:
-          assert( torrent->peer_list->seed_count[i] > 0 );
+          assert( torrent->peer_list->seed_count[i] >= 0 );
           assert( torrent->peer_list->seed_count[i] <= torrent->peer_list->peers[i].size );
           return torrent;
       }
@@ -225,7 +225,7 @@ ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer ) {
     if( !(OT_FLAG(peer_dest) & PEER_FLAG_SEEDING ) && (OT_FLAG(peer) & PEER_FLAG_SEEDING ) )
       torrent->peer_list->seed_count[0]++;
 
-    assert( torrent->peer_list->seed_count[0] > 0 );
+    assert( torrent->peer_list->seed_count[0] >= 0 );
     assert( torrent->peer_list->seed_count[0] <= torrent->peer_list->peers[0].size );
   }
 
@@ -463,7 +463,7 @@ void remove_peer_from_torrent( ot_hash *hash, ot_peer *peer ) {
       case 0: continue;
       case 2: torrent->peer_list->seed_count[i]--;
       case 1: default:
-        assert( torrent->peer_list->seed_count[i] > 0 );
+        assert( torrent->peer_list->seed_count[i] >= 0 );
         assert( torrent->peer_list->seed_count[i] <= torrent->peer_list->peers[i].size );
         return;
     }
