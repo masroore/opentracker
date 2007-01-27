@@ -335,7 +335,7 @@ ANNOUNCE_WORKAROUND:
           if(!byte_diff(data,7,"stopped")) OT_FLAG( &peer ) |= PEER_FLAG_STOPPED;
           break;
         case 9:
-          if(!byte_diff(data,9,"complete")) OT_FLAG( &peer ) |= PEER_FLAG_COMPLETED;
+          if(!byte_diff(data,9,"completed")) OT_FLAG( &peer ) |= PEER_FLAG_COMPLETED;
         default: /* Fall through intended */
           break;
         }
