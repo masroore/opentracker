@@ -195,6 +195,9 @@ ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer ) {
   peer_pool = &torrent->peer_list->peers[0];
   peer_dest = vector_find_or_insert( peer_pool, (void*)peer, sizeof( ot_peer ), OT_PEER_COMPARE_SIZE, &exactmatch );
 
+  if( OT_FLAG(peer) & PEER_FLAG_COMPLETED )
+    torrent->peer_list->downloaded++;
+
   /* If we hadn't had a match in current pool, create peer there and
      remove it from all older pools */
   if( !exactmatch ) {
@@ -215,8 +218,6 @@ ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer ) {
     if( !(OT_FLAG(peer_dest) & PEER_FLAG_SEEDING ) && (OT_FLAG(peer) & PEER_FLAG_SEEDING ) )
       torrent->peer_list->seed_count[0]++;
   }
-  if( OT_FLAG(peer) & PEER_FLAG_COMPLETED )
-    torrent->peer_list->downloaded++;
 
   return torrent;
 }
@@ -435,13 +436,13 @@ void remove_peer_from_torrent( ot_hash *hash, ot_peer *peer ) {
   int          exactmatch, i;
   ot_vector   *torrents_list = &all_torrents[*hash[0]];
   ot_torrent  *torrent = binary_search( hash, torrents_list->data, torrents_list->size, sizeof( ot_torrent ), OT_HASH_COMPARE_SIZE, &exactmatch );
-  
+
   if( !exactmatch ) return;
-  
+
   /* Maybe this does the job */
   if( clean_peerlist( NOW, torrent->peer_list ) ) {
 #ifdef WANT_CLOSED_TRACKER
-    if( !g_closedtracker ) 
+    if( !g_closedtracker )
 #endif
     vector_remove_torrent( torrents_list, hash );
     return;

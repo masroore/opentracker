@@ -285,7 +285,7 @@ SCRAPE_WORKAROUND:
     /* Enough for http header + whole scrape string */
     if( ( reply_size = return_scrape_for_torrent( hash, SUCCESS_HTTP_HEADER_LENGTH + static_scratch ) ) <= 0 ) HTTPERROR_500;
     break;
-  case 8: 
+  case 8:
     if( byte_diff(data,8,"announce")) HTTPERROR_404;
 
 ANNOUNCE_WORKAROUND:
@@ -383,7 +383,7 @@ ANNOUNCE_WORKAROUND:
     if( byte_diff(data,11,"mrtg_scrape")) HTTPERROR_404;
 
     t = time( NULL ) - ot_start_time;
-    reply_size = sprintf( static_scratch + SUCCESS_HTTP_HEADER_LENGTH, 
+    reply_size = sprintf( static_scratch + SUCCESS_HTTP_HEADER_LENGTH,
                           "%i\n%i\nUp: %i seconds (%i hours)\nPretuned by german engineers, currently handling %i connections per second.",
                           ot_overall_connections, ot_overall_successfulannounces, (int)t, (int)(t / 3600), (int)ot_overall_connections / ( (int)t ? (int)t : 1 ) );
     break;

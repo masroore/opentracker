@@ -1,4 +1,4 @@
-/* This software was written by Dirk Engling <erdgeist@erdgeist.org> 
+/* This software was written by Dirk Engling <erdgeist@erdgeist.org>
    It is considered beerware. Prost. Skol. Cheers or whatever. */
 
 #ifndef __TRACKERLOGIC_H__
@@ -44,7 +44,7 @@ typedef time_t         ot_time;
 typedef struct {
   void   *data;
   size_t  size;
-  size_t  space;   
+  size_t  space;
 } ot_vector;
 
 typedef struct {
