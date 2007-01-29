@@ -372,7 +372,7 @@ ANNOUNCE_WORKAROUND:
 
     t = time( NULL ) - ot_start_time;
     reply_size = sprintf( static_outbuf + SUCCESS_HTTP_HEADER_LENGTH,
-                          "%i\n%i\nUp: %i seconds (%i hours)\nPretuned by german engineers, currently handling %i connections per second.",
+                          "%i\n%i\n%i seconds (%i hours)\nopentracker - Pretuned by german engineers, currently handling %i connections per second.",
                           ot_overall_connections, ot_overall_successfulannounces, (int)t, (int)(t / 3600), (int)ot_overall_connections / ( (int)t ? (int)t : 1 ) );
     break;
   case 12:
