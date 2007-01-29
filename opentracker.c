@@ -33,7 +33,8 @@ static time_t ot_start_time;
 static const size_t SUCCESS_HTTP_HEADER_LENGTH = 80;
 static const size_t SUCCESS_HTTP_SIZE_OFF = 17;
 /* To always have space for error messages ;) */
-static char static_scratch[8192];
+static char static_inbuf[8192];
+static char static_outbuf[8192*4];
 
 #ifdef _DEBUG_HTTPERROR
 static char debug_request[8192];
@@ -51,12 +52,11 @@ struct http_data {
 
 int main( int argc, char **argv );
 
-static int  httpheader_complete( struct http_data *h );
-static void httperror( const int64 s, struct http_data *h, const char *title, const char *message );
-static void httpresponse( const int64 s, struct http_data *h);
+static void httperror( const int64 s, const char *title, const char *message );
+static void httpresponse( const int64 s, char *data );
 
-static void sendmallocdata( const int64 s, struct http_data *h, char *buffer, const size_t size );
-static void senddata( const int64 s, struct http_data *h, char *buffer, const size_t size );
+static void sendmallocdata( const int64 s, char *buffer, const size_t size );
+static void senddata( const int64 s, char *buffer, const size_t size );
 
 static void server_mainloop( const int64 serversocket );
 static void handle_timeouted( void );
@@ -71,11 +71,11 @@ static void carp( const char *routine );
 static void panic( const char *routine );
 static void graceful( int s );
 
-#define HTTPERROR_400         return httperror( s, h, "400 Invalid Request",       "This server only understands GET." )
-#define HTTPERROR_400_PARAM   return httperror( s, h, "400 Invalid Request",       "Invalid parameter" )
-#define HTTPERROR_400_COMPACT return httperror( s, h, "400 Invalid Request",       "This server only delivers compact results." )
-#define HTTPERROR_404         return httperror( s, h, "404 Not Found",             "No such file or directory." )
-#define HTTPERROR_500         return httperror( s, h, "500 Internal Server Error", "A server error has occured. Please retry later." )
+#define HTTPERROR_400         return httperror( s, "400 Invalid Request",       "This server only understands GET." )
+#define HTTPERROR_400_PARAM   return httperror( s, "400 Invalid Request",       "Invalid parameter" )
+#define HTTPERROR_400_COMPACT return httperror( s, "400 Invalid Request",       "This server only delivers compact results." )
+#define HTTPERROR_404         return httperror( s, "404 Not Found",             "No such file or directory." )
+#define HTTPERROR_500         return httperror( s, "500 Internal Server Error", "A server error has occured. Please retry later." )
 
 /* End of prototypes */
 
@@ -91,33 +91,23 @@ static void panic( const char *routine ) {
   exit( 111 );
 }
 
-static int httpheader_complete( struct http_data *h ) {
-  size_t l = array_bytes( &h->request ), i;
-  const char* c = array_start( &h->request );
-
-  for( i=0; i+1<l; ++i) {
-    if( c[i]=='\n' && c[i+1]=='\n') return i+2;
-    if( i+3<l && c[i]=='\r' && c[i+1]=='\n' && c[i+2]=='\r' && c[i+3]=='\n' ) return i+4;
-  }
-  return 0;
-}
-
-static void httperror( const int64 s, struct http_data *h, const char *title, const char *message ) {
-  size_t reply_size = sprintf( static_scratch, "HTTP/1.0 %s\r\nContent-Type: text/html\r\nConnection: close\r\nContent-Length: %zd\r\n\r\n<title>%s</title>\n",
+static void httperror( const int64 s, const char *title, const char *message ) {
+  size_t reply_size = sprintf( static_outbuf, "HTTP/1.0 %s\r\nContent-Type: text/html\r\nConnection: close\r\nContent-Length: %zd\r\n\r\n<title>%s</title>\n",
                         title, strlen(message)+strlen(title)+16-4,title+4);
 #ifdef _DEBUG_HTTPERROR
   fprintf( stderr, "DEBUG: invalid request was: %s\n", debug_request );
 #endif
-  senddata(s,h,static_scratch,reply_size);
+  senddata(s,static_outbuf,reply_size);
 }
 
-static void sendmallocdata( const int64 s, struct http_data *h, char *buffer, size_t size ) {
-  tai6464 t;
+static void sendmallocdata( const int64 s, char *buffer, size_t size ) {
+  struct http_data *h = io_getcookie( s );
   char *header;
   size_t header_size;
+  tai6464 t;
 
   if( !h )
-    return free( buffer);
+    return free( buffer );
   array_reset( &h->request );
 
   header = malloc( SUCCESS_HTTP_HEADER_LENGTH );
@@ -133,12 +123,13 @@ static void sendmallocdata( const int64 s, struct http_data *h, char *buffer, si
   iob_addbuf_free( &h->batch, buffer, size );
 
   /* writeable sockets just have a tcp timeout */
-  taia_uint(&t,0); io_timeout( s, t );
+  taia_uint( &t, 0 ); io_timeout( s, t );
   io_dontwantread( s );
   io_wantwrite( s );
 }
 
-static void senddata( const int64 s, struct http_data *h, char *buffer, size_t size ) {
+static void senddata( const int64 s, char *buffer, size_t size ) {
+  struct http_data *h = io_getcookie( s );
   size_t written_size;
 
   /* whoever sends data is not interested in its input-array */
@@ -168,8 +159,8 @@ static void senddata( const int64 s, struct http_data *h, char *buffer, size_t s
   }
 }
 
-static void httpresponse( const int64 s, struct http_data *h) {
-  char       *c, *data, *reply;
+static void httpresponse( const int64 s, char *data ) {
+  char       *c, *reply;
   ot_peer     peer;
   ot_torrent *torrent;
   ot_hash    *hash = NULL;
@@ -178,22 +169,19 @@ static void httpresponse( const int64 s, struct http_data *h) {
   time_t      t;
   size_t      reply_size = 0, reply_off;
 
-  array_cat0( &h->request );
-  c = array_start( &h->request );
-
 #ifdef _DEBUG_HTTPERROR
-  memcpy( debug_request, array_start( &h->request ), array_bytes( &h->request ) );
+  memcpy( debug_request, data, sizeof( debug_request ) );
 #endif
 
-  if( byte_diff( c, 4, "GET ") ) HTTPERROR_400;
+  /* This one implicitely tests strlen < 5, too -- remember, it is \n terminated */
+  if( byte_diff( data, 5, "GET /") ) HTTPERROR_400;
 
-  c+=4;
-  for( data = c; *data!=' ' && *data != '\t' && *data != '\n' && *data != '\r'; ++data ) ;
+  /* Query string MUST terminate with SP -- we know that theres at least a '\n' where this search terminates */
+  for( c = data + 5; *c!=' ' && *c != '\t' && *c != '\n' && *c != '\r'; ++c ) ;
+  if( *c != ' ' ) HTTPERROR_400;
 
-  if( *data != ' ' ) HTTPERROR_400;
-  *data = 0;
-  if( c[0] != '/' ) HTTPERROR_404;
-  while( *c == '/' ) ++c;
+  /* Skip leading '/' */
+  for( c = data+4; *c == '/'; ++c);
 
   switch( scan_urlencoded_query( &c, data = c, SCAN_PATH ) ) {
   case 4: /* sync ? */
@@ -222,7 +210,7 @@ static void httpresponse( const int64 s, struct http_data *h) {
     if( !hash ) HTTPERROR_400_PARAM;
     if( ( reply_size = return_sync_for_torrent( hash, &reply ) ) <= 0 ) HTTPERROR_500;
 
-    return sendmallocdata( s, h, reply, reply_size );
+    return sendmallocdata( s, reply, reply_size );
   case 5: /* stats ? */
     if( byte_diff(data,5,"stats")) HTTPERROR_404;
     scanon = 1;
@@ -250,7 +238,7 @@ static void httpresponse( const int64 s, struct http_data *h) {
     }
 
     /* Enough for http header + whole scrape string */
-    if( ( reply_size = return_stats_for_tracker( SUCCESS_HTTP_HEADER_LENGTH + static_scratch, mode ) ) <= 0 ) HTTPERROR_500;
+    if( ( reply_size = return_stats_for_tracker( SUCCESS_HTTP_HEADER_LENGTH + static_outbuf, mode ) ) <= 0 ) HTTPERROR_500;
 
     break;
   case 6: /* scrape ? */
@@ -279,18 +267,18 @@ SCRAPE_WORKAROUND:
     /* Scanned whole query string, no hash means full scrape... you might want to limit that */
     if( !hash ) {
       if( ( reply_size = return_fullscrape_for_tracker( &reply ) ) <= 0 ) HTTPERROR_500;
-      return sendmallocdata( s, h, reply, reply_size );
+      return sendmallocdata( s, reply, reply_size );
     }
 
     /* Enough for http header + whole scrape string */
-    if( ( reply_size = return_scrape_for_torrent( hash, SUCCESS_HTTP_HEADER_LENGTH + static_scratch ) ) <= 0 ) HTTPERROR_500;
+    if( ( reply_size = return_scrape_for_torrent( hash, SUCCESS_HTTP_HEADER_LENGTH + static_outbuf ) ) <= 0 ) HTTPERROR_500;
     break;
   case 8:
     if( byte_diff(data,8,"announce")) HTTPERROR_404;
 
 ANNOUNCE_WORKAROUND:
 
-    OT_SETIP( &peer, h->ip);
+    OT_SETIP( &peer, ((struct http_data*)io_getcookie( s ))->ip);
     OT_SETPORT( &peer, &port );
     OT_FLAG( &peer ) = 0;
     numwant = 50;
@@ -369,10 +357,10 @@ ANNOUNCE_WORKAROUND:
 
     if( OT_FLAG( &peer ) & PEER_FLAG_STOPPED ) {
       remove_peer_from_torrent( hash, &peer );
-      reply_size = sprintf( static_scratch + SUCCESS_HTTP_HEADER_LENGTH, "d8:completei0e10:incompletei0e8:intervali%ie5:peers0:e", OT_CLIENT_REQUEST_INTERVAL_RANDOM );
+      reply_size = sprintf( static_outbuf + SUCCESS_HTTP_HEADER_LENGTH, "d8:completei0e10:incompletei0e8:intervali%ie5:peers0:e", OT_CLIENT_REQUEST_INTERVAL_RANDOM );
     } else {
       torrent = add_peer_to_torrent( hash, &peer );
-      if( !torrent || ( reply_size = return_peers_for_torrent( torrent, numwant, SUCCESS_HTTP_HEADER_LENGTH + static_scratch ) ) <= 0 ) HTTPERROR_500;
+      if( !torrent || ( reply_size = return_peers_for_torrent( torrent, numwant, SUCCESS_HTTP_HEADER_LENGTH + static_outbuf ) ) <= 0 ) HTTPERROR_500;
     }
     ot_overall_successfulannounces++;
     break;
@@ -383,7 +371,7 @@ ANNOUNCE_WORKAROUND:
     if( byte_diff(data,11,"mrtg_scrape")) HTTPERROR_404;
 
     t = time( NULL ) - ot_start_time;
-    reply_size = sprintf( static_scratch + SUCCESS_HTTP_HEADER_LENGTH,
+    reply_size = sprintf( static_outbuf + SUCCESS_HTTP_HEADER_LENGTH,
                           "%i\n%i\nUp: %i seconds (%i hours)\nPretuned by german engineers, currently handling %i connections per second.",
                           ot_overall_connections, ot_overall_successfulannounces, (int)t, (int)(t / 3600), (int)ot_overall_connections / ( (int)t ? (int)t : 1 ) );
     break;
@@ -403,16 +391,16 @@ ANNOUNCE_WORKAROUND:
      plus dynamic space needed to expand our Content-Length value. We reserve SUCCESS_HTTP_SIZE_OFF for it expansion and calculate
      the space NOT needed to expand in reply_off
   */
-  reply_off = SUCCESS_HTTP_SIZE_OFF - snprintf( static_scratch, 0, "%zd", reply_size );
+  reply_off = SUCCESS_HTTP_SIZE_OFF - snprintf( static_outbuf, 0, "%zd", reply_size );
 
   /* 2. Now we sprintf our header so that sprintf writes its terminating '\0' exactly one byte before content starts. Complete
      packet size is increased by size of header plus one byte '\n', we  will copy over '\0' in next step */
-  reply_size += 1 + sprintf( static_scratch + reply_off, "HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %zd\r\n\r", reply_size );
+  reply_size += 1 + sprintf( static_outbuf + reply_off, "HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %zd\r\n\r", reply_size );
 
   /* 3. Finally we join both blocks neatly */
-  static_scratch[ SUCCESS_HTTP_HEADER_LENGTH - 1 ] = '\n';
+  static_outbuf[ SUCCESS_HTTP_HEADER_LENGTH - 1 ] = '\n';
 
-  senddata( s, h, static_scratch + reply_off, reply_size );
+  senddata( s, static_outbuf + reply_off, reply_size );
 }
 
 static void graceful( int s ) {
@@ -463,7 +451,7 @@ static void handle_read( const int64 clientsocket ) {
   struct http_data* h = io_getcookie( clientsocket );
   size_t l;
 
-  if( ( l = io_tryread( clientsocket, static_scratch, sizeof static_scratch ) ) <= 0 ) {
+  if( ( l = io_tryread( clientsocket, static_inbuf, sizeof static_inbuf ) ) <= 0 ) {
     if( h ) {
       array_reset( &h->request );
       free( h );
@@ -472,24 +460,30 @@ static void handle_read( const int64 clientsocket ) {
     return;
   }
 
-  array_catb( &h->request, static_scratch, l );
-
 #ifdef _DEBUG_HTTPERROR
   memcpy( debug_request, "500!\0", 5 );
 #endif
 
+  /* If we get the whole request in one packet, handle it without copying */
+  if( !array_start( &h->request ) ) {
+    if( memchr( static_inbuf, '\n', l ) )
+      return httpresponse( clientsocket, static_inbuf );
+    return array_catb( &h->request, static_inbuf, l );
+  }
+
+  array_catb( &h->request, static_inbuf, l );
+
   if( array_failed( &h->request ) )
-    httperror( clientsocket, h, "500 Server Error", "Request too long.");
+    httperror( clientsocket, "500 Server Error", "Request too long.");
   else if( array_bytes( &h->request ) > 8192 )
-    httperror( clientsocket, h, "500 request too long", "You sent too much headers");
-  else if( ( l = httpheader_complete( h ) ) )
-    httpresponse( clientsocket, h);
+    httperror( clientsocket, "500 request too long", "You sent too much headers");
+  else if( memchr( array_start( &h->request ), '\n', array_length( &h->request, 1 ) ) )
+    httpresponse( clientsocket, array_start( &h->request ) );
 }
 
 static void handle_write( const int64 clientsocket ) {
   struct http_data* h=io_getcookie( clientsocket );
-  if( !h ) return;
-  if( iob_send( clientsocket, &h->batch ) <= 0 ) {
+  if( !h || ( iob_send( clientsocket, &h->batch ) <= 0 ) ) {
     iob_reset( &h->batch );
     io_close( clientsocket );
     free( h );

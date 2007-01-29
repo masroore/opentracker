@@ -14,7 +14,6 @@
 #include <math.h>
 #include <glob.h>
 
-#include <assert.h>
 #include <errno.h>
 #include "scan.h"
 #include "byte.h"
@@ -207,16 +206,11 @@ ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer ) {
     if( OT_FLAG(peer) & PEER_FLAG_SEEDING )
       torrent->peer_list->seed_count[0]++;
 
-    assert( torrent->peer_list->seed_count[0] <= torrent->peer_list->peers[0].size );
-
     for( i=1; i<OT_POOLS_COUNT; ++i ) {
       switch( vector_remove_peer( &torrent->peer_list->peers[i], peer ) ) {
         case 0: continue;
         case 2: torrent->peer_list->seed_count[i]--;
-        case 1: default:
-          assert( torrent->peer_list->seed_count[i] >= 0 );
-          assert( torrent->peer_list->seed_count[i] <= torrent->peer_list->peers[i].size );
-          return torrent;
+        case 1: default: return torrent;
       }
     }
   } else {
@@ -225,9 +219,6 @@ ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer ) {
     if( !(OT_FLAG(peer_dest) & PEER_FLAG_SEEDING ) && (OT_FLAG(peer) & PEER_FLAG_SEEDING ) )
       torrent->peer_list->seed_count[0]++;
     memmove( peer_dest, peer, sizeof( ot_peer ) );
-
-    assert( torrent->peer_list->seed_count[0] >= 0 );
-    assert( torrent->peer_list->seed_count[0] <= torrent->peer_list->peers[0].size );
   }
 
   return torrent;
@@ -463,10 +454,7 @@ void remove_peer_from_torrent( ot_hash *hash, ot_peer *peer ) {
     switch( vector_remove_peer( &torrent->peer_list->peers[i], peer ) ) {
       case 0: continue;
       case 2: torrent->peer_list->seed_count[i]--;
-      case 1: default:
-        assert( torrent->peer_list->seed_count[i] >= 0 );
-        assert( torrent->peer_list->seed_count[i] <= torrent->peer_list->peers[i].size );
-        return;
+      case 1: default: return;
     }
 }
 
@@ -476,10 +464,10 @@ int init_logic( const char * const serverdir ) {
     return -1;
   }
 
-  srandom( time(NULL));
+  srandom( time(NULL) );
 
   /* Initialize control structures */
-  byte_zero( all_torrents, sizeof (all_torrents));
+  byte_zero( all_torrents, sizeof (all_torrents) );
 
   return 0;
 }
