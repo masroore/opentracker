@@ -6,6 +6,7 @@
 
 #include <sys/types.h>
 #include <sys/time.h>
+#include <time.h>
 
 /* Should be called BYTE, WORD, DWORD - but some OSs already have that and there's no #iftypedef */
 /* They mark memory used as data instead of integer or human readable string -
