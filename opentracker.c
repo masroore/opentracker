@@ -351,9 +351,11 @@ ANNOUNCE_WORKAROUND:
       }
     }
 
-    /* Scanned whole query string XXX better send Error */
-    if( !hash ) HTTPERROR_400_PARAM;
-
+    /* Scanned whole query string */
+    if( !hash ) {
+      reply_size = sprintf( static_outbuf + SUCCESS_HTTP_HEADER_LENGTH, "d14:failure reason81:Your client forgot to send your torrent's info_hash. Please upgrade your client.e" );
+      break;
+    }
     if( OT_FLAG( &peer ) & PEER_FLAG_STOPPED ) {
       remove_peer_from_torrent( hash, &peer );
       reply_size = sprintf( static_outbuf + SUCCESS_HTTP_HEADER_LENGTH, "d8:completei0e10:incompletei0e8:intervali%ie5:peers0:e", OT_CLIENT_REQUEST_INTERVAL_RANDOM );
