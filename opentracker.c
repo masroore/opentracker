@@ -130,7 +130,7 @@ static void sendmallocdata( const int64 s, char *buffer, size_t size ) {
 
 static void senddata( const int64 s, char *buffer, size_t size ) {
   struct http_data *h = io_getcookie( s );
-  size_t written_size;
+  ssize_t written_size;
 
   /* whoever sends data is not interested in its input-array */
   if( h )
@@ -167,6 +167,7 @@ static void httpresponse( const int64 s, char *data ) {
   int         numwant, tmp, scanon, mode;
   unsigned short port = htons(6881);
   time_t      t;
+  ssize_t     len;
   size_t      reply_size = 0, reply_off;
 
 #ifdef _DEBUG_HTTPERROR
@@ -208,7 +209,7 @@ static void httpresponse( const int64 s, char *data ) {
     }
 
     if( !hash ) HTTPERROR_400_PARAM;
-    if( ( reply_size = return_sync_for_torrent( hash, &reply ) ) <= 0 ) HTTPERROR_500;
+    if( !( reply_size = return_sync_for_torrent( hash, &reply ) ) ) HTTPERROR_500;
 
     return sendmallocdata( s, reply, reply_size );
   case 5: /* stats ? */
@@ -226,8 +227,7 @@ static void httpresponse( const int64 s, char *data ) {
           scan_urlencoded_query( &c, NULL, SCAN_SEARCHPATH_VALUE );
           continue;
         }
-        size_t len = scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE );
-        if( len <= 0 ) HTTPERROR_400_PARAM;
+        if( scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE ) != 4 ) HTTPERROR_400_PARAM;
         if( !byte_diff(data,4,"mrtg"))
           mode = STATS_MRTG;
         else if( !byte_diff(data,4,"top5"))
@@ -238,7 +238,7 @@ static void httpresponse( const int64 s, char *data ) {
     }
 
     /* Enough for http header + whole scrape string */
-    if( ( reply_size = return_stats_for_tracker( SUCCESS_HTTP_HEADER_LENGTH + static_outbuf, mode ) ) <= 0 ) HTTPERROR_500;
+    if( !( reply_size = return_stats_for_tracker( SUCCESS_HTTP_HEADER_LENGTH + static_outbuf, mode ) ) ) HTTPERROR_500;
 
     break;
   case 6: /* scrape ? */
@@ -266,19 +266,19 @@ SCRAPE_WORKAROUND:
 
     /* Scanned whole query string, no hash means full scrape... you might want to limit that */
     if( !hash ) {
-      if( ( reply_size = return_fullscrape_for_tracker( &reply ) ) <= 0 ) HTTPERROR_500;
+      if( !( reply_size = return_fullscrape_for_tracker( &reply ) ) ) HTTPERROR_500;
       return sendmallocdata( s, reply, reply_size );
     }
 
     /* Enough for http header + whole scrape string */
-    if( ( reply_size = return_scrape_for_torrent( hash, SUCCESS_HTTP_HEADER_LENGTH + static_outbuf ) ) <= 0 ) HTTPERROR_500;
+    if( !( reply_size = return_scrape_for_torrent( hash, SUCCESS_HTTP_HEADER_LENGTH + static_outbuf ) ) ) HTTPERROR_500;
     break;
   case 8:
-    if( byte_diff(data,8,"announce")) HTTPERROR_404;
+    if( byte_diff( data, 8, "announce" ) ) HTTPERROR_404;
 
 ANNOUNCE_WORKAROUND:
 
-    OT_SETIP( &peer, ((struct http_data*)io_getcookie( s ))->ip);
+    OT_SETIP( &peer, ((struct http_data*)io_getcookie( s ) )->ip );
     OT_SETPORT( &peer, &port );
     OT_FLAG( &peer ) = 0;
     numwant = 50;
@@ -292,8 +292,8 @@ ANNOUNCE_WORKAROUND:
 #ifdef WANT_IP_FROM_QUERY_STRING
       case 2:
         if(!byte_diff(data,2,"ip")) {
-          size_t len = scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE );
           unsigned char ip[4];
+          len = scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE );
           if( ( len <= 0 ) || scan_fixed_ip( data, len, ip ) ) HTTPERROR_400_PARAM;
           OT_SETIP( &peer, ip );
        } else
@@ -301,40 +301,39 @@ ANNOUNCE_WORKAROUND:
        break;
 #endif
       case 4:
-        if(!byte_diff(data,4,"port")) {
-          size_t len = scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE );
+        if( !byte_diff( data, 4, "port" ) ) {
+          len = scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE );
           if( ( len <= 0 ) || scan_fixed_int( data, len, &tmp ) || ( tmp > 0xffff ) ) HTTPERROR_400_PARAM;
           port = htons( tmp ); OT_SETPORT( &peer, &port );
-        } else if(!byte_diff(data,4,"left")) {
-          size_t len = scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE );
-          if( len <= 0 ) HTTPERROR_400_PARAM;
+        } else if( !byte_diff( data, 4, "left" ) ) {
+          if( ( len = scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE ) ) <= 0 ) HTTPERROR_400_PARAM;
           if( scan_fixed_int( data, len, &tmp ) ) tmp = 0;
           if( !tmp ) OT_FLAG( &peer ) |= PEER_FLAG_SEEDING;
         } else
           scan_urlencoded_query( &c, NULL, SCAN_SEARCHPATH_VALUE );
         break;
       case 5:
-        if(byte_diff(data,5,"event"))
+        if( byte_diff( data, 5, "event" ) )
           scan_urlencoded_query( &c, NULL, SCAN_SEARCHPATH_VALUE );
         else switch( scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE ) ) {
         case -1:
           HTTPERROR_400_PARAM;
         case 7:
-          if(!byte_diff(data,7,"stopped")) OT_FLAG( &peer ) |= PEER_FLAG_STOPPED;
+          if( !byte_diff( data, 7, "stopped" ) ) OT_FLAG( &peer ) |= PEER_FLAG_STOPPED;
           break;
         case 9:
-          if(!byte_diff(data,9,"completed")) OT_FLAG( &peer ) |= PEER_FLAG_COMPLETED;
+          if( !byte_diff( data, 9, "completed" ) ) OT_FLAG( &peer ) |= PEER_FLAG_COMPLETED;
         default: /* Fall through intended */
           break;
         }
         break;
       case 7:
         if(!byte_diff(data,7,"numwant")) {
-          size_t len = scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE );
+          len = scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE );
           if( ( len <= 0 ) || scan_fixed_int( data, len, &numwant ) ) HTTPERROR_400_PARAM;
           if( numwant > 200 ) numwant = 200;
         } else if(!byte_diff(data,7,"compact")) {
-          size_t len = scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE );
+          len = scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE );
           if( ( len <= 0 ) || scan_fixed_int( data, len, &tmp ) ) HTTPERROR_400_PARAM;
           if( !tmp ) HTTPERROR_400_COMPACT;
         } else
@@ -352,7 +351,7 @@ ANNOUNCE_WORKAROUND:
       }
     }
 
-    /* Scanned whole query string */
+    /* Scanned whole query string XXX better send Error */
     if( !hash ) HTTPERROR_400_PARAM;
 
     if( OT_FLAG( &peer ) & PEER_FLAG_STOPPED ) {
@@ -360,15 +359,15 @@ ANNOUNCE_WORKAROUND:
       reply_size = sprintf( static_outbuf + SUCCESS_HTTP_HEADER_LENGTH, "d8:completei0e10:incompletei0e8:intervali%ie5:peers0:e", OT_CLIENT_REQUEST_INTERVAL_RANDOM );
     } else {
       torrent = add_peer_to_torrent( hash, &peer );
-      if( !torrent || ( reply_size = return_peers_for_torrent( torrent, numwant, SUCCESS_HTTP_HEADER_LENGTH + static_outbuf ) ) <= 0 ) HTTPERROR_500;
+      if( !torrent || !( reply_size = return_peers_for_torrent( torrent, numwant, SUCCESS_HTTP_HEADER_LENGTH + static_outbuf ) ) ) HTTPERROR_500;
     }
     ot_overall_successfulannounces++;
     break;
   case 10:
-    if( byte_diff(data,10,"scrape.php")) HTTPERROR_404;
+    if( byte_diff( data, 10, "scrape.php" ) ) HTTPERROR_404;
     goto SCRAPE_WORKAROUND;
   case 11:
-    if( byte_diff(data,11,"mrtg_scrape")) HTTPERROR_404;
+    if( byte_diff( data, 11, "mrtg_scrape" ) ) HTTPERROR_404;
 
     t = time( NULL ) - ot_start_time;
     reply_size = sprintf( static_outbuf + SUCCESS_HTTP_HEADER_LENGTH,
@@ -376,13 +375,13 @@ ANNOUNCE_WORKAROUND:
                           ot_overall_connections, ot_overall_successfulannounces, (int)t, (int)(t / 3600), (int)ot_overall_connections / ( (int)t ? (int)t : 1 ) );
     break;
   case 12:
-    if( byte_diff(data,12,"announce.php")) HTTPERROR_404;
+    if( byte_diff( data, 12, "announce.php" ) ) HTTPERROR_404;
     goto ANNOUNCE_WORKAROUND;
   default: /* neither *scrape nor announce */
     HTTPERROR_404;
   }
 
-  if( reply_size <= 0 ) HTTPERROR_500;
+  if( !reply_size ) HTTPERROR_500;
 
   /* This one is rather ugly, so I take you step by step through it.
 
@@ -449,7 +448,7 @@ static void help( char *name ) {
 
 static void handle_read( const int64 clientsocket ) {
   struct http_data* h = io_getcookie( clientsocket );
-  int64 l;
+  ssize_t l;
 
   if( ( l = io_tryread( clientsocket, static_inbuf, sizeof static_inbuf ) ) <= 0 ) {
     if( h ) {

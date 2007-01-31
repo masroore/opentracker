@@ -21,7 +21,7 @@ static int is_unreserved( unsigned char c ) {
   if( ( c <= 32 ) || ( c >= 127 ) ) return 0; return 1&(reserved_matrix[(c-32)>>3]>>(c&7));
 }
 
-size_t scan_urlencoded_query(char **string, char *deststring, int flags) {
+ssize_t scan_urlencoded_query(char **string, char *deststring, int flags) {
   register const unsigned char* s=*(const unsigned char**) string;
   unsigned char *d = (unsigned char*)deststring;
   register unsigned char b, c;
@@ -62,18 +62,17 @@ found_terminator:
   return d - (unsigned char*)deststring;
 }
 
-size_t scan_fixed_int( char *data, size_t len, int *tmp ) {
+ssize_t scan_fixed_int( char *data, size_t len, int *tmp ) {
   *tmp = 0;
   while( (len > 0) && (*data >= '0') && (*data <= '9') ) { --len; *tmp = 10**tmp + *data++-'0'; }
   return len;
 }
 
-size_t scan_fixed_ip( char *data, size_t len, unsigned char ip[4] ) {
+ssize_t scan_fixed_ip( char *data, size_t len, unsigned char ip[4] ) {
   int u, i;
 
   for( i=0; i<4; ++i ) {
-    register unsigned int j;
-    j = scan_fixed_int( data, len, &u );
+    ssize_t j = scan_fixed_int( data, len, &u );
     if( j == len ) return len;
     ip[i] = u;
     data += len - j;
