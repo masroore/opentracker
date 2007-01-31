@@ -449,7 +449,7 @@ static void help( char *name ) {
 
 static void handle_read( const int64 clientsocket ) {
   struct http_data* h = io_getcookie( clientsocket );
-  size_t l;
+  int64 l;
 
   if( ( l = io_tryread( clientsocket, static_inbuf, sizeof static_inbuf ) ) <= 0 ) {
     if( h ) {
