@@ -256,6 +256,7 @@ static void httpresponse( const int64 s, char *data ) {
     /* Enough for http header + whole scrape string */
     if( !( reply_size = return_stats_for_tracker( SUCCESS_HTTP_HEADER_LENGTH + static_outbuf, mode ) ) ) HTTPERROR_500;
 
+    ot_overall_successfulannounces++;
     break;
   case 6: /* scrape ? */
     if( byte_diff( data, 6, "scrape") ) HTTPERROR_404;
