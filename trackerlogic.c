@@ -339,7 +339,7 @@ size_t return_memstat_for_tracker( char **reply ) {
     torrent_count += torrents_list->size;
   }
 
-  if( !( r = *reply = malloc( 256*32 + (43+3+30)*torrent_count ) ) ) return 0;
+  if( !( r = *reply = malloc( 256*32 + (43+OT_POOLS_COUNT*32)*torrent_count ) ) ) return 0;
 
   for( i=0; i<256; ++i )
     r += sprintf( r, "%02X: %08X %08X\n", i, (ot_dword)all_torrents[i].size, (ot_dword)all_torrents[i].space );
