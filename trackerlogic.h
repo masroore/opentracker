@@ -25,9 +25,10 @@ typedef time_t         ot_time;
 #define OT_CLIENT_REQUEST_INTERVAL (60*30)
 #define OT_CLIENT_REQUEST_VARIATION (60*3)
 
-#define OT_TORRENT_TIMEOUT ((60*60*24)/OT_POOLS_TIMEOUT)
+#define OT_TORRENT_TIMEOUT_HOURS 24
+#define OT_TORRENT_TIMEOUT ((60*60*OT_TORRENT_TIMEOUT_HOURS)/OT_POOLS_TIMEOUT)
 
-#define OT_CLIENT_REQUEST_INTERVAL_RANDOM ( OT_CLIENT_REQUEST_INTERVAL + (int)( random( ) % OT_CLIENT_REQUEST_VARIATION ) )
+#define OT_CLIENT_REQUEST_INTERVAL_RANDOM ( OT_CLIENT_REQUEST_INTERVAL - OT_CLIENT_REQUEST_VARIATION/2 + (int)( random( ) % OT_CLIENT_REQUEST_VARIATION ) )
 
 /* We maintain a list of 256 pointers to sorted list of ot_torrent structs
    Sort key is, of course, its hash */
