@@ -22,8 +22,10 @@ typedef time_t         ot_time;
 /* Some tracker behaviour tunable */
 #define OT_CLIENT_TIMEOUT 30
 #define OT_CLIENT_TIMEOUT_CHECKINTERVAL 5
-#define OT_CLIENT_REQUEST_INTERVAL 1800
-#define OT_CLIENT_REQUEST_VARIATION 180
+#define OT_CLIENT_REQUEST_INTERVAL (60*30)
+#define OT_CLIENT_REQUEST_VARIATION (60*3)
+
+#define OT_TORRENT_TIMEOUT ((60*60*24)/OT_POOLS_TIMEOUT)
 
 #define OT_CLIENT_REQUEST_INTERVAL_RANDOM ( OT_CLIENT_REQUEST_INTERVAL + (int)( random( ) % OT_CLIENT_REQUEST_VARIATION ) )
 
@@ -35,7 +37,7 @@ typedef time_t         ot_time;
    These pools are sorted by its binary content */
 
 #define OT_POOLS_COUNT   9
-#define OT_POOLS_TIMEOUT 300
+#define OT_POOLS_TIMEOUT (60*5)
 #define NOW              (time(NULL)/OT_POOLS_TIMEOUT)
 
 #define OT_VECTOR_MIN_MEMBERS   16
