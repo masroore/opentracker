@@ -99,6 +99,12 @@ static int vector_remove_peer( ot_vector *vector, ot_peer *peer ) {
     vector->space /= OT_VECTOR_SHRINK_RATIO;
     vector->data = realloc( vector->data, vector->space * sizeof( ot_peer ) );
   }
+  if( !vector->size ) {
+    /* for peer pools its safe to let them go,
+       in 999 of 1000 this happens in older pools, that won't ever grow again */
+    free( vector->data );
+    vector->space = 0;
+  }
   return exactmatch;
 }
 
