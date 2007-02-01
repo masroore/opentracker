@@ -24,7 +24,6 @@
 
 /* GLOBAL VARIABLES */
 static ot_vector all_torrents[256];
-
 #ifdef WANT_CLOSED_TRACKER
 int g_closedtracker = 1;
 static ot_torrent* const OT_TORRENT_NOT_ON_WHITELIST = (ot_torrent*)1;
@@ -326,6 +325,37 @@ size_t return_fullscrape_for_tracker( char **reply ) {
   }
 
   *r++='e'; *r++='e';
+  return r - *reply;
+}
+
+size_t return_memstat_for_tracker( char **reply ) {
+  size_t torrent_count = 0, j;
+  int    i, k;
+  char  *r;
+  time_t time_now = NOW;
+
+  for( i=0; i<256; ++i ) {
+    ot_vector *torrents_list = &all_torrents[i];
+    torrent_count += torrents_list->size;
+  }
+
+  if( !( r = *reply = malloc( 256*32 + 64*torrent_count ) ) ) return 0;
+
+  for( i=0; i<256; ++i )
+    r += sprintf( r, "%02X: %08X %08X\n", i, (ot_dword)all_torrents[i].size, (ot_dword)all_torrents[i].space );
+
+  for( i=0; i<256; ++i ) {
+    ot_vector *torrents_list = &all_torrents[i];
+    for( j=0; j<torrents_list->size; ++j ) {
+      ot_peerlist *peer_list = ( ((ot_torrent*)(torrents_list->data))[j] ).peer_list;
+      ot_hash     *hash      =&( ((ot_torrent*)(torrents_list->data))[j] ).hash;
+      r += sprintf( r, "\n%s:\n", to_hex( (ot_byte*)hash ) );
+      clean_peerlist( time_now, peer_list );
+      for( k=0; k<OT_POOLS_COUNT; ++k )
+        r += sprintf( r, "\t%08X %08X\n", peer_list->peers[k].size, peer_list->peers[k].space );
+    }
+  }
+
   return r - *reply;
 }
 

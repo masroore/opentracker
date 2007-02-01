@@ -241,9 +241,16 @@ static void httpresponse( const int64 s, char *data ) {
           mode = STATS_MRTG;
         else if( !byte_diff(data,4,"top5"))
           mode = STATS_TOP5;
+        else if( !byte_diff(data,4,"dmem"))
+          mode = STATS_DMEM;
         else
           HTTPERROR_400_PARAM;
       }
+    }
+
+    if( mode == STATS_DMEM ) {
+      if( !( reply_size = return_memstat_for_tracker( &reply ) ) ) HTTPERROR_500;
+      return sendmallocdata( s, reply, reply_size );
     }
 
     /* Enough for http header + whole scrape string */
