@@ -103,6 +103,7 @@ static int vector_remove_peer( ot_vector *vector, ot_peer *peer ) {
     /* for peer pools its safe to let them go,
        in 999 of 1000 this happens in older pools, that won't ever grow again */
     free( vector->data );
+    vector->data = NULL;
     vector->space = 0;
   }
   return exactmatch;
