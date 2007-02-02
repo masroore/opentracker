@@ -255,8 +255,6 @@ static void httpresponse( const int64 s, char *data ) {
 
     /* Enough for http header + whole scrape string */
     if( !( reply_size = return_stats_for_tracker( SUCCESS_HTTP_HEADER_LENGTH + static_outbuf, mode ) ) ) HTTPERROR_500;
-
-    ot_overall_successfulannounces++;
     break;
   case 6: /* scrape ? */
     if( byte_diff( data, 6, "scrape") ) HTTPERROR_404;
@@ -284,11 +282,14 @@ SCRAPE_WORKAROUND:
     /* Scanned whole query string, no hash means full scrape... you might want to limit that */
     if( !hash ) {
       if( !( reply_size = return_fullscrape_for_tracker( &reply ) ) ) HTTPERROR_500;
+      ot_overall_successfulannounces++;
       return sendmallocdata( s, reply, reply_size );
     }
 
     /* Enough for http header + whole scrape string */
     if( !( reply_size = return_scrape_for_torrent( hash, SUCCESS_HTTP_HEADER_LENGTH + static_outbuf ) ) ) HTTPERROR_500;
+
+    ot_overall_successfulannounces++;
     break;
   case 8:
     if( byte_diff( data, 8, "announce" ) ) HTTPERROR_404;
