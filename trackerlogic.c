@@ -349,7 +349,7 @@ size_t return_memstat_for_tracker( char **reply ) {
   if( !( r = *reply = malloc( 256*32 + (43+OT_POOLS_COUNT*32)*torrent_count ) ) ) return 0;
 
   for( i=0; i<256; ++i )
-    r += sprintf( r, "%02X: %08X %08X\n", i, (ot_dword)all_torrents[i].size, (ot_dword)all_torrents[i].space );
+    r += sprintf( r, "%02X: %04X %04X\n", i, (ot_dword)all_torrents[i].size, (ot_dword)all_torrents[i].space );
 
   for( i=0; i<256; ++i ) {
     ot_vector *torrents_list = &all_torrents[i];
