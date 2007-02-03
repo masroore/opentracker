@@ -35,14 +35,8 @@ static const size_t SUCCESS_HTTP_SIZE_OFF = 17;
 
 /* To always have space for error messages ;) */
 
-#define static_outbuf_size   8192
-#define static_outbuf_count  64
-#define static_outbuf        ( static_outbufs + static_outbuf_size * static_outbuf_off )
-#define static_outbuf_next   ( static_outbuf_off = ( static_outbuf_off + 1 ) & ( static_outbuf_count - 1 ) )
-
 static char static_inbuf[8192];
-static char static_outbufs[ static_outbuf_size * static_outbuf_count ];
-static int static_outbuf_off = 0;
+static char static_outbuf[8192];
 
 #ifdef _DEBUG_HTTPERROR
 static char debug_request[8192];
@@ -146,7 +140,6 @@ static void senddata( const int64 s, char *buffer, size_t size ) {
 
   written_size = write( s, buffer, size );
   if( ( written_size < 0 ) || ( written_size == size ) ) {
-    static_outbuf_next;
     free( h ); io_close( s );
   } else {
     char * outbuf = malloc( size - written_size );
