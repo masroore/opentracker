@@ -34,6 +34,11 @@ int g_check_blacklist = 1;
 static ot_torrent* const OT_TORRENT_ON_BLACKLIST = (ot_torrent*)2;
 #endif
 
+/* Converter function from memory to human readable hex strings
+   - definitely not thread safe!!!
+*/
+static char ths[2+2*20]="-";static char*to_hex(ot_byte*s){const char*m="0123456789ABCDEF";char*e=ths+41;char*t=ths+1;while(t<e){*t++=m[*s>>4];*t++=m[*s++&15];}*t=0;return ths+1;}
+
 /* This function gives us a binary search that returns a pointer, even if
    no exact match is found. In that case it sets exactmatch 0 and gives
    calling functions the chance to insert data
@@ -58,11 +63,13 @@ static void *binary_search( const void * const key, const void * base, const siz
   return (void*)lookat;
 }
 
-/* Converter function from memory to human readable hex strings
-   - definitely not thread safe!!!
+/* This is the generic insert operation for our vector type.
+   It tries to locate the object at "key" with size "member_size" by comparing its first "compare_size" bytes with
+   those of objects in vector. Our special "binary_search" function does that and either returns the match or a
+   pointer to where the object is to be inserted. vector_find_or_insert makes space for the object and copies it,
+   if it wasn't found in vector. Caller needs to check the passed "exactmatch" variable to see, whether an insert
+   took place. If resizing the vector failed, NULL is returned, else the pointer to the object in vector.
 */
-char ths[2+2*20]="-";char*to_hex(ot_byte*s){char*m="0123456789ABCDEF";char*e=ths+41;char*t=ths+1;while(t<e){*t++=m[*s>>4];*t++=m[*s++&15];}*t=0;return ths+1;}
-
 static void *vector_find_or_insert( ot_vector *vector, void *key, size_t member_size, size_t compare_size, int *exactmatch ) {
   ot_byte *match = binary_search( key, vector->data, vector->size, member_size, compare_size, exactmatch );
 
@@ -83,9 +90,16 @@ static void *vector_find_or_insert( ot_vector *vector, void *key, size_t member_
   vector->size++;
   return match;
 }
-	
-static int vector_remove_peer( ot_vector *vector, ot_peer *peer ) {
-  int exactmatch;
+
+/* This is the non-generic delete from vector-operation specialized for peers in pools.
+   Set hysteresis == 0 if you expect the vector not to ever grow again.
+   It returns 0 if no peer was found (and thus not removed)
+              1 if a non-seeding peer was removed
+              2 if a seeding peer was removed
+*/
+static int vector_remove_peer( ot_vector *vector, ot_peer *peer, int hysteresis ) {
+  int      exactmatch;
+  size_t   shrink_thresh = hysteresis ? OT_VECTOR_SHRINK_THRESH : OT_VECTOR_SHRINK_RATIO;
   ot_peer *end = ((ot_peer*)vector->data) + vector->size;
   ot_peer *match;
 
@@ -95,7 +109,7 @@ static int vector_remove_peer( ot_vector *vector, ot_peer *peer ) {
   if( !exactmatch ) return 0;
   exactmatch = ( OT_FLAG( match ) & PEER_FLAG_SEEDING ) ? 2 : 1;
   memmove( match, match + 1, sizeof(ot_peer) * ( end - match - 1 ) );
-  if( ( --vector->size * OT_VECTOR_SHRINK_THRESH < vector->space ) && ( vector->space > OT_VECTOR_MIN_MEMBERS ) ) {
+  if( ( --vector->size * shrink_thresh < vector->space ) && ( vector->space > OT_VECTOR_MIN_MEMBERS ) ) {
     vector->space /= OT_VECTOR_SHRINK_RATIO;
     vector->data = realloc( vector->data, vector->space * sizeof( ot_peer ) );
   }
@@ -117,14 +131,18 @@ static void free_peerlist( ot_peerlist *peer_list ) {
   free( peer_list );
 }
 
+/* This is the non-generic delete from vector-operation specialized for torrents in buckets.
+   it returns 0 if the hash wasn't found in vector
+              1 if the torrent was removed from vector
+*/
 static int vector_remove_torrent( ot_vector *vector, ot_hash *hash ) {
   int exactmatch;
   ot_torrent *end = ((ot_torrent*)vector->data) + vector->size;
   ot_torrent *match;
 
   if( !vector->size ) return 0;
-  match = binary_search( hash, vector->data, vector->size, sizeof( ot_torrent ), OT_HASH_COMPARE_SIZE, &exactmatch );
 
+  match = binary_search( hash, vector->data, vector->size, sizeof( ot_torrent ), OT_HASH_COMPARE_SIZE, &exactmatch );
   if( !exactmatch ) return 0;
 
   /* If this is being called after a unsuccessful malloc() for peer_list
@@ -139,8 +157,11 @@ static int vector_remove_torrent( ot_vector *vector, ot_hash *hash ) {
   return 1;
 }
 
-/* Returns 1, if torrent is gone, 0 otherwise
-   We expect NOW as a parameter since calling time() may be expensive*/
+/* This function deallocates all timedouted pools and shifts all other pools
+   it Returns 1 if torrent itself has not seen an announce for more than OT_TORRENT_TIMEOUT time units
+              0 if torrent is not yet timed out
+   Note: We expect NOW as a parameter since calling time() may be expensive
+*/
 static int clean_peerlist( time_t time_now, ot_peerlist *peer_list ) {
   int i, timedout = (int)( time_now - peer_list->base );
 
@@ -156,8 +177,11 @@ static int clean_peerlist( time_t time_now, ot_peerlist *peer_list ) {
   memmove( peer_list->seed_count + timedout, peer_list->seed_count, sizeof( size_t ) * ( OT_POOLS_COUNT - timedout) );
   byte_zero( peer_list->seed_count, sizeof( size_t ) * timedout );
 
-  peer_list->base = NOW;
-  return timedout == OT_POOLS_COUNT;
+  if( timedout == OT_POOLS_COUNT )
+    return time_now - peer_list->base > OT_TORRENT_TIMEOUT;
+
+  peer_list->base = time_now;
+  return 0;
 }
 
 ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer ) {
@@ -187,13 +211,12 @@ ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer ) {
     /* Create a new torrent entry, then */
     memmove( &torrent->hash, hash, sizeof( ot_hash ) );
 
-    torrent->peer_list = malloc( sizeof (ot_peerlist) );
-    if( !torrent->peer_list ) {
+    if( !( torrent->peer_list = malloc( sizeof (ot_peerlist) ) ) ) {
       vector_remove_torrent( torrents_list, hash );
       return NULL;
     }
 
-    byte_zero( torrent->peer_list, sizeof( ot_peerlist ));
+    byte_zero( torrent->peer_list, sizeof( ot_peerlist ) );
     torrent->peer_list->base = NOW;
   } else
     clean_peerlist( NOW, torrent->peer_list );
@@ -201,7 +224,7 @@ ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer ) {
   peer_pool = &torrent->peer_list->peers[0];
   peer_dest = vector_find_or_insert( peer_pool, (void*)peer, sizeof( ot_peer ), OT_PEER_COMPARE_SIZE, &exactmatch );
 
-  if( OT_FLAG(peer) & PEER_FLAG_COMPLETED )
+  if( OT_FLAG( peer ) & PEER_FLAG_COMPLETED )
     torrent->peer_list->downloaded++;
 
   /* If we hadn't had a match in current pool, create peer there and
@@ -213,7 +236,7 @@ ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer ) {
       torrent->peer_list->seed_count[0]++;
 
     for( i=1; i<OT_POOLS_COUNT; ++i ) {
-      switch( vector_remove_peer( &torrent->peer_list->peers[i], peer ) ) {
+      switch( vector_remove_peer( &torrent->peer_list->peers[i], peer, 0 ) ) {
         case 0: continue;
         case 2: torrent->peer_list->seed_count[i]--;
         case 1: default: return torrent;
@@ -231,7 +254,7 @@ ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer ) {
 }
 
 /* Compiles a list of random peers for a torrent
-   * reply must have enough space to hold 24+6*amount bytes
+   * reply must have enough space to hold 92+6*amount bytes
    * Selector function can be anything, maybe test for seeds, etc.
    * RANDOM may return huge values
    * does not yet check not to return self
@@ -349,7 +372,7 @@ size_t return_memstat_for_tracker( char **reply ) {
   if( !( r = *reply = malloc( 256*32 + (43+OT_POOLS_COUNT*32)*torrent_count ) ) ) return 0;
 
   for( i=0; i<256; ++i )
-    r += sprintf( r, "%02X: %04X %04X\n", i, (ot_dword)all_torrents[i].size, (ot_dword)all_torrents[i].space );
+    r += sprintf( r, "%02X: %08X %08X\n", i, (unsigned int)all_torrents[i].size, (unsigned int)all_torrents[i].space );
 
   for( i=0; i<256; ++i ) {
     ot_vector *torrents_list = &all_torrents[i];
@@ -359,7 +382,7 @@ size_t return_memstat_for_tracker( char **reply ) {
       r += sprintf( r, "\n%s:\n", to_hex( (ot_byte*)hash ) );
       clean_peerlist( time_now, peer_list );
       for( k=0; k<OT_POOLS_COUNT; ++k )
-        r += sprintf( r, "\t%04X %04X\n", peer_list->peers[k].size, peer_list->peers[k].space );
+        r += sprintf( r, "\t%04X %04X\n", ((unsigned int)peer_list->peers[k].size), (unsigned int)peer_list->peers[k].space );
     }
   }
 
@@ -432,7 +455,13 @@ size_t return_stats_for_tracker( char *reply, int mode ) {
     for( j=0; j<torrents_list->size; ++j ) {
       ot_peerlist *peer_list = ( ((ot_torrent*)(torrents_list->data))[j] ).peer_list;
       size_t local_peers = 0, local_seeds = 0;
-      clean_peerlist( time_now, peer_list );
+
+      if( clean_peerlist( time_now, peer_list ) ) {
+        ot_hash *hash =&( ((ot_torrent*)(torrents_list->data))[j] ).hash;
+        vector_remove_torrent( torrents_list->data, hash );
+        --j;
+        continue;
+      }
       for( k=0; k<OT_POOLS_COUNT; ++k ) {
         local_peers += peer_list->peers[k].size;
         local_seeds += peer_list->seed_count[k];
@@ -480,15 +509,12 @@ void remove_peer_from_torrent( ot_hash *hash, ot_peer *peer ) {
 
   /* Maybe this does the job */
   if( clean_peerlist( NOW, torrent->peer_list ) ) {
-#ifdef WANT_CLOSED_TRACKER
-    if( !g_closedtracker )
-#endif
     vector_remove_torrent( torrents_list, hash );
     return;
   }
 
   for( i=0; i<OT_POOLS_COUNT; ++i )
-    switch( vector_remove_peer( &torrent->peer_list->peers[i], peer ) ) {
+    switch( vector_remove_peer( &torrent->peer_list->peers[i], peer, i == 0 ) ) {
       case 0: continue;
       case 2: torrent->peer_list->seed_count[i]--;
       case 1: default: return;
