@@ -359,7 +359,7 @@ size_t return_memstat_for_tracker( char **reply ) {
       r += sprintf( r, "\n%s:\n", to_hex( (ot_byte*)hash ) );
       clean_peerlist( time_now, peer_list );
       for( k=0; k<OT_POOLS_COUNT; ++k )
-        r += sprintf( r, "\t%08X %08X\n", peer_list->peers[k].size, peer_list->peers[k].space );
+        r += sprintf( r, "\t%04X %04X\n", peer_list->peers[k].size, peer_list->peers[k].space );
     }
   }
 
