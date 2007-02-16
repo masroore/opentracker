@@ -224,14 +224,15 @@ ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer ) {
   peer_pool = &torrent->peer_list->peers[0];
   peer_dest = vector_find_or_insert( peer_pool, (void*)peer, sizeof( ot_peer ), OT_PEER_COMPARE_SIZE, &exactmatch );
 
-  if( OT_FLAG( peer ) & PEER_FLAG_COMPLETED )
-    torrent->peer_list->downloaded++;
-
   /* If we hadn't had a match in current pool, create peer there and
      remove it from all older pools */
   if( !exactmatch ) {
     int i;
     memmove( peer_dest, peer, sizeof( ot_peer ) );
+
+    if( OT_FLAG( peer ) & PEER_FLAG_COMPLETED )
+      torrent->peer_list->downloaded++;
+
     if( OT_FLAG(peer) & PEER_FLAG_SEEDING )
       torrent->peer_list->seed_count[0]++;
 
@@ -247,6 +248,11 @@ ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer ) {
       torrent->peer_list->seed_count[0]--;
     if( !(OT_FLAG(peer_dest) & PEER_FLAG_SEEDING ) && (OT_FLAG(peer) & PEER_FLAG_SEEDING ) )
       torrent->peer_list->seed_count[0]++;
+    if( !(OT_FLAG( peer_dest ) & PEER_FLAG_COMPLETED ) && (OT_FLAG( peer ) & PEER_FLAG_COMPLETED ) )
+      torrent->peer_list->downloaded++;
+    if( OT_FLAG( peer_dest ) & PEER_FLAG_COMPLETED )
+      OT_FLAG( peer ) |= PEER_FLAG_COMPLETED;
+
     memmove( peer_dest, peer, sizeof( ot_peer ) );
   }
 
