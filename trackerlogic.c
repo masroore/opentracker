@@ -464,7 +464,7 @@ size_t return_stats_for_tracker( char *reply, int mode ) {
 
       if( clean_peerlist( time_now, peer_list ) ) {
         ot_hash *hash =&( ((ot_torrent*)(torrents_list->data))[j] ).hash;
-        vector_remove_torrent( torrents_list->data, hash );
+        vector_remove_torrent( torrents_list, hash );
         --j;
         continue;
       }
