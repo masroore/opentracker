@@ -12,6 +12,8 @@
 #include "case.h"
 #include "fmt.h"
 #include "str.h"
+#include "scan.h"
+#include "ip4.h"
 #include <string.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -38,6 +40,13 @@ static const size_t SUCCESS_HTTP_SIZE_OFF = 17;
 static char static_inbuf[8192];
 static char static_outbuf[8192];
 
+#define OT_MAXSOCKETS_TCP4 64
+#define OT_MAXSOCKETS_UDP4 64
+static int64 ot_sockets_tcp4[ OT_MAXSOCKETS_TCP4 ];
+static int64 ot_sockets_udp4[ OT_MAXSOCKETS_UDP4 ];
+static int ot_sockets_tcp4_count = 0;
+static int ot_sockets_udp4_count = 0;
+
 #ifdef _DEBUG_HTTPERROR
 static char debug_request[8192];
 #endif
@@ -60,7 +69,7 @@ static void httpresponse( const int64 s, char *data );
 static void sendmallocdata( const int64 s, char *buffer, const size_t size );
 static void senddata( const int64 s, char *buffer, const size_t size );
 
-static void server_mainloop( const int64 serversocket );
+static void server_mainloop( );
 static void handle_timeouted( void );
 static void handle_accept( const int64 serversocket );
 static void handle_read( const int64 clientsocket );
@@ -436,8 +445,9 @@ static void usage( char *name ) {
 
 static void help( char *name ) {
   usage( name );
-  fprintf( stderr, "\t-i serverip\tspecify ip to bind to (default: *)\n"
-                   "\t-p serverport\tspecify port to bind to (default: 6969)\n"
+  fprintf( stderr, "\t-i serverip\tspecify ip to bind to (default: *, you may specify more than one)\n"
+                   "\t-p serverport\tspecify port to bind to (default: 6969, you may specify more than one)\n"
+                   "\t-P serverport\tspecify port to bind to (you may specify more than one)\n"
                    "\t-d serverdir\tspecify directory containing white- or black listed torrent info_hashes (default: \".\")\n"
 #ifdef WANT_CLOSED_TRACKER
                    "\t-o\t\tmake tracker an open tracker, e.g. do not check for white list (default: off)\n"
@@ -456,6 +466,7 @@ static void help( char *name ) {
 #endif
                    "* To white list a torrent, touch a file inside serverdir with info_hash hex string, preprended by '-'.\n"
 #endif
+                   "\nExample:   ./opentracker -i 127.0.0.1 -p 6968 -P 6968 -i 10.1.1.23 -p 6969 -p 6970\n"
 );
 }
 
@@ -544,10 +555,35 @@ static void handle_timeouted( void ) {
   }
 }
 
-static void server_mainloop( const int64 serversocket ) {
+void handle_udp4( int64 serversocket ) {
+  size_t r;
+  char remoteip[4];
+  uint16 port;
+
+  r = socket_recv4(serversocket, static_inbuf, 8192, remoteip, &port);
+
+  // too lazy :)
+}
+
+int ot_in_tcp4_sockets( int64 fd ) {
+  int i;
+  for( i=0; i<ot_sockets_tcp4_count; ++i)
+    if( ot_sockets_tcp4[i] == fd )
+      return 1;
+  return 0;
+}
+
+int ot_in_udp4_sockets( int64 fd ) {
+  int i;
+  for( i=0; i<ot_sockets_udp4_count; ++i)
+    if( ot_sockets_udp4[i] == fd )
+      return 1;
+  return 0;
+}
+
+static void server_mainloop( ) {
   tai6464 t, next_timeout_check;
 
-  io_wantread( serversocket );
   taia_now( &next_timeout_check );
 
   for( ; ; ) {
@@ -558,8 +594,10 @@ static void server_mainloop( const int64 serversocket ) {
     io_waituntil( t );
 
     while( ( i = io_canread( ) ) != -1 ) {
-      if( i == serversocket )
+      if( ot_in_tcp4_sockets( i ) )
         handle_accept( i );
+      else if( ot_in_udp4_sockets( i ) )
+        handle_udp4( i );
       else
         handle_read( i );
     }
@@ -576,18 +614,52 @@ static void server_mainloop( const int64 serversocket ) {
   }
 }
 
-int main( int argc, char **argv ) {
+void ot_try_bind_tcp4( char ip[4], uint16 port ) {
   int64 s = socket_tcp4( );
-  char *serverip = NULL;
+  if( ot_sockets_tcp4_count == OT_MAXSOCKETS_TCP4 ) {
+    fprintf( stderr, "Too many tcp4 sockets, increase OT_MAXSOCKETS_TCP4 and recompile.\n"); exit(1);
+  }
+  if( socket_bind4_reuse( s, ip, port ) == -1 )
+    panic( "socket_bind4_reuse" );
+
+  if( socket_listen( s, SOMAXCONN) == -1 )
+    panic( "socket_listen" );
+
+  if( !io_fd( s ) )
+    panic( "io_fd" );
+
+  io_wantread( s );
+
+  ot_sockets_tcp4[ ot_sockets_tcp4_count++ ] = s;
+}
+
+void ot_try_bind_udp4( char ip[4], uint16 port ) {
+  int64 s = socket_udp4( );
+  if( ot_sockets_udp4_count == OT_MAXSOCKETS_UDP4 ) {
+    fprintf( stderr, "Too many udp4 sockets, increase OT_MAXSOCKETS_UDP4 and recompile.\n"); exit(1);
+  }
+  if( socket_bind4_reuse( s, ip, port ) == -1 )
+    panic( "socket_bind4_reuse" );
+
+  if( !io_fd( s ) )
+    panic( "io_fd" );
+
+  io_wantread( s );
+
+  ot_sockets_udp4[ ot_sockets_udp4_count++ ] = s;
+}
+
+int main( int argc, char **argv ) {
+  char serverip[4] = {0,0,0,0};
   char *serverdir = ".";
-  uint16 port = 6969;
   int scanon = 1;
 
   while( scanon ) {
     switch( getopt( argc, argv, ":i:p:d:ocbBh" ) ) {
       case -1 : scanon = 0; break;
-      case 'i': serverip = optarg; break;
-      case 'p': port = (uint16)atol( optarg ); break;
+      case 'i': scan_ip4( optarg, serverip ); break;
+      case 'p': ot_try_bind_tcp4( serverip, (uint16)atol( optarg ) ); break;
+      case 'P': ot_try_bind_udp4( serverip, (uint16)atol( optarg ) ); break;
       case 'd': serverdir = optarg; break;
       case 'h': help( argv[0] ); exit( 0 );
 #ifdef WANT_CLOSED_TRACKER
@@ -603,17 +675,12 @@ int main( int argc, char **argv ) {
     }
   }
 
-  if( socket_bind4_reuse( s, serverip, port ) == -1 )
-    panic( "socket_bind4_reuse" );
+  // Bind to our default tcp port
+  if( !ot_sockets_tcp4_count && !ot_sockets_udp4_count )
+    ot_try_bind_tcp4( serverip, 6969 );
 
   setegid( (gid_t)-2 ); setuid( (uid_t)-2 );
   setgid( (gid_t)-2 ); seteuid( (uid_t)-2 );
-
-  if( socket_listen( s, SOMAXCONN) == -1 )
-    panic( "socket_listen" );
-
-  if( !io_fd( s ) )
-    panic( "io_fd" );
 
   signal( SIGPIPE, SIG_IGN );
   signal( SIGINT,  graceful );
@@ -622,7 +689,7 @@ int main( int argc, char **argv ) {
 
   ot_start_time = time( NULL );
 
-  server_mainloop( s );
+  server_mainloop( );
 
   return 0;
 }

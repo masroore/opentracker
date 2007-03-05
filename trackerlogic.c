@@ -221,6 +221,10 @@ ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer ) {
   } else
     clean_peerlist( NOW, torrent->peer_list );
 
+  /* Sanitize flags: Whoever claims to have completed download, must be a seeder */
+  if( ( OT_FLAG( peer ) & ( PEER_FLAG_COMPLETED | PEER_FLAG_SEEDING ) ) == PEER_FLAG_COMPLETED )
+    OT_FLAG( peer ) ^= PEER_FLAG_COMPLETED;
+
   peer_pool = &torrent->peer_list->peers[0];
   peer_dest = vector_find_or_insert( peer_pool, (void*)peer, sizeof( ot_peer ), OT_PEER_COMPARE_SIZE, &exactmatch );
 
