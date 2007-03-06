@@ -94,12 +94,12 @@ extern int g_check_blacklist;
 enum { STATS_MRTG, STATS_TOP5, STATS_DMEM };
 
 ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer );
-size_t return_peers_for_torrent( ot_torrent *torrent, size_t amount, char *reply );
+size_t return_peers_for_torrent( ot_torrent *torrent, size_t amount, char *reply, int is_tcp );
 size_t return_fullscrape_for_tracker( char **reply );
 size_t return_scrape_for_torrent( ot_hash *hash, char *reply );
 size_t return_sync_for_torrent( ot_hash *hash, char **reply );
 size_t return_stats_for_tracker( char *reply, int mode );
 size_t return_memstat_for_tracker( char **reply );
-void  remove_peer_from_torrent( ot_hash *hash, ot_peer *peer );
+void   remove_peer_from_torrent( ot_hash *hash, ot_peer *peer );
 
 #endif

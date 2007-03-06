@@ -74,6 +74,12 @@ static void handle_timeouted( void );
 static void handle_accept( const int64 serversocket );
 static void handle_read( const int64 clientsocket );
 static void handle_write( const int64 clientsocket );
+static void handle_udp4( const int64 serversocket );
+
+static void ot_try_bind_udp4( char ip[4], uint16 port );
+static void ot_try_bind_tcp4( char ip[4], uint16 port );
+static int ot_in_udp4_sockets( int64 fd );
+static int ot_in_tcp4_sockets( int64 fd );
 
 static void usage( char *name );
 static void help( char *name );
@@ -381,7 +387,7 @@ ANNOUNCE_WORKAROUND:
       reply_size = sprintf( static_outbuf + SUCCESS_HTTP_HEADER_LENGTH, "d8:completei0e10:incompletei0e8:intervali%ie5:peers0:e", OT_CLIENT_REQUEST_INTERVAL_RANDOM );
     } else {
       torrent = add_peer_to_torrent( hash, &peer );
-      if( !torrent || !( reply_size = return_peers_for_torrent( torrent, numwant, SUCCESS_HTTP_HEADER_LENGTH + static_outbuf ) ) ) HTTPERROR_500;
+      if( !torrent || !( reply_size = return_peers_for_torrent( torrent, numwant, SUCCESS_HTTP_HEADER_LENGTH + static_outbuf, 1 ) ) ) HTTPERROR_500;
     }
     ot_overall_successfulannounces++;
     break;
@@ -555,17 +561,76 @@ static void handle_timeouted( void ) {
   }
 }
 
-void handle_udp4( int64 serversocket ) {
-  size_t r;
-  char remoteip[4];
-  uint16 port;
+static void handle_udp4( int64 serversocket ) {
+  ot_peer        peer;
+  ot_torrent    *torrent;
+  ot_hash       *hash = NULL;
+  char           remoteip[4];
+  unsigned long *inpacket = (unsigned long*)static_inbuf;
+  unsigned long *outpacket = (unsigned long*)static_outbuf;
+  unsigned long  numwant, left, event;
+  uint16         port;
+  size_t         r;
 
-  r = socket_recv4(serversocket, static_inbuf, 8192, remoteip, &port);
+  r = socket_recv4( serversocket, static_inbuf, 8192, remoteip, &port);
 
-  // too lazy :)
+  /* Minimum udp tracker packet size, also catches error */
+  if( r < 16 )
+    return;
+
+  switch( ntohl( inpacket[2] ) ) {
+    case 0: /* This is a connect action */
+      outpacket[0] = 0;           outpacket[1] = inpacket[3];
+      outpacket[2] = inpacket[0]; outpacket[3] = inpacket[1];
+      socket_send4( serversocket, static_outbuf, 16, remoteip, port );
+      break;
+    case 1: /* This is an announce action */
+      /* Minimum udp announce packet size */
+      if( r < 98 )
+        return;
+
+      numwant = 200;
+      left  = ntohl( inpacket[64/4] );
+      event = ntohl( inpacket[80/4] );
+      port  = ntohl( inpacket[96/4] );
+      hash  = (ot_hash*)inpacket+(16/4);
+
+      OT_SETIP( &peer, remoteip );
+      OT_SETPORT( &peer, &port );
+      OT_FLAG( &peer ) = 0;
+
+      switch( event ) {
+        case 1: OT_FLAG( &peer ) |= PEER_FLAG_COMPLETED; break;
+        case 3: OT_FLAG( &peer ) |= PEER_FLAG_STOPPED; break;
+        default: break;
+      }
+      if( !left )
+        OT_FLAG( &peer )         |= PEER_FLAG_SEEDING;
+
+      if( OT_FLAG( &peer ) & PEER_FLAG_STOPPED ) {
+        /* Peer is gone. */
+        remove_peer_from_torrent( hash, &peer );
+
+        /* Create fake packet to satisfy parser on the other end */
+        outpacket[0] = htonl( 1 );
+        outpacket[1] = inpacket[12/4];
+        outpacket[2] = outpacket[3] = outpacket[4] = 0;
+        socket_send4( serversocket, static_outbuf, 20, remoteip, port );
+      } else {
+        torrent = add_peer_to_torrent( hash, &peer );
+        if( !torrent )
+          return; /* XXX maybe send error */
+
+        outpacket[0] = htonl( 1 );
+        outpacket[1] = inpacket[12/4];
+        r = 8 + return_peers_for_torrent( torrent, numwant, static_outbuf + 8, 0 );
+        socket_send4( serversocket, static_outbuf, r, remoteip, port );
+      }
+      break;
+  }
 }
 
-int ot_in_tcp4_sockets( int64 fd ) {
+static int ot_in_tcp4_sockets( int64 fd ) {
   int i;
   for( i=0; i<ot_sockets_tcp4_count; ++i)
     if( ot_sockets_tcp4[i] == fd )
@@ -573,7 +638,7 @@ int ot_in_tcp4_sockets( int64 fd ) {
   return 0;
 }
 
-int ot_in_udp4_sockets( int64 fd ) {
+static int ot_in_udp4_sockets( int64 fd ) {
   int i;
   for( i=0; i<ot_sockets_udp4_count; ++i)
     if( ot_sockets_udp4[i] == fd )
@@ -614,7 +679,7 @@ static void server_mainloop( ) {
   }
 }
 
-void ot_try_bind_tcp4( char ip[4], uint16 port ) {
+static void ot_try_bind_tcp4( char ip[4], uint16 port ) {
   int64 s = socket_tcp4( );
   if( ot_sockets_tcp4_count == OT_MAXSOCKETS_TCP4 ) {
     fprintf( stderr, "Too many tcp4 sockets, increase OT_MAXSOCKETS_TCP4 and recompile.\n"); exit(1);
@@ -633,7 +698,7 @@ void ot_try_bind_tcp4( char ip[4], uint16 port ) {
   ot_sockets_tcp4[ ot_sockets_tcp4_count++ ] = s;
 }
 
-void ot_try_bind_udp4( char ip[4], uint16 port ) {
+static void ot_try_bind_udp4( char ip[4], uint16 port ) {
   int64 s = socket_udp4( );
   if( ot_sockets_udp4_count == OT_MAXSOCKETS_UDP4 ) {
     fprintf( stderr, "Too many udp4 sockets, increase OT_MAXSOCKETS_UDP4 and recompile.\n"); exit(1);
@@ -655,7 +720,7 @@ int main( int argc, char **argv ) {
   int scanon = 1;
 
   while( scanon ) {
-    switch( getopt( argc, argv, ":i:p:d:ocbBh" ) ) {
+    switch( getopt( argc, argv, ":i:p:P:d:ocbBh" ) ) {
       case -1 : scanon = 0; break;
       case 'i': scan_ip4( optarg, serverip ); break;
       case 'p': ot_try_bind_tcp4( serverip, (uint16)atol( optarg ) ); break;

@@ -269,7 +269,7 @@ ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer ) {
    * RANDOM may return huge values
    * does not yet check not to return self
 */
-size_t return_peers_for_torrent( ot_torrent *torrent, size_t amount, char *reply ) {
+size_t return_peers_for_torrent( ot_torrent *torrent, size_t amount, char *reply, int is_tcp ) {
   char  *r = reply;
   size_t peer_count, seed_count, index;
 
@@ -295,7 +295,15 @@ size_t return_peers_for_torrent( ot_torrent *torrent, size_t amount, char *reply
   }
   if( peer_count < amount ) amount = peer_count;
 
-  r += sprintf( r, "d8:completei%zde10:incompletei%zde8:intervali%ie5:peers%zd:", seed_count, peer_count-seed_count, OT_CLIENT_REQUEST_INTERVAL_RANDOM, 6*amount );
+  if( is_tcp )
+    r += sprintf( r, "d8:completei%zde10:incompletei%zde8:intervali%ie5:peers%zd:", seed_count, peer_count-seed_count, OT_CLIENT_REQUEST_INTERVAL_RANDOM, 6*amount );
+  else {
+    *(unsigned long*)(r+0) = htonl( OT_CLIENT_REQUEST_INTERVAL_RANDOM );
+    *(unsigned long*)(r+4) = htonl( peer_count );
+    *(unsigned long*)(r+8) = htonl( seed_count );
+    r += 12;
+  }
+
   if( amount ) {
     unsigned int pool_offset, pool_index = 0;;
     unsigned int shifted_pc = peer_count;
@@ -327,7 +335,8 @@ size_t return_peers_for_torrent( ot_torrent *torrent, size_t amount, char *reply
       r += 6;
     }
   }
-  *r++ = 'e';
+  if( is_tcp )
+    *r++ = 'e';
 
   return r - reply;
 }
