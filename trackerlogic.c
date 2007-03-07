@@ -9,6 +9,7 @@
 #include <fcntl.h>
 #include <sys/types.h>
 #include <sys/mman.h>
+#include <arpa/inet.h>
 #include <unistd.h>
 #include <time.h>
 #include <math.h>
