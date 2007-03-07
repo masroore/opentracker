@@ -40,12 +40,9 @@ static const size_t SUCCESS_HTTP_SIZE_OFF = 17;
 static char static_inbuf[8192];
 static char static_outbuf[8192];
 
-#define OT_MAXSOCKETS_TCP4 64
-#define OT_MAXSOCKETS_UDP4 64
-static int64 ot_sockets_tcp4[ OT_MAXSOCKETS_TCP4 ];
-static int64 ot_sockets_udp4[ OT_MAXSOCKETS_UDP4 ];
-static int ot_sockets_tcp4_count = 0;
-static int ot_sockets_udp4_count = 0;
+static char *FLAG_TCP = "TCP";
+static char *FLAG_UDP = "UDP";
+static size_t ot_sockets_count = 0;
 
 #ifdef _DEBUG_HTTPERROR
 static char debug_request[8192];
@@ -76,10 +73,7 @@ static void handle_read( const int64 clientsocket );
 static void handle_write( const int64 clientsocket );
 static void handle_udp4( const int64 serversocket );
 
-static void ot_try_bind_udp4( char ip[4], uint16 port );
-static void ot_try_bind_tcp4( char ip[4], uint16 port );
-static int ot_in_udp4_sockets( int64 fd );
-static int ot_in_tcp4_sockets( int64 fd );
+static void ot_try_bind( char ip[4], uint16 port, int is_tcp );
 
 static void usage( char *name );
 static void help( char *name );
@@ -415,7 +409,7 @@ ANNOUNCE_WORKAROUND:
 
      1. In order to avoid having two buffers, one for header and one for content, we allow all above functions from trackerlogic to
      write to a fixed location, leaving SUCCESS_HTTP_HEADER_LENGTH bytes in our static buffer, which is enough for the static string
-     plus dynamic space needed to expand our Content-Length value. We reserve SUCCESS_HTTP_SIZE_OFF for it expansion and calculate
+     plus dynamic space needed to expand our Content-Length value. We reserve SUCCESS_HTTP_SIZE_OFF for its expansion and calculate
      the space NOT needed to expand in reply_off
   */
   reply_off = SUCCESS_HTTP_SIZE_OFF - snprintf( static_outbuf, 0, "%zd", reply_size );
@@ -630,22 +624,6 @@ static void handle_udp4( int64 serversocket ) {
   }
 }
 
-static int ot_in_tcp4_sockets( int64 fd ) {
-  int i;
-  for( i=0; i<ot_sockets_tcp4_count; ++i)
-    if( ot_sockets_tcp4[i] == fd )
-      return 1;
-  return 0;
-}
-
-static int ot_in_udp4_sockets( int64 fd ) {
-  int i;
-  for( i=0; i<ot_sockets_udp4_count; ++i)
-    if( ot_sockets_udp4[i] == fd )
-      return 1;
-  return 0;
-}
-
 static void server_mainloop( ) {
   tai6464 t, next_timeout_check;
 
@@ -659,9 +637,10 @@ static void server_mainloop( ) {
     io_waituntil( t );
 
     while( ( i = io_canread( ) ) != -1 ) {
-      if( ot_in_tcp4_sockets( i ) )
+      const void *cookie = io_getcookie( i );
+      if( cookie == FLAG_TCP )
         handle_accept( i );
-      else if( ot_in_udp4_sockets( i ) )
+      else if( cookie == FLAG_UDP )
         handle_udp4( i );
       else
         handle_read( i );
@@ -679,39 +658,23 @@ static void server_mainloop( ) {
   }
 }
 
-static void ot_try_bind_tcp4( char ip[4], uint16 port ) {
-  int64 s = socket_tcp4( );
-  if( ot_sockets_tcp4_count == OT_MAXSOCKETS_TCP4 ) {
-    fprintf( stderr, "Too many tcp4 sockets, increase OT_MAXSOCKETS_TCP4 and recompile.\n"); exit(1);
-  }
+static void ot_try_bind( char ip[4], uint16 port, int is_tcp ) {
+  int64 s = is_tcp ? socket_tcp4( ) : socket_udp4();
+
   if( socket_bind4_reuse( s, ip, port ) == -1 )
     panic( "socket_bind4_reuse" );
 
-  if( socket_listen( s, SOMAXCONN) == -1 )
+  if( is_tcp && ( socket_listen( s, SOMAXCONN) == -1 ) )
     panic( "socket_listen" );
 
   if( !io_fd( s ) )
     panic( "io_fd" );
 
-  io_wantread( s );
-
-  ot_sockets_tcp4[ ot_sockets_tcp4_count++ ] = s;
-}
-
-static void ot_try_bind_udp4( char ip[4], uint16 port ) {
-  int64 s = socket_udp4( );
-  if( ot_sockets_udp4_count == OT_MAXSOCKETS_UDP4 ) {
-    fprintf( stderr, "Too many udp4 sockets, increase OT_MAXSOCKETS_UDP4 and recompile.\n"); exit(1);
-  }
-  if( socket_bind4_reuse( s, ip, port ) == -1 )
-    panic( "socket_bind4_reuse" );
-
-  if( !io_fd( s ) )
-    panic( "io_fd" );
+  io_setcookie( s, is_tcp ? FLAG_TCP : FLAG_UDP );
 
   io_wantread( s );
 
-  ot_sockets_udp4[ ot_sockets_udp4_count++ ] = s;
+  ++ot_sockets_count;
 }
 
 int main( int argc, char **argv ) {
@@ -723,8 +686,8 @@ int main( int argc, char **argv ) {
     switch( getopt( argc, argv, ":i:p:P:d:ocbBh" ) ) {
       case -1 : scanon = 0; break;
       case 'i': scan_ip4( optarg, serverip ); break;
-      case 'p': ot_try_bind_tcp4( serverip, (uint16)atol( optarg ) ); break;
-      case 'P': ot_try_bind_udp4( serverip, (uint16)atol( optarg ) ); break;
+      case 'p': ot_try_bind( serverip, (uint16)atol( optarg ), 1 ); break;
+      case 'P': ot_try_bind( serverip, (uint16)atol( optarg ), 0 ); break;
       case 'd': serverdir = optarg; break;
       case 'h': help( argv[0] ); exit( 0 );
 #ifdef WANT_CLOSED_TRACKER
@@ -741,8 +704,8 @@ int main( int argc, char **argv ) {
   }
 
   // Bind to our default tcp port
-  if( !ot_sockets_tcp4_count && !ot_sockets_udp4_count )
-    ot_try_bind_tcp4( serverip, 6969 );
+  if( !ot_sockets_count )
+    ot_try_bind( serverip, 6969, 1 );
 
   setegid( (gid_t)-2 ); setuid( (uid_t)-2 );
   setgid( (gid_t)-2 ); seteuid( (uid_t)-2 );
