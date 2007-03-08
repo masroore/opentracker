@@ -586,8 +586,8 @@ static void handle_udp4( int64 serversocket ) {
       numwant = 200;
       left  = ntohl( inpacket[64/4] );
       event = ntohl( inpacket[80/4] );
-      port  = ntohl( inpacket[96/4] );
-      hash  = (ot_hash*)inpacket+(16/4);
+      port  = ntohs( *(unsigned short*)( static_inbuf + 96 ) );
+      hash  = (ot_hash*)( static_inbuf + 16 );
 
       OT_SETIP( &peer, remoteip );
       OT_SETPORT( &peer, &port );
