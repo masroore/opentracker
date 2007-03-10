@@ -608,7 +608,8 @@ static void handle_udp4( int64 serversocket ) {
         /* Create fake packet to satisfy parser on the other end */
         outpacket[0] = htonl( 1 );
         outpacket[1] = inpacket[12/4];
-        outpacket[2] = outpacket[3] = outpacket[4] = 0;
+        outpacket[2] = OT_CLIENT_REQUEST_INTERVAL_RANDOM;
+        outpacket[3] = outpacket[4] = 0;
         socket_send4( serversocket, static_outbuf, 20, remoteip, port );
       } else {
         torrent = add_peer_to_torrent( hash, &peer );

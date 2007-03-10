@@ -347,7 +347,6 @@ size_t return_fullscrape_for_tracker( char **reply ) {
   size_t torrent_count = 0, j;
   int    i, k;
   char  *r;
-  time_t time_now = NOW;
 
   for( i=0; i<256; ++i ) {
     ot_vector *torrents_list = &all_torrents[i];
@@ -363,12 +362,11 @@ size_t return_fullscrape_for_tracker( char **reply ) {
       ot_peerlist *peer_list = ( ((ot_torrent*)(torrents_list->data))[j] ).peer_list;
       ot_hash     *hash      =&( ((ot_torrent*)(torrents_list->data))[j] ).hash;
       size_t       peers = 0, seeds = 0;
-      clean_peerlist( time_now, peer_list );
       for( k=0; k<OT_POOLS_COUNT; ++k ) {
         peers += peer_list->peers[k].size;
         seeds += peer_list->seed_count[k];
       }
-      memmove( r, "20:", 3 ); r+=3;
+      *r++='2'; *r++='0'; *r++=':';
       memmove( r, hash, 20 ); r+=20;
       r += sprintf( r, "d8:completei%zde10:downloadedi%zde10:incompletei%zdee", seeds, peer_list->downloaded, peers-seeds );
     }
