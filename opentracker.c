@@ -587,7 +587,7 @@ static void handle_udp4( int64 serversocket ) {
       /* We do only want to know, if it is zero */
       left  = inpacket[64/4] | inpacket[68/4];
       event = ntohl( inpacket[80/4] );
-      port  = ntohs( *(unsigned short*)( static_inbuf + 96 ) );
+      port  = *(unsigned short*)( static_inbuf + 96 );
       hash  = (ot_hash*)( static_inbuf + 16 );
 
       OT_SETIP( &peer, remoteip );
