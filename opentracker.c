@@ -563,10 +563,10 @@ static void handle_udp4( int64 serversocket ) {
   unsigned long *inpacket = (unsigned long*)static_inbuf;
   unsigned long *outpacket = (unsigned long*)static_outbuf;
   unsigned long  numwant, left, event;
-  uint16         port;
+  uint16         port, remoteport;
   size_t         r;
 
-  r = socket_recv4( serversocket, static_inbuf, 8192, remoteip, &port);
+  r = socket_recv4( serversocket, static_inbuf, 8192, remoteip, &remoteport);
 
   /* Minimum udp tracker packet size, also catches error */
   if( r < 16 )
@@ -576,7 +576,7 @@ static void handle_udp4( int64 serversocket ) {
     case 0: /* This is a connect action */
       outpacket[0] = 0;           outpacket[1] = inpacket[3];
       outpacket[2] = inpacket[0]; outpacket[3] = inpacket[1];
-      socket_send4( serversocket, static_outbuf, 16, remoteip, port );
+      socket_send4( serversocket, static_outbuf, 16, remoteip, remoteport );
       break;
     case 1: /* This is an announce action */
       /* Minimum udp announce packet size */
@@ -611,7 +611,7 @@ static void handle_udp4( int64 serversocket ) {
         outpacket[1] = inpacket[12/4];
         outpacket[2] = htonl( OT_CLIENT_REQUEST_INTERVAL_RANDOM );
         outpacket[3] = outpacket[4] = 0;
-        socket_send4( serversocket, static_outbuf, 20, remoteip, port );
+        socket_send4( serversocket, static_outbuf, 20, remoteip, remoteport );
       } else {
         torrent = add_peer_to_torrent( hash, &peer );
         if( !torrent )
@@ -620,7 +620,7 @@ static void handle_udp4( int64 serversocket ) {
         outpacket[0] = htonl( 1 );
         outpacket[1] = inpacket[12/4];
         r = 8 + return_peers_for_torrent( torrent, numwant, static_outbuf + 8, 0 );
-        socket_send4( serversocket, static_outbuf, r, remoteip, port );
+        socket_send4( serversocket, static_outbuf, r, remoteip, remoteport );
       }
       break;
   }
