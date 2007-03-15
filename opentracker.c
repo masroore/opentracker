@@ -29,7 +29,8 @@
 #include "scan_urlencoded_query.h"
 
 /* Globals */
-static unsigned int ot_overall_connections = 0;
+static unsigned int ot_overall_tcp_connections = 0;
+static unsigned int ot_overall_udp_connections = 0;
 static unsigned int ot_overall_tcp_successfulannounces = 0;
 static unsigned int ot_overall_udp_successfulannounces = 0;
 static time_t ot_start_time;
@@ -264,15 +265,15 @@ static void httpresponse( const int64 s, char *data ) {
         case STATS_UDP:
           t = time( NULL ) - ot_start_time;
           reply_size = sprintf( static_outbuf + SUCCESS_HTTP_HEADER_LENGTH,
-                "%i\n%i\n%i seconds (%i hours)\nopentracker udp stats.",
-                ot_overall_connections, ot_overall_udp_successfulannounces, (int)t, (int)(t / 3600) );
+                "%i\n%i\n%i seconds (%i hours)\nopentracker udp4 stats.",
+                ot_overall_udp_connections, ot_overall_udp_successfulannounces, (int)t, (int)(t / 3600) );
           break;
 
         case STATS_TCP:
           t = time( NULL ) - ot_start_time;
           reply_size = sprintf( static_outbuf + SUCCESS_HTTP_HEADER_LENGTH,
-                "%i\n%i\n%i seconds (%i hours)\nopentracker tcp stats.",
-                ot_overall_connections, ot_overall_tcp_successfulannounces, (int)t, (int)(t / 3600) );
+                "%i\n%i\n%i seconds (%i hours)\nopentracker tcp4 stats.",
+                ot_overall_tcp_connections, ot_overall_tcp_successfulannounces, (int)t, (int)(t / 3600) );
           break;
 
         default:
@@ -281,7 +282,7 @@ static void httpresponse( const int64 s, char *data ) {
           if( !( reply_size = return_stats_for_tracker( SUCCESS_HTTP_HEADER_LENGTH + static_outbuf, mode ) ) ) HTTPERROR_500;
           break;
       }
-      
+
     break;
   case 6: /* scrape ? */
     if( byte_diff( data, 6, "scrape") ) HTTPERROR_404;
@@ -419,7 +420,7 @@ ANNOUNCE_WORKAROUND:
     t = time( NULL ) - ot_start_time;
     reply_size = sprintf( static_outbuf + SUCCESS_HTTP_HEADER_LENGTH,
                           "%i\n%i\n%i seconds (%i hours)\nopentracker - Pretuned by german engineers, currently handling %i connections per second.",
-                          ot_overall_connections, ot_overall_tcp_successfulannounces+ot_overall_udp_successfulannounces, (int)t, (int)(t / 3600), (int)ot_overall_connections / ( (int)t ? (int)t : 1 ) );
+                          ot_overall_tcp_connections+ot_overall_udp_connections, ot_overall_tcp_successfulannounces+ot_overall_udp_successfulannounces, (int)t, (int)(t / 3600), (int)ot_overall_tcp_connections / ( (int)t ? (int)t : 1 ) );
     break;
   case 12:
     if( byte_diff( data, 12, "announce.php" ) ) HTTPERROR_404;
@@ -558,7 +559,7 @@ static void handle_accept( const int64 serversocket ) {
     byte_zero(h,sizeof(struct http_data));
     memmove(h->ip,ip,sizeof(ip));
     io_setcookie(i,h);
-    ++ot_overall_connections;
+    ++ot_overall_tcp_connections;
     taia_now(&t);
     taia_addsec(&t,&t,OT_CLIENT_TIMEOUT);
     io_timeout(i,t);
@@ -593,6 +594,8 @@ static void handle_udp4( int64 serversocket ) {
 
   r = socket_recv4( serversocket, static_inbuf, 8192, remoteip, &remoteport);
 
+  ot_overall_udp_connections++;
+  
   /* Minimum udp tracker packet size, also catches error */
   if( r < 16 )
     return;
