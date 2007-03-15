@@ -91,7 +91,7 @@ extern int g_closedtracker;
 extern int g_check_blacklist;
 #endif
 
-enum { STATS_MRTG, STATS_TOP5, STATS_DMEM };
+enum { STATS_MRTG, STATS_TOP5, STATS_DMEM, STATS_TCP, STATS_UDP };
 
 ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer );
 size_t return_peers_for_torrent( ot_torrent *torrent, size_t amount, char *reply, int is_tcp );

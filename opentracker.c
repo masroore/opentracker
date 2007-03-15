@@ -246,18 +246,42 @@ static void httpresponse( const int64 s, char *data ) {
           mode = STATS_TOP5;
         else if( !byte_diff(data,4,"dmem"))
           mode = STATS_DMEM;
+        else if( !byte_diff(data,4,"tcp4"))
+          mode = STATS_TCP;
+        else if( !byte_diff(data,4,"udp4"))
+          mode = STATS_UDP;
         else
           HTTPERROR_400_PARAM;
       }
     }
 
-    if( mode == STATS_DMEM ) {
-      if( !( reply_size = return_memstat_for_tracker( &reply ) ) ) HTTPERROR_500;
-      return sendmallocdata( s, reply, reply_size );
-    }
+      switch( mode)
+      {
+        case STATS_DMEM:
+          if( !( reply_size = return_memstat_for_tracker( &reply ) ) ) HTTPERROR_500;
+          return sendmallocdata( s, reply, reply_size );
+          
+        case STATS_UDP:
+          t = time( NULL ) - ot_start_time;
+          reply_size = sprintf( static_outbuf + SUCCESS_HTTP_HEADER_LENGTH,
+                "%i\n%i\n%i seconds (%i hours)\nopentracker udp stats.",
+                ot_overall_connections, ot_overall_udp_successfulannounces, (int)t, (int)(t / 3600) );
+          break;
 
-    /* Enough for http header + whole scrape string */
-    if( !( reply_size = return_stats_for_tracker( SUCCESS_HTTP_HEADER_LENGTH + static_outbuf, mode ) ) ) HTTPERROR_500;
+        case STATS_TCP:
+          t = time( NULL ) - ot_start_time;
+          reply_size = sprintf( static_outbuf + SUCCESS_HTTP_HEADER_LENGTH,
+                "%i\n%i\n%i seconds (%i hours)\nopentracker tcp stats.",
+                ot_overall_connections, ot_overall_tcp_successfulannounces, (int)t, (int)(t / 3600) );
+          break;
+
+        default:
+        case STATS_MRTG:
+          /* Enough for http header + whole scrape string */
+          if( !( reply_size = return_stats_for_tracker( SUCCESS_HTTP_HEADER_LENGTH + static_outbuf, mode ) ) ) HTTPERROR_500;
+          break;
+      }
+      
     break;
   case 6: /* scrape ? */
     if( byte_diff( data, 6, "scrape") ) HTTPERROR_404;
