@@ -30,7 +30,8 @@
 
 /* Globals */
 static unsigned int ot_overall_connections = 0;
-static unsigned int ot_overall_successfulannounces = 0;
+static unsigned int ot_overall_tcp_successfulannounces = 0;
+static unsigned int ot_overall_udp_successfulannounces = 0;
 static time_t ot_start_time;
 static const size_t SUCCESS_HTTP_HEADER_LENGTH = 80;
 static const size_t SUCCESS_HTTP_SIZE_OFF = 17;
@@ -284,14 +285,14 @@ SCRAPE_WORKAROUND:
     /* Scanned whole query string, no hash means full scrape... you might want to limit that */
     if( !hash ) {
       if( !( reply_size = return_fullscrape_for_tracker( &reply ) ) ) HTTPERROR_500;
-      ot_overall_successfulannounces++;
+      ot_overall_tcp_successfulannounces++;
       return sendmallocdata( s, reply, reply_size );
     }
 
     /* Enough for http header + whole scrape string */
     if( !( reply_size = return_scrape_for_torrent( hash, SUCCESS_HTTP_HEADER_LENGTH + static_outbuf ) ) ) HTTPERROR_500;
 
-    ot_overall_successfulannounces++;
+    ot_overall_tcp_successfulannounces++;
     break;
   case 8:
     if( byte_diff( data, 8, "announce" ) ) HTTPERROR_404;
@@ -383,7 +384,7 @@ ANNOUNCE_WORKAROUND:
       torrent = add_peer_to_torrent( hash, &peer );
       if( !torrent || !( reply_size = return_peers_for_torrent( torrent, numwant, SUCCESS_HTTP_HEADER_LENGTH + static_outbuf, 1 ) ) ) HTTPERROR_500;
     }
-    ot_overall_successfulannounces++;
+    ot_overall_tcp_successfulannounces++;
     break;
   case 10:
     if( byte_diff( data, 10, "scrape.php" ) ) HTTPERROR_404;
@@ -394,7 +395,7 @@ ANNOUNCE_WORKAROUND:
     t = time( NULL ) - ot_start_time;
     reply_size = sprintf( static_outbuf + SUCCESS_HTTP_HEADER_LENGTH,
                           "%i\n%i\n%i seconds (%i hours)\nopentracker - Pretuned by german engineers, currently handling %i connections per second.",
-                          ot_overall_connections, ot_overall_successfulannounces, (int)t, (int)(t / 3600), (int)ot_overall_connections / ( (int)t ? (int)t : 1 ) );
+                          ot_overall_connections, ot_overall_tcp_successfulannounces+ot_overall_tcp_successfulannounces, (int)t, (int)(t / 3600), (int)ot_overall_connections / ( (int)t ? (int)t : 1 ) );
     break;
   case 12:
     if( byte_diff( data, 12, "announce.php" ) ) HTTPERROR_404;
@@ -621,6 +622,7 @@ static void handle_udp4( int64 serversocket ) {
         outpacket[1] = inpacket[12/4];
         r = 8 + return_peers_for_torrent( torrent, numwant, static_outbuf + 8, 0 );
         socket_send4( serversocket, static_outbuf, r, remoteip, remoteport );
+		ot_overall_udp_successfulannounces++;
       }
       break;
   }
