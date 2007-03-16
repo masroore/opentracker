@@ -472,8 +472,8 @@ static void usage( char *name ) {
 static void help( char *name ) {
   usage( name );
   fprintf( stderr, "\t-i serverip\tspecify ip to bind to (default: *, you may specify more than one)\n"
-                   "\t-p serverport\tspecify port to bind to (default: 6969, you may specify more than one)\n"
-                   "\t-P serverport\tspecify port to bind to (you may specify more than one)\n"
+                   "\t-p serverport\tspecify tcp port to bind to (default: 6969, you may specify more than one)\n"
+                   "\t-P serverport\tspecify udp port to bind to (default: 6969, you may specify more than one)\n"
                    "\t-d serverdir\tspecify directory containing white- or black listed torrent info_hashes (default: \".\")\n"
 #ifdef WANT_CLOSED_TRACKER
                    "\t-o\t\tmake tracker an open tracker, e.g. do not check for white list (default: off)\n"
@@ -492,7 +492,7 @@ static void help( char *name ) {
 #endif
                    "* To white list a torrent, touch a file inside serverdir with info_hash hex string, preprended by '-'.\n"
 #endif
-                   "\nExample:   ./opentracker -i 127.0.0.1 -p 6968 -P 6968 -i 10.1.1.23 -p 6969 -p 6970\n"
+                   "\nExample:   ./opentracker -i 127.0.0.1 -p 6969 -P 6969 -i 10.1.1.23 -p 2710 -p 80\n"
 );
 }
 
@@ -556,16 +556,18 @@ static void handle_accept( const int64 serversocket ) {
 
     io_wantread( i );
 
-    byte_zero(h,sizeof(struct http_data));
-    memmove(h->ip,ip,sizeof(ip));
-    io_setcookie(i,h);
+    byte_zero( h, sizeof( struct http_data ) );
+    memmove( h->ip, ip, sizeof( ip ) );
+    io_setcookie( i, h );
+
     ++ot_overall_tcp_connections;
-    taia_now(&t);
-    taia_addsec(&t,&t,OT_CLIENT_TIMEOUT);
-    io_timeout(i,t);
+
+    taia_now( &t );
+    taia_addsec( &t, &t, OT_CLIENT_TIMEOUT );
+    io_timeout( i, t );
   }
 
-  if( errno==EAGAIN )
+  if( errno == EAGAIN )
     io_eagain( serversocket );
 }
 
@@ -747,10 +749,11 @@ int main( int argc, char **argv ) {
     }
   }
 
-  // Bind to our default tcp port
-  if( !ot_sockets_count )
+  // Bind to our default tcp/udp ports
+  if( !ot_sockets_count ) {
     ot_try_bind( serverip, 6969, 1 );
-
+    ot_try_bind( serverip, 6969, 0 );
+  }
   setegid( (gid_t)-2 ); setuid( (uid_t)-2 );
   setgid( (gid_t)-2 ); seteuid( (uid_t)-2 );
 
