@@ -595,7 +595,7 @@ static void handle_udp4( int64 serversocket ) {
   r = socket_recv4( serversocket, static_inbuf, 8192, remoteip, &remoteport);
 
   ot_overall_udp_connections++;
-  
+
   /* Minimum udp tracker packet size, also catches error */
   if( r < 16 )
     return;
@@ -653,6 +653,10 @@ static void handle_udp4( int64 serversocket ) {
         socket_send4( serversocket, static_outbuf, r, remoteip, remoteport );
         ot_overall_udp_successfulannounces++;
       }
+      break;
+
+    case 2: /* This is a scrape action */
+      ot_overall_udp_connections--; // subtract again because we don't answer scrapes but it is also not an error
       break;
   }
 }
