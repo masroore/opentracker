@@ -628,31 +628,31 @@ static void handle_udp4( int64 serversocket ) {
         case 3: OT_FLAG( &peer ) |= PEER_FLAG_STOPPED; break;
         default: break;
       }
+
       if( !left )
         OT_FLAG( &peer )         |= PEER_FLAG_SEEDING;
+
+      outpacket[0] = htonl( 1 );    /* announce action */
+      outpacket[1] = inpacket[12/4];
 
       if( OT_FLAG( &peer ) & PEER_FLAG_STOPPED ) {
         /* Peer is gone. */
         remove_peer_from_torrent( hash, &peer );
 
         /* Create fake packet to satisfy parser on the other end */
-        outpacket[0] = htonl( 1 );
-        outpacket[1] = inpacket[12/4];
         outpacket[2] = htonl( OT_CLIENT_REQUEST_INTERVAL_RANDOM );
         outpacket[3] = outpacket[4] = 0;
-        socket_send4( serversocket, static_outbuf, 20, remoteip, remoteport );
-        ot_overall_udp_successfulannounces++;
+        r = 20;
       } else {
         torrent = add_peer_to_torrent( hash, &peer );
         if( !torrent )
           return; /* XXX maybe send error */
 
-        outpacket[0] = htonl( 1 );    /* announce action */
-        outpacket[1] = inpacket[12/4];
         r = 8 + return_peers_for_torrent( torrent, numwant, static_outbuf + 8, 0 );
-        socket_send4( serversocket, static_outbuf, r, remoteip, remoteport );
-        ot_overall_udp_successfulannounces++;
       }
+
+      socket_send4( serversocket, static_outbuf, r, remoteip, remoteport );
+      ot_overall_udp_successfulannounces++;
       break;
 
     case 2: /* This is a scrape action */
