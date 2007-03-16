@@ -315,7 +315,7 @@ SCRAPE_WORKAROUND:
     }
 
     /* Enough for http header + whole scrape string */
-    if( !( reply_size = return_scrape_for_torrent( hash, SUCCESS_HTTP_HEADER_LENGTH + static_outbuf ) ) ) HTTPERROR_500;
+    if( !( reply_size = return_tcp_scrape_for_torrent( hash, SUCCESS_HTTP_HEADER_LENGTH + static_outbuf ) ) ) HTTPERROR_500;
 
     ot_overall_tcp_successfulannounces++;
     break;
@@ -590,7 +590,7 @@ static void handle_udp4( int64 serversocket ) {
   unsigned long *outpacket = (unsigned long*)static_outbuf;
   unsigned long  numwant, left, event;
   uint16         port, remoteport;
-  size_t         r;
+  size_t         r, r_out;
 
   r = socket_recv4( serversocket, static_inbuf, 8192, remoteip, &remoteport);
 
@@ -647,7 +647,7 @@ static void handle_udp4( int64 serversocket ) {
         if( !torrent )
           return; /* XXX maybe send error */
 
-        outpacket[0] = htonl( 1 );
+        outpacket[0] = htonl( 1 );    /* announce action */
         outpacket[1] = inpacket[12/4];
         r = 8 + return_peers_for_torrent( torrent, numwant, static_outbuf + 8, 0 );
         socket_send4( serversocket, static_outbuf, r, remoteip, remoteport );
@@ -656,7 +656,14 @@ static void handle_udp4( int64 serversocket ) {
       break;
 
     case 2: /* This is a scrape action */
-      ot_overall_udp_connections--; // subtract again because we don't answer scrapes but it is also not an error
+      outpacket[0] = htonl( 2 );    /* scrape action */
+      outpacket[1] = inpacket[12/4];
+
+      for( r_out = 0; ( r_out * 20 < r - 16) && ( r_out <= 74 ); r_out++ )
+        return_udp_scrape_for_torrent( (ot_hash*)( static_inbuf + 16 + 20 * r_out ), static_outbuf + 8 + 12 * r_out );
+
+      socket_send4( serversocket, static_outbuf, 8 + 12 * r_out, remoteip, remoteport );
+      ot_overall_udp_successfulannounces++;
       break;
   }
 }

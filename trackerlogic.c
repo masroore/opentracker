@@ -408,7 +408,33 @@ size_t return_memstat_for_tracker( char **reply ) {
 }
 
 /* Fetches scrape info for a specific torrent */
-size_t return_scrape_for_torrent( ot_hash *hash, char *reply ) {
+size_t return_udp_scrape_for_torrent( ot_hash *hash, char *reply ) {
+  int          exactmatch, i;
+  size_t       peers = 0, seeds = 0;
+  ot_vector   *torrents_list = &all_torrents[*hash[0]];
+  ot_torrent  *torrent = binary_search( hash, torrents_list->data, torrents_list->size, sizeof( ot_torrent ), OT_HASH_COMPARE_SIZE, &exactmatch );
+
+  if( !exactmatch ) {
+    memset( reply, 0, 12);
+  }
+  else
+  {
+    unsigned long *r = (unsigned long*) reply;
+    clean_peerlist( NOW, torrent->peer_list );
+
+    for( i=0; i<OT_POOLS_COUNT; ++i ) {
+      peers += torrent->peer_list->peers[i].size;
+      seeds += torrent->peer_list->seed_count[i];
+    }
+    r[0] = seeds;
+    r[1] = torrent->peer_list->downloaded;
+    r[2] = peers-seeds;
+  }
+  return 12;
+}
+
+/* Fetches scrape info for a specific torrent */
+size_t return_tcp_scrape_for_torrent( ot_hash *hash, char *reply ) {
   char        *r = reply;
   int          exactmatch, i;
   size_t       peers = 0, seeds = 0;
