@@ -416,9 +416,7 @@ size_t return_udp_scrape_for_torrent( ot_hash *hash, char *reply ) {
 
   if( !exactmatch ) {
     memset( reply, 0, 12);
-  }
-  else
-  {
+  } else {
     unsigned long *r = (unsigned long*) reply;
     clean_peerlist( NOW, torrent->peer_list );
 
@@ -426,9 +424,9 @@ size_t return_udp_scrape_for_torrent( ot_hash *hash, char *reply ) {
       peers += torrent->peer_list->peers[i].size;
       seeds += torrent->peer_list->seed_count[i];
     }
-    r[0] = seeds;
-    r[1] = torrent->peer_list->downloaded;
-    r[2] = peers-seeds;
+    r[0] = htonl( seeds );
+    r[1] = htonl( torrent->peer_list->downloaded );
+    r[2] = htonl( peers-seeds );
   }
   return 12;
 }
