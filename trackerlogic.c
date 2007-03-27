@@ -19,25 +19,11 @@
 #include "scan.h"
 #include "byte.h"
 
-#if defined( WANT_CLOSED_TRACKER ) || defined( WANT_BLACKLIST )
-#include <sys/stat.h>
-#endif
-
 /* GLOBAL VARIABLES */
 static ot_vector all_torrents[256];
 static ot_vector changeset;
 size_t changeset_size = 0;
 time_t last_clean_time = 0;
-
-#ifdef WANT_CLOSED_TRACKER
-int g_closedtracker = 1;
-static ot_torrent* const OT_TORRENT_NOT_ON_WHITELIST = (ot_torrent*)1;
-#endif
-
-#ifdef WANT_BLACKLIST
-int g_check_blacklist = 1;
-static ot_torrent* const OT_TORRENT_ON_BLACKLIST = (ot_torrent*)2;
-#endif
 
 /* Converter function from memory to human readable hex strings
    - definitely not thread safe!!!
@@ -162,25 +148,12 @@ static int vector_remove_torrent( ot_vector *vector, ot_hash *hash ) {
   return 1;
 }
 
-ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer ) {
-  int          exactmatch;
+ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer, int from_changeset ) {
+  int         exactmatch;
   ot_torrent *torrent;
   ot_peer    *peer_dest;
   ot_vector  *torrents_list = &all_torrents[*hash[0]], *peer_pool;
-#if defined( WANT_CLOSED_TRACKER ) || defined( WANT_BLACKLIST )
-  struct stat dummy_sb;
-  char       *fn = to_hex( (ot_byte*)hash );
-#endif
-
-#ifdef WANT_CLOSED_TRACKER
-  if( g_closedtracker && stat( fn, &dummy_sb ) )
-    return OT_TORRENT_NOT_ON_WHITELIST;
-#endif
-
-#ifdef WANT_BLACKLIST
-  if( g_check_blacklist && !stat( fn - 1, &dummy_sb ) )
-    return OT_TORRENT_ON_BLACKLIST;
-#endif
+  int         base_pool = 0;
 
   torrent = vector_find_or_insert( torrents_list, (void*)hash, sizeof( ot_torrent ), OT_HASH_COMPARE_SIZE, &exactmatch );
   if( !torrent ) return NULL;
@@ -202,7 +175,16 @@ ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer ) {
   if( ( OT_FLAG( peer ) & ( PEER_FLAG_COMPLETED | PEER_FLAG_SEEDING ) ) == PEER_FLAG_COMPLETED )
     OT_FLAG( peer ) ^= PEER_FLAG_COMPLETED;
 
-  peer_pool = &torrent->peer_list->peers[0];
+  if( from_changeset ) {
+    /* Check, whether peer already is in current pool, do nothing if so */
+    peer_pool = &torrent->peer_list->peers[0];
+    binary_search( peer, peer_pool->data, peer_pool->size, sizeof(ot_peer), OT_PEER_COMPARE_SIZE, &exactmatch );
+    if( exactmatch )
+      return torrent;
+    base_pool = 1;
+  }
+
+  peer_pool = &torrent->peer_list->peers[ base_pool ];
   peer_dest = vector_find_or_insert( peer_pool, (void*)peer, sizeof( ot_peer ), OT_PEER_COMPARE_SIZE, &exactmatch );
 
   /* If we hadn't had a match in current pool, create peer there and
@@ -215,9 +197,9 @@ ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer ) {
       torrent->peer_list->downloaded++;
 
     if( OT_FLAG(peer) & PEER_FLAG_SEEDING )
-      torrent->peer_list->seed_count[0]++;
+      torrent->peer_list->seed_count[ base_pool ]++;
 
-    for( i=1; i<OT_POOLS_COUNT; ++i ) {
+    for( i= base_pool + 1; i<OT_POOLS_COUNT; ++i ) {
       switch( vector_remove_peer( &torrent->peer_list->peers[i], peer, 0 ) ) {
         case 0: continue;
         case 2: torrent->peer_list->seed_count[i]--;
@@ -226,9 +208,9 @@ ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer ) {
     }
   } else {
     if( (OT_FLAG(peer_dest) & PEER_FLAG_SEEDING ) && !(OT_FLAG(peer) & PEER_FLAG_SEEDING ) )
-      torrent->peer_list->seed_count[0]--;
+      torrent->peer_list->seed_count[ base_pool ]--;
     if( !(OT_FLAG(peer_dest) & PEER_FLAG_SEEDING ) && (OT_FLAG(peer) & PEER_FLAG_SEEDING ) )
-      torrent->peer_list->seed_count[0]++;
+      torrent->peer_list->seed_count[ base_pool ]++;
     if( !(OT_FLAG( peer_dest ) & PEER_FLAG_COMPLETED ) && (OT_FLAG( peer ) & PEER_FLAG_COMPLETED ) )
       torrent->peer_list->downloaded++;
     if( OT_FLAG( peer_dest ) & PEER_FLAG_COMPLETED )
@@ -249,22 +231,6 @@ ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer ) {
 size_t return_peers_for_torrent( ot_torrent *torrent, size_t amount, char *reply, int is_tcp ) {
   char  *r = reply;
   size_t peer_count, seed_count, index;
-
-#ifdef WANT_CLOSED_TRACKER
-  if( torrent == OT_TORRENT_NOT_ON_WHITELIST ) {
-    const char * const notvalid = "d14:failure reason43:This torrent is not served by this tracker.e";
-    memmove( reply, notvalid, sizeof(notvalid));
-    return sizeof(notvalid);
-  }
-#endif
-
-#ifdef WANT_BLACKLIST
-  if( torrent == OT_TORRENT_ON_BLACKLIST ) {
-    const char * const blacklisted = "d14:failure reason29:This torrent is black listed.e";
-    memmove( reply, blacklisted, sizeof(blacklisted));
-    return sizeof(blacklisted);
-  }
-#endif
 
   for( peer_count = seed_count = index = 0; index < OT_POOLS_COUNT; ++index ) {
     peer_count += torrent->peer_list->peers[index].size;
@@ -473,8 +439,48 @@ static void add_pool_to_changeset( ot_hash *hash, ot_peer *peers, size_t peer_co
   changeset_size += r - sizeof( size_t );
 }
 
+/* Import Changeset from an external authority
+   format: d4:syncd[..]ee
+   [..]:   ( 20:01234567890abcdefghij16:XXXXYYYY )+
+*/
+int add_changeset_to_tracker( ot_byte *data, size_t len ) {
+  ot_hash    *hash;
+  ot_byte    *end = data + len;
+  size_t      peer_count;
+
+  /* We do know, that the string is \n terminated, so it cant
+     overflow */
+  if( byte_diff( data, 8, "d4:syncd" ) ) return -1;
+  data += 8;
+
+  while( 1 ) {
+    if( byte_diff( data, 3, "20:" ) ) {
+      if( byte_diff( data, 2, "ee" ) )
+        return -1;
+      return 0;
+    }
+    data += 3;
+    hash = (ot_hash*)data;
+    data += sizeof( ot_hash );
+
+    /* Scan string length indicator */
+    data += ( len = scan_ulong( (char*)data, &peer_count ) );
+
+    /* If no long was scanned, it is not divisible by 8, it is not
+       followed by a colon or claims to need to much memory, we fail */
+    if( !len || !peer_count || ( peer_count & 7 ) || ( *data++ != ':' ) || ( data + peer_count > end ) )
+      return -1;
+
+    while( peer_count > 0 ) {
+      add_peer_to_torrent( hash, (ot_peer*)data, 1 );
+      data += 8; peer_count -= 8;
+    }
+  }
+  return 0;
+}
+
 /* Proposed output format
-   d4:syncd20:<info_hash>8*N:(xxxxyy)*Nee
+   d4:syncd20:<info_hash>8*N:(xxxxyyyy)*Nee
 */
 size_t return_changeset_for_tracker( char **reply ) {
   size_t i, r = 8;

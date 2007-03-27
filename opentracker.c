@@ -56,6 +56,7 @@ struct http_data {
     io_batch batch;
   };
   unsigned char ip[4];
+  int        blessed;
 };
 
 /* Prototypes */
@@ -87,6 +88,7 @@ static void graceful( int s );
 #define HTTPERROR_400         return httperror( s, "400 Invalid Request",       "This server only understands GET." )
 #define HTTPERROR_400_PARAM   return httperror( s, "400 Invalid Request",       "Invalid parameter" )
 #define HTTPERROR_400_COMPACT return httperror( s, "400 Invalid Request",       "This server only delivers compact results." )
+#define HTTPERROR_403_IP      return httperror( s, "403 Access Denied",         "Your ip address is not allowed to administrate this server." )
 #define HTTPERROR_404         return httperror( s, "404 Not Found",             "No such file or directory." )
 #define HTTPERROR_500         return httperror( s, "500 Internal Server Error", "A server error has occured. Please retry later." )
 
@@ -173,6 +175,7 @@ static void senddata( const int64 s, char *buffer, size_t size ) {
 }
 
 static void httpresponse( const int64 s, char *data ) {
+  struct http_data* h = io_getcookie( s );
   char       *c, *reply;
   ot_peer     peer;
   ot_torrent *torrent;
@@ -198,11 +201,48 @@ static void httpresponse( const int64 s, char *data ) {
   for( c = data+4; *c == '/'; ++c);
 
   switch( scan_urlencoded_query( &c, data = c, SCAN_PATH ) ) {
+
+/******************************
+ *         S Y N C            *
+ ******************************/
   case 4: /* sync ? */
     if( byte_diff( data, 4, "sync") ) HTTPERROR_404;
-    if( !( reply_size = return_changeset_for_tracker( &reply ) ) ) HTTPERROR_500;
-    return sendmallocdata( s, reply, reply_size );
+    if( !h->blessed ) HTTPERROR_403_IP;
 
+    mode = SYNC_OUT;
+    scanon = 1;
+
+    while( scanon ) {
+      switch( scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_PARAM ) ) {
+      case -2: scanon = 0; break;   /* TERMINATOR */
+      case -1: HTTPERROR_400_PARAM; /* PARSE ERROR */
+      default: scan_urlencoded_query( &c, NULL, SCAN_SEARCHPATH_VALUE ); break;
+      case 9:
+        if(byte_diff(data,9,"changeset")) {
+          scan_urlencoded_query( &c, NULL, SCAN_SEARCHPATH_VALUE );
+          continue;
+        }
+        /* ignore this, when we dont at least see "d4:syncdee" */
+        if( ( len = scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE ) ) < 10 ) HTTPERROR_400_PARAM;
+        if( add_changeset_to_tracker( (ot_byte*)data, len ) ) HTTPERROR_400_PARAM;
+        mode = SYNC_IN;
+        break;
+      }
+    }
+
+    if( mode == SYNC_OUT ) {
+      if( !( reply_size = return_changeset_for_tracker( &reply ) ) ) HTTPERROR_500;
+      return sendmallocdata( s, reply, reply_size );
+    }
+
+    /* Simple but proof for now */
+    reply = "OK";
+    reply_size = 2;
+
+    break;
+/******************************
+ *        S T A T S           *
+ ******************************/
   case 5: /* stats ? */
     if( byte_diff(data,5,"stats")) HTTPERROR_404;
     scanon = 1;
@@ -260,8 +300,11 @@ static void httpresponse( const int64 s, char *data ) {
           if( !( reply_size = return_stats_for_tracker( SUCCESS_HTTP_HEADER_LENGTH + static_outbuf, mode ) ) ) HTTPERROR_500;
           break;
       }
-
     break;
+
+/******************************
+ *       S C R A P E          *
+ ******************************/
   case 6: /* scrape ? */
     if( byte_diff( data, 6, "scrape") ) HTTPERROR_404;
 
@@ -280,7 +323,7 @@ SCRAPE_WORKAROUND:
         }
         /* ignore this, when we have less than 20 bytes */
         if( scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE ) != 20 ) HTTPERROR_400_PARAM;
-        hash = (ot_hash*)data; /* Fall through intended */
+        hash = (ot_hash*)data;
         break;
       }
     }
@@ -297,6 +340,9 @@ SCRAPE_WORKAROUND:
 
     ot_overall_tcp_successfulannounces++;
     break;
+/******************************
+ *      A N N O U N C E       *
+ ******************************/
   case 8:
     if( byte_diff( data, 8, "announce" ) ) HTTPERROR_404;
 
@@ -384,7 +430,7 @@ ANNOUNCE_WORKAROUND:
       remove_peer_from_torrent( hash, &peer );
       reply_size = sprintf( static_outbuf + SUCCESS_HTTP_HEADER_LENGTH, "d8:completei0e10:incompletei0e8:intervali%ie5:peers0:e", OT_CLIENT_REQUEST_INTERVAL_RANDOM );
     } else {
-      torrent = add_peer_to_torrent( hash, &peer );
+      torrent = add_peer_to_torrent( hash, &peer, 0 );
       if( !torrent || !( reply_size = return_peers_for_torrent( torrent, numwant, SUCCESS_HTTP_HEADER_LENGTH + static_outbuf, 1 ) ) ) HTTPERROR_500;
     }
     ot_overall_tcp_successfulannounces++;
@@ -438,12 +484,6 @@ static void graceful( int s ) {
 
 static void usage( char *name ) {
   fprintf( stderr, "Usage: %s [-i serverip] [-p serverport] [-d serverdirectory]"
-#ifdef WANT_CLOSED_TRACKER
-  " [-oc]"
-#endif
-#ifdef WANT_BLACKLIST
-  " [-bB]"
-#endif
   "\n", name );
 }
 
@@ -453,23 +493,6 @@ static void help( char *name ) {
                    "\t-p serverport\tspecify tcp port to bind to (default: 6969, you may specify more than one)\n"
                    "\t-P serverport\tspecify udp port to bind to (default: 6969, you may specify more than one)\n"
                    "\t-d serverdir\tspecify directory containing white- or black listed torrent info_hashes (default: \".\")\n"
-#ifdef WANT_CLOSED_TRACKER
-                   "\t-o\t\tmake tracker an open tracker, e.g. do not check for white list (default: off)\n"
-                   "\t-c\t\tmake tracker a closed tracker, e.g. check each announced torrent against white list (default: on)\n"
-#endif
-#ifdef WANT_BLACKLIST
-                   "\t-b\t\tmake tracker check its black list, e.g. check each announced torrent against black list (default: on)\n"
-                   "\t-B\t\tmake tracker check its black list, e.g. check each announced torrent against black list (default: off)\n"
-#endif
-#ifdef WANT_CLOSED_TRACKER
-                   "\n* To white list a torrent, touch a file inside serverdir with info_hash hex string.\n"
-#endif
-#ifdef WANT_BLACKLIST
-#ifndef WANT_CLOSED_TRACKER
-                   "\n"
-#endif
-                   "* To white list a torrent, touch a file inside serverdir with info_hash hex string, preprended by '-'.\n"
-#endif
                    "\nExample:   ./opentracker -i 127.0.0.1 -p 6969 -P 6969 -i 10.1.1.23 -p 2710 -p 80\n"
 );
 }
@@ -503,7 +526,7 @@ static void handle_read( const int64 clientsocket ) {
   if( array_failed( &h->request ) )
     return httperror( clientsocket, "500 Server Error", "Request too long.");
 
-  if( array_bytes( &h->request ) > 8192 )
+  if( ( !h->blessed ) && ( array_bytes( &h->request ) > 8192 ) )
     return httperror( clientsocket, "500 request too long", "You sent too much headers");
 
   if( memchr( array_start( &h->request ), '\n', array_length( &h->request, 1 ) ) )
@@ -626,7 +649,7 @@ static void handle_udp4( int64 serversocket ) {
         outpacket[3] = outpacket[4] = 0;
         r = 20;
       } else {
-        torrent = add_peer_to_torrent( hash, &peer );
+        torrent = add_peer_to_torrent( hash, &peer, 0 );
         if( !torrent )
           return; /* XXX maybe send error */
 
@@ -719,14 +742,6 @@ int main( int argc, char **argv ) {
       case 'P': ot_try_bind( serverip, (uint16)atol( optarg ), 0 ); break;
       case 'd': serverdir = optarg; break;
       case 'h': help( argv[0] ); exit( 0 );
-#ifdef WANT_CLOSED_TRACKER
-      case 'o': g_closedtracker = 0; break;
-      case 'c': g_closedtracker = 1; break;
-#endif
-#ifdef WANT_BLACKLIST
-      case 'b': g_check_blacklist = 1; break;
-      case 'B': g_check_blacklist = 0; break;
-#endif
       default:
       case '?': usage( argv[0] ); exit( 1 );
     }

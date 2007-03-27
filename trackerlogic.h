@@ -84,16 +84,10 @@ typedef struct {
 int  init_logic( const char * const serverdir );
 void deinit_logic( void );
 
-#ifdef WANT_CLOSED_TRACKER
-extern int g_closedtracker;
-#endif
-#ifdef WANT_BLACKLIST
-extern int g_check_blacklist;
-#endif
+enum { STATS_MRTG, STATS_TOP5, STATS_DMEM, STATS_TCP, STATS_UDP, SYNC_IN, SYNC_OUT };
 
-enum { STATS_MRTG, STATS_TOP5, STATS_DMEM, STATS_TCP, STATS_UDP };
-
-ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer );
+ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer, int from_changeset );
+int    add_changeset_to_tracker( ot_byte *data, size_t len );
 size_t return_peers_for_torrent( ot_torrent *torrent, size_t amount, char *reply, int is_tcp );
 size_t return_fullscrape_for_tracker( char **reply );
 size_t return_tcp_scrape_for_torrent( ot_hash *hash, char *reply );
