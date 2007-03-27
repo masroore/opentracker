@@ -200,31 +200,9 @@ static void httpresponse( const int64 s, char *data ) {
   switch( scan_urlencoded_query( &c, data = c, SCAN_PATH ) ) {
   case 4: /* sync ? */
     if( byte_diff( data, 4, "sync") ) HTTPERROR_404;
-    scanon = 1;
-
-    while( scanon ) {
-      switch( scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_PARAM ) ) {
-      case -2: scanon = 0; break;   /* TERMINATOR */
-      case -1: HTTPERROR_400_PARAM; /* PARSE ERROR */
-      case 9:
-        if(byte_diff(data,9,"info_hash")) {
-          scan_urlencoded_query( &c, NULL, SCAN_SEARCHPATH_VALUE );
-          continue;
-        }
-        /* ignore this, when we have less than 20 bytes */
-        if( scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE ) != 20 ) HTTPERROR_400_PARAM;
-        hash = (ot_hash*)data; /* Fall through intended */
-        break;
-      default:
-        scan_urlencoded_query( &c, NULL, SCAN_SEARCHPATH_VALUE );
-        break;
-      }
-    }
-
-    if( !hash ) HTTPERROR_400_PARAM;
-    if( !( reply_size = return_sync_for_torrent( hash, &reply ) ) ) HTTPERROR_500;
-
+    if( !( reply_size = return_changeset_for_tracker( &reply ) ) ) HTTPERROR_500;
     return sendmallocdata( s, reply, reply_size );
+
   case 5: /* stats ? */
     if( byte_diff(data,5,"stats")) HTTPERROR_404;
     scanon = 1;
@@ -523,11 +501,13 @@ static void handle_read( const int64 clientsocket ) {
   array_catb( &h->request, static_inbuf, l );
 
   if( array_failed( &h->request ) )
-    httperror( clientsocket, "500 Server Error", "Request too long.");
-  else if( array_bytes( &h->request ) > 8192 )
-    httperror( clientsocket, "500 request too long", "You sent too much headers");
-  else if( memchr( array_start( &h->request ), '\n', array_length( &h->request, 1 ) ) )
-    httpresponse( clientsocket, array_start( &h->request ) );
+    return httperror( clientsocket, "500 Server Error", "Request too long.");
+
+  if( array_bytes( &h->request ) > 8192 )
+    return httperror( clientsocket, "500 request too long", "You sent too much headers");
+
+  if( memchr( array_start( &h->request ), '\n', array_length( &h->request, 1 ) ) )
+    return httpresponse( clientsocket, array_start( &h->request ) );
 }
 
 static void handle_write( const int64 clientsocket ) {
@@ -701,6 +681,9 @@ static void server_mainloop( ) {
       taia_now( &next_timeout_check );
       taia_addsec( &next_timeout_check, &next_timeout_check, OT_CLIENT_TIMEOUT_CHECKINTERVAL);
     }
+
+    /* See if we need to move our pools */
+    clean_all_torrents();
   }
 }
 

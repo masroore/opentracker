@@ -98,9 +98,10 @@ size_t return_peers_for_torrent( ot_torrent *torrent, size_t amount, char *reply
 size_t return_fullscrape_for_tracker( char **reply );
 size_t return_tcp_scrape_for_torrent( ot_hash *hash, char *reply );
 size_t return_udp_scrape_for_torrent( ot_hash *hash, char *reply );
-size_t return_sync_for_torrent( ot_hash *hash, char **reply );
 size_t return_stats_for_tracker( char *reply, int mode );
 size_t return_memstat_for_tracker( char **reply );
+size_t return_changeset_for_tracker( char **reply );
+void   clean_all_torrents( void );
 void   remove_peer_from_torrent( ot_hash *hash, ot_peer *peer );
 
 #endif
