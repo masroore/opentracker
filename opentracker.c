@@ -36,6 +36,7 @@ static unsigned int ot_overall_udp_successfulannounces = 0;
 static time_t ot_start_time;
 static const size_t SUCCESS_HTTP_HEADER_LENGTH = 80;
 static const size_t SUCCESS_HTTP_SIZE_OFF = 17;
+static char g_adminip[4] = {0,0,0,0};
 
 /* To always have space for error messages ;) */
 
@@ -561,6 +562,10 @@ static void handle_accept( const int64 serversocket ) {
 
     byte_zero( h, sizeof( struct http_data ) );
     memmove( h->ip, ip, sizeof( ip ) );
+
+    if( ntohl(*(ot_dword*)&h->ip) == *(ot_dword*)g_adminip )
+      h->blessed = 1;
+
     io_setcookie( i, h );
 
     ++ot_overall_tcp_connections;
@@ -735,9 +740,10 @@ int main( int argc, char **argv ) {
   int scanon = 1;
 
   while( scanon ) {
-    switch( getopt( argc, argv, ":i:p:P:d:ocbBh" ) ) {
+    switch( getopt( argc, argv, ":i:p:A:P:d:ocbBh" ) ) {
       case -1 : scanon = 0; break;
       case 'i': scan_ip4( optarg, serverip ); break;
+      case 'A': scan_ip4( optarg, g_adminip ); break;
       case 'p': ot_try_bind( serverip, (uint16)atol( optarg ), 1 ); break;
       case 'P': ot_try_bind( serverip, (uint16)atol( optarg ), 0 ); break;
       case 'd': serverdir = optarg; break;
