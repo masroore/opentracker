@@ -494,6 +494,7 @@ static void help( char *name ) {
                    "\t-p serverport\tspecify tcp port to bind to (default: 6969, you may specify more than one)\n"
                    "\t-P serverport\tspecify udp port to bind to (default: 6969, you may specify more than one)\n"
                    "\t-d serverdir\tspecify directory containing white- or black listed torrent info_hashes (default: \".\")\n"
+                   "\t-A adminip\tbless an ip address as admin address (e.g. to allow snycs from this address)\n"
                    "\nExample:   ./opentracker -i 127.0.0.1 -p 6969 -P 6969 -i 10.1.1.23 -p 2710 -p 80\n"
 );
 }
@@ -563,7 +564,7 @@ static void handle_accept( const int64 serversocket ) {
     byte_zero( h, sizeof( struct http_data ) );
     memmove( h->ip, ip, sizeof( ip ) );
 
-    if( ntohl(*(ot_dword*)&h->ip) == *(ot_dword*)g_adminip )
+    if( !byte_diff( &h->ip, 4, g_adminip ) )
       h->blessed = 1;
 
     io_setcookie( i, h );
