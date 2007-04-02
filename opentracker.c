@@ -24,6 +24,7 @@
 #include <errno.h>
 #include <signal.h>
 #include <stdio.h>
+#include <pwd.h>
 
 #include "trackerlogic.h"
 #include "scan_urlencoded_query.h"
@@ -736,6 +737,7 @@ static void ot_try_bind( char ip[4], uint16 port, int is_tcp ) {
 }
 
 int main( int argc, char **argv ) {
+  struct passwd *pws = NULL;
   char serverip[4] = {0,0,0,0};
   char *serverdir = ".";
   int scanon = 1;
@@ -759,8 +761,15 @@ int main( int argc, char **argv ) {
     ot_try_bind( serverip, 6969, 1 );
     ot_try_bind( serverip, 6969, 0 );
   }
-  setegid( (gid_t)-2 ); setuid( (uid_t)-2 );
-  setgid( (gid_t)-2 ); seteuid( (uid_t)-2 );
+
+  pws = getpwnam( "nobody ");
+  if( !pws ) {
+    setegid( (gid_t)-2 ); setuid( (uid_t)-2 );
+    setgid( (gid_t)-2 ); seteuid( (uid_t)-2 );
+  } else {
+    setegid( pws->pw_gid ); setuid( pws->pw_uid );
+    setgid( pws->pw_gid ); seteuid( pws->pw_uid );
+  }
 
   signal( SIGPIPE, SIG_IGN );
   signal( SIGINT,  graceful );
