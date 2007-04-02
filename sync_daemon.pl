@@ -1,5 +1,8 @@
 #!/usr/bin/perl
 
+# This software was written by Philipp Wuensche <cryx-otsync@h3q.com>
+# It is considered beerware.
+
 use strict;
 
 #use Convert::Bencode_XS qw(:all);
