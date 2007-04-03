@@ -73,7 +73,7 @@ ssize_t scan_fixed_ip( char *data, size_t len, unsigned char ip[4] ) {
 
   for( i=0; i<4; ++i ) {
     ssize_t j = scan_fixed_int( data, len, &u );
-    if( j == len ) return len;
+    if( j == (ssize_t)len ) return len;
     ip[i] = u;
     data += len - j;
     len = j;

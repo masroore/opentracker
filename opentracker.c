@@ -154,7 +154,7 @@ static void senddata( const int64 s, char *buffer, size_t size ) {
     array_reset( &h->request );
 
   written_size = write( s, buffer, size );
-  if( ( written_size < 0 ) || ( written_size == size ) ) {
+  if( ( written_size < 0 ) || ( (size_t)written_size == size ) ) {
     free( h ); io_close( s );
   } else {
     char * outbuf = malloc( size - written_size );
@@ -594,15 +594,15 @@ static void handle_timeouted( void ) {
 }
 
 static void handle_udp4( int64 serversocket ) {
-  ot_peer        peer;
-  ot_torrent    *torrent;
-  ot_hash       *hash = NULL;
-  char           remoteip[4];
-  unsigned long *inpacket = (unsigned long*)static_inbuf;
-  unsigned long *outpacket = (unsigned long*)static_outbuf;
-  unsigned long  numwant, left, event;
-  uint16         port, remoteport;
-  size_t         r, r_out;
+  ot_peer     peer;
+  ot_torrent *torrent;
+  ot_hash    *hash = NULL;
+  char        remoteip[4];
+  ot_dword   *inpacket = (ot_dword*)static_inbuf;
+  ot_dword   *outpacket = (ot_dword*)static_outbuf;
+  ot_dword    numwant, left, event;
+  ot_word     port, remoteport;
+  size_t      r, r_out;
 
   r = socket_recv4( serversocket, static_inbuf, 8192, remoteip, &remoteport);
 
@@ -627,8 +627,9 @@ static void handle_udp4( int64 serversocket ) {
       numwant = 200;
       /* We do only want to know, if it is zero */
       left  = inpacket[64/4] | inpacket[68/4];
+
       event = ntohl( inpacket[80/4] );
-      port  = *(unsigned short*)( static_inbuf + 96 );
+      port  = *(ot_word*)( static_inbuf + 96 );
       hash  = (ot_hash*)( static_inbuf + 16 );
 
       OT_SETIP( &peer, remoteip );

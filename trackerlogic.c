@@ -243,9 +243,9 @@ size_t return_peers_for_torrent( ot_torrent *torrent, size_t amount, char *reply
   if( is_tcp )
     r += sprintf( r, "d8:completei%zde10:incompletei%zde8:intervali%ie5:peers%zd:", seed_count, peer_count-seed_count, OT_CLIENT_REQUEST_INTERVAL_RANDOM, 6*amount );
   else {
-    *(unsigned long*)(r+0) = htonl( OT_CLIENT_REQUEST_INTERVAL_RANDOM );
-    *(unsigned long*)(r+4) = htonl( peer_count );
-    *(unsigned long*)(r+8) = htonl( seed_count );
+    *(ot_dword*)(r+0) = htonl( OT_CLIENT_REQUEST_INTERVAL_RANDOM );
+    *(ot_dword*)(r+4) = htonl( peer_count );
+    *(ot_dword*)(r+8) = htonl( seed_count );
     r += 12;
   }
 
@@ -357,7 +357,7 @@ size_t return_udp_scrape_for_torrent( ot_hash *hash, char *reply ) {
   if( !exactmatch ) {
     memset( reply, 0, 12);
   } else {
-    unsigned long *r = (unsigned long*) reply;
+    ot_dword *r = (ot_dword*) reply;
 
     for( i=0; i<OT_POOLS_COUNT; ++i ) {
       peers += torrent->peer_list->peers[i].size;
@@ -394,7 +394,7 @@ size_t return_tcp_scrape_for_torrent( ot_hash *hash, char *reply ) {
 /* Throw away old changeset */
 static void release_changeset( void ) {
   ot_byte **changeset_ptrs = (ot_byte**)(changeset.data);
-  int i;
+  size_t i;
 
   for( i = 0; i < changeset.size; ++i )
     free( changeset_ptrs[i] );
@@ -507,7 +507,8 @@ size_t return_changeset_for_tracker( char **reply ) {
 /* Clean up all torrents, remove timedout pools and
    torrents, also prepare new changeset */
 void clean_all_torrents( void ) {
-  int    i, j, k;
+  int    i, k;
+  size_t j;
   time_t time_now = NOW;
   size_t peers_count;
 
@@ -566,7 +567,7 @@ void clean_all_torrents( void ) {
   }
 }
 
-typedef struct { int val; ot_torrent * torrent; } ot_record;
+typedef struct { size_t val; ot_torrent * torrent; } ot_record;
 
 /* Fetches stats from tracker */
 size_t return_stats_for_tracker( char *reply, int mode ) {
@@ -611,11 +612,11 @@ size_t return_stats_for_tracker( char *reply, int mode ) {
     r += sprintf( r, "Top5 torrents by peers:\n" );
     for( idx=0; idx<5; ++idx )
       if( top5c[idx].torrent )
-        r += sprintf( r, "\t%i\t%s\n", top5c[idx].val, to_hex(top5c[idx].torrent->hash) );
+        r += sprintf( r, "\t%zd\t%s\n", top5c[idx].val, to_hex(top5c[idx].torrent->hash) );
     r += sprintf( r, "Top5 torrents by seeds:\n" );
     for( idx=0; idx<5; ++idx )
       if( top5s[idx].torrent )
-        r += sprintf( r, "\t%i\t%s\n", top5s[idx].val, to_hex(top5s[idx].torrent->hash) );
+        r += sprintf( r, "\t%zd\t%s\n", top5s[idx].val, to_hex(top5s[idx].torrent->hash) );
   } else {
     r += sprintf( r, "%zd\n%zd\nopentracker serving %zd torrents\nopentracker", peer_count, seed_count, torrent_count );
   }
