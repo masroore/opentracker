@@ -485,20 +485,22 @@ static void graceful( int s ) {
 }
 
 static void usage( char *name ) {
-  fprintf( stderr, "Usage: %s [-i serverip] [-p serverport] [-d serverdirectory]"
-  "\n", name );
+  fprintf( stderr, "Usage: %s [-i ip] [-p port] [-P port] [-d dir] [-A ip]\n", name );
 }
 
+#define HELPLINE(opt,desc) fprintf(stderr, "\t%-10s%s\n",opt,desc)
 static void help( char *name ) {
   usage( name );
-  fprintf( stderr, "\t-i serverip\tspecify ip to bind to (default: *, you may specify more than one)\n"
-                   "\t-p serverport\tspecify tcp port to bind to (default: 6969, you may specify more than one)\n"
-                   "\t-P serverport\tspecify udp port to bind to (default: 6969, you may specify more than one)\n"
-                   "\t-d serverdir\tspecify directory containing white- or black listed torrent info_hashes (default: \".\")\n"
-                   "\t-A adminip\tbless an ip address as admin address (e.g. to allow snycs from this address)\n"
-                   "\nExample:   ./opentracker -i 127.0.0.1 -p 6969 -P 6969 -i 10.1.1.23 -p 2710 -p 80\n"
-);
+
+  HELPLINE("-i ip","specify ip to bind to (default: *, you may specify more than one)");
+  HELPLINE("-p port","specify tcp port to bind to (default: 6969, you may specify more than one)");
+  HELPLINE("-P port","specify udp port to bind to (default: 6969, you may specify more than one)");
+  HELPLINE("-d dir","specify directory containing white- or black listed torrent info_hashes (default: \".\")");
+  HELPLINE("-A ip","bless an ip address as admin address (e.g. to allow syncs from this address)");
+
+  fprintf( stderr, "\nExample:   ./opentracker -i 127.0.0.1 -p 6969 -P 6969 -i 10.1.1.23 -p 2710 -p 80\n" );
 }
+#undef HELPLINE
 
 static void handle_read( const int64 clientsocket ) {
   struct http_data* h = io_getcookie( clientsocket );
