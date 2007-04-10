@@ -446,7 +446,7 @@ static void add_pool_to_changeset( ot_hash *hash, ot_peer *peers, size_t peer_co
 int add_changeset_to_tracker( ot_byte *data, size_t len ) {
   ot_hash    *hash;
   ot_byte    *end = data + len;
-  size_t      peer_count;
+  unsigned long      peer_count;
 
   /* We do know, that the string is \n terminated, so it cant
      overflow */
