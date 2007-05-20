@@ -340,7 +340,7 @@ size_t return_memstat_for_tracker( char **reply ) {
       ot_hash     *hash      =&( ((ot_torrent*)(torrents_list->data))[j] ).hash;
       r += sprintf( r, "\n%s:\n", to_hex( (ot_byte*)hash ) );
       for( k=0; k<OT_POOLS_COUNT; ++k )
-        r += sprintf( r, "\t%04X %04X\n", ((unsigned int)peer_list->peers[k].size), (unsigned int)peer_list->peers[k].space );
+        r += sprintf( r, "\t%05X %05X\n", ((unsigned int)peer_list->peers[k].size), (unsigned int)peer_list->peers[k].space );
     }
   }
 
