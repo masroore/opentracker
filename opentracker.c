@@ -614,6 +614,10 @@ static void handle_udp4( int64 serversocket ) {
   if( r < 16 )
     return;
 
+  /* look for udp bittorrent magic id */
+  if( (ntohl(inpacket[0]) != 0x00000417) || (ntohl(inpacket[1]) != 0x27101980) )
+    return;
+
   switch( ntohl( inpacket[2] ) ) {
     case 0: /* This is a connect action */
       outpacket[0] = 0;           outpacket[1] = inpacket[3];
