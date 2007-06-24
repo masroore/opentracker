@@ -595,6 +595,8 @@ static void handle_timeouted( void ) {
   }
 }
 
+/* UDP implementation according to http://xbtt.sourceforge.net/udp_tracker_protocol.html */
+
 static void handle_udp4( int64 serversocket ) {
   ot_peer     peer;
   ot_torrent *torrent;
