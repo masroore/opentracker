@@ -765,7 +765,7 @@ int main( int argc, char **argv ) {
     }
   }
 
-  // Bind to our default tcp/udp ports
+  /* Bind to our default tcp/udp ports */
   if( !ot_sockets_count ) {
     ot_try_bind( serverip, 6969, 1 );
     ot_try_bind( serverip, 6969, 0 );
@@ -779,6 +779,7 @@ int main( int argc, char **argv ) {
     setegid( pws->pw_gid ); setuid( pws->pw_uid );
     setgid( pws->pw_gid ); seteuid( pws->pw_uid );
   }
+  endpwent();
 
   signal( SIGPIPE, SIG_IGN );
   signal( SIGINT,  graceful );
