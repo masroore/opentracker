@@ -656,8 +656,8 @@ size_t return_stats_for_slash24s( char *reply, size_t amount, ot_dword thresh ) 
         ot_peer *peers =    peer_list->peers[k].data;
         size_t   numpeers = peer_list->peers[k].size;
         for( l=0; l<numpeers; ++l )
-          if( ++count[ (*(ot_dword*)(peers+l))>>8 ] == 65335 )
-            count[ (*(ot_dword*)(peers+l))>>8 ] = 65334;
+          if( ++count[ ntohl(*(ot_dword*)(peers+l))>>8 ] == 65335 )
+            count[ ntohl(*(ot_dword*)(peers+l))>>8 ] = 65334;
       }
     }
   }
