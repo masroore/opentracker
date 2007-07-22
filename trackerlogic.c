@@ -663,7 +663,7 @@ size_t return_stats_for_slash24s( char *reply, size_t amount, ot_dword thresh ) 
   }
 
   for( i=0; i<0x1000000; ++i )
-    if( count[i] >= thresh ) {
+    if( count[i] > thresh ) {
       /* This subnet seems to announce more torrents than the last in our list */
       int insert_pos = amount - 1;
       while( ( insert_pos >= 0 ) && ( count[i] > slash24s[ 2 * insert_pos ] ) )
