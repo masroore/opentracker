@@ -634,6 +634,59 @@ size_t return_stats_for_tracker( char *reply, int mode ) {
   return r - reply;
 }
 
+size_t return_stats_for_slash24s( char *reply, size_t amount, ot_dword thresh ) {
+  ot_word *count = malloc( 0x1000000 * sizeof(ot_word) );
+  ot_dword slash24s[amount*2];  /* first dword amount, second dword subnet */
+  size_t i, j, k, l;
+  char     *r  = reply;
+
+  if( !count )
+    return 0;
+
+  byte_zero( count, 0x1000000 * sizeof(ot_word) );
+  byte_zero( slash24s, amount * 2 * sizeof(ot_dword) );
+
+  r += sprintf( r, "Stats for all /24s with more than %d announced torrents:\n\n", ((int)thresh) );
+
+  for( i=0; i<256; ++i ) {
+    ot_vector *torrents_list = &all_torrents[i];
+    for( j=0; j<torrents_list->size; ++j ) {
+      ot_peerlist *peer_list = ( ((ot_torrent*)(torrents_list->data))[j] ).peer_list;
+      for( k=0; k<OT_POOLS_COUNT; ++k ) {
+        ot_peer *peers =    peer_list->peers[k].data;
+        size_t   numpeers = peer_list->peers[k].size;
+        for( l=0; l<numpeers; ++l )
+          if( ++count[ (*(ot_dword*)(peers+l))>>8 ] == 65335 )
+            count[ (*(ot_dword*)(peers+l))>>8 ] = 65334;
+      }
+    }
+  }
+
+  for( i=0; i<0x1000000; ++i )
+    if( count[i] >= thresh ) {
+      /* This subnet seems to announce more torrents than the last in our list */
+      int insert_pos = amount - 1;
+      while( ( insert_pos >= 0 ) && ( count[i] > slash24s[ 2 * insert_pos ] ) )
+        --insert_pos;
+      ++insert_pos;
+      memmove( slash24s + 2 * ( insert_pos + 1 ), slash24s + 2 * ( insert_pos ), 2 * sizeof( ot_dword ) * ( amount - insert_pos - 1 ) );
+      slash24s[ 2 * insert_pos     ] = count[i];
+      slash24s[ 2 * insert_pos + 1 ] = i;
+      if( slash24s[ 2 * amount - 2 ] > thresh )
+        thresh = slash24s[ 2 * amount - 2 ];
+    }
+
+  free( count );
+
+  for( i=0; i < amount; ++i )
+    if( slash24s[ 2*i ] >= thresh ) {
+      unsigned long ip = slash24s[ 2*i +1 ];
+      r += sprintf( r, "% 10ld %d.%d.%d/24\n", (long)slash24s[ 2*i ], (int)(ip >> 16), (int)(255 & ( ip >> 8 )), (int)(ip & 255) );
+    }
+
+  return r - reply;
+}
+
 void remove_peer_from_torrent( ot_hash *hash, ot_peer *peer ) {
   int          exactmatch, i;
   ot_vector   *torrents_list = &all_torrents[*hash[0]];

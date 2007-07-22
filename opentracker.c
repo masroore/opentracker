@@ -274,6 +274,8 @@ static void httpresponse( const int64 s, char *data ) {
           mode = STATS_TCP;
         else if( !byte_diff(data,4,"udp4"))
           mode = STATS_UDP;
+        else if( !byte_diff(data,4,"s24s"))
+          mode = STATS_SLASH24S;
         else
           HTTPERROR_400_PARAM;
       }
@@ -303,6 +305,9 @@ static void httpresponse( const int64 s, char *data ) {
         case STATS_MRTG:
           /* Enough for http header + whole scrape string */
           if( !( reply_size = return_stats_for_tracker( SUCCESS_HTTP_HEADER_LENGTH + static_outbuf, mode ) ) ) HTTPERROR_500;
+          break;
+        case STATS_SLASH24S:
+          if( !( reply_size = return_stats_for_slash24s( SUCCESS_HTTP_HEADER_LENGTH + static_outbuf, 25, 64 ) ) ) HTTPERROR_500;
           break;
       }
     break;
