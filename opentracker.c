@@ -38,6 +38,9 @@ static time_t ot_start_time;
 static const size_t SUCCESS_HTTP_HEADER_LENGTH = 80;
 static const size_t SUCCESS_HTTP_SIZE_OFF = 17;
 static char g_adminip[4] = {0,0,0,0};
+#ifdef WANT_BLACKLISTING
+static char *blacklist_filename = NULL;
+#endif
 
 /* To always have space for error messages ;) */
 
@@ -495,8 +498,11 @@ static void help( char *name ) {
   HELPLINE("-i ip","specify ip to bind to (default: *, you may specify more than one)");
   HELPLINE("-p port","specify tcp port to bind to (default: 6969, you may specify more than one)");
   HELPLINE("-P port","specify udp port to bind to (default: 6969, you may specify more than one)");
-  HELPLINE("-d dir","specify directory containing white- or black listed torrent info_hashes (default: \".\")");
+  HELPLINE("-d dir","specify directory to try to chroot to (default: \".\")");
   HELPLINE("-A ip","bless an ip address as admin address (e.g. to allow syncs from this address)");
+#ifdef WANT_BLACKLISTING
+  HELPLINE("-b file","specify blacklist file.");
+#endif
 
   fprintf( stderr, "\nExample:   ./opentracker -i 127.0.0.1 -p 6969 -P 6969 -i 10.1.1.23 -p 2710 -p 80\n" );
 }
@@ -745,6 +751,43 @@ static void ot_try_bind( char ip[4], uint16 port, int is_tcp ) {
   ++ot_sockets_count;
 }
 
+#ifdef WANT_BLACKLISTING
+/* Read initial black list */
+void read_blacklist_file( int foo ) {
+  FILE *  blacklist_filehandle = fopen( blacklist_filename, "r" );
+  ot_hash infohash;
+  foo = foo;
+
+  /* Free blacklist vector in trackerlogic.c*/
+  blacklist_reset();
+
+  if( blacklist_filehandle == NULL ) {
+    fprintf( stderr, "Warning: Can't open blacklist file: %s (but will try to create it later, if necessary and possible).", blacklist_filename );
+    return;
+  }
+
+  /* We do ignore anything that is not of the form "^[:xdigit:]{40}[^:xdigit:].*" */
+  while( fgets( static_inbuf, sizeof(static_inbuf), blacklist_filehandle ) ) {
+    int i;
+    for( i=0; i<20; ++i ) {
+      int eger = 16 * scan_fromhex( static_inbuf[ 2*i ] ) + scan_fromhex( static_inbuf[ 1 + 2*i ] );
+      if( eger < 0 )
+        goto ignore_line;
+      infohash[i] = eger;
+    }
+    if( scan_fromhex( static_inbuf[ 40 ] ) >= 0 )
+      goto ignore_line;
+
+    /* Append blacklist to blacklist vector */
+    blacklist_addentry( &infohash );
+
+ignore_line:
+    continue;
+  }
+  fclose( blacklist_filehandle );
+}
+#endif
+
 int main( int argc, char **argv ) {
   struct passwd *pws = NULL;
   char serverip[4] = {0,0,0,0};
@@ -752,10 +795,13 @@ int main( int argc, char **argv ) {
   int scanon = 1;
 
   while( scanon ) {
-    switch( getopt( argc, argv, ":i:p:A:P:d:ocbBh" ) ) {
+    switch( getopt( argc, argv, ":i:p:A:P:d:b:h" ) ) {
       case -1 : scanon = 0; break;
       case 'i': scan_ip4( optarg, serverip ); break;
       case 'A': scan_ip4( optarg, g_adminip ); break;
+#ifdef WANT_BLACKLISTING
+      case 'b': blacklist_filename = optarg; break;
+#endif
       case 'p': ot_try_bind( serverip, (uint16)atol( optarg ), 1 ); break;
       case 'P': ot_try_bind( serverip, (uint16)atol( optarg ), 0 ); break;
       case 'd': serverdir = optarg; break;
@@ -771,7 +817,8 @@ int main( int argc, char **argv ) {
     ot_try_bind( serverip, 6969, 0 );
   }
 
-  pws = getpwnam( "nobody ");
+  /* Drop permissions */
+  pws = getpwnam( "nobody" );
   if( !pws ) {
     setegid( (gid_t)-2 ); setuid( (uid_t)-2 );
     setgid( (gid_t)-2 ); seteuid( (uid_t)-2 );
@@ -781,8 +828,17 @@ int main( int argc, char **argv ) {
   }
   endpwent();
 
+#ifdef WANT_BLACKLISTING
+  /* Passing "0" since read_blacklist_file also is SIGHUP handler */
+  if( blacklist_filename ) {
+    read_blacklist_file( 0 );
+    signal( SIGHUP,  read_blacklist_file );
+  }
+#endif
+
   signal( SIGPIPE, SIG_IGN );
   signal( SIGINT,  graceful );
+
   if( init_logic( serverdir ) == -1 )
     panic( "Logic not started" );
 

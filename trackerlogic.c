@@ -22,6 +22,10 @@
 /* GLOBAL VARIABLES */
 static ot_vector all_torrents[256];
 static ot_vector changeset;
+#ifdef WANT_BLACKLISTING
+static ot_vector blacklist;
+#endif
+
 size_t changeset_size = 0;
 time_t last_clean_time = 0;
 
@@ -154,6 +158,12 @@ ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer, int from_changese
   ot_peer    *peer_dest;
   ot_vector  *torrents_list = &all_torrents[*hash[0]], *peer_pool;
   int         base_pool = 0;
+
+#ifdef WANT_BLACKLISTING
+  binary_search( hash, blacklist.data, blacklist.size, OT_HASH_COMPARE_SIZE, OT_HASH_COMPARE_SIZE, &exactmatch );
+  if( exactmatch )
+    return NULL;
+#endif
 
   torrent = vector_find_or_insert( torrents_list, (void*)hash, sizeof( ot_torrent ), OT_HASH_COMPARE_SIZE, &exactmatch );
   if( !torrent ) return NULL;
@@ -672,3 +682,22 @@ void deinit_logic( void ) {
   byte_zero( &changeset, sizeof( changeset ) );
   changeset_size = 0;
 }
+
+#ifdef WANT_BLACKLISTING
+void blacklist_reset( void ) {
+  free( blacklist.data );
+  byte_zero( &blacklist, sizeof( blacklist ) );
+}
+
+int blacklist_addentry( ot_hash *infohash ) {
+  int em;
+  void *insert = vector_find_or_insert( &blacklist, infohash, OT_HASH_COMPARE_SIZE, OT_HASH_COMPARE_SIZE, &em );
+
+  if( !insert )
+    return -1;
+
+  memmove( insert, infohash, OT_HASH_COMPARE_SIZE );
+
+  return 0;
+}
+#endif

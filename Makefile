@@ -1,5 +1,5 @@
 CC?=gcc
-FEATURES=#-DWANT_IP_FROM_QUERY_STRING -D_DEBUG_HTTPERROR
+FEATURES=-DWANT_BLACKLISTING #-DWANT_IP_FROM_QUERY_STRING -D_DEBUG_HTTPERROR
 OPTS_debug=-g -ggdb #-pg # -fprofile-arcs -ftest-coverage
 OPTS_production=-s -Os
 CFLAGS+=-I../libowfat -Wall -pipe -Wextra #-pedantic #-ansi
