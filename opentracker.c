@@ -759,15 +759,19 @@ static void ot_try_bind( char ip[4], uint16 port, int is_tcp ) {
 #ifdef WANT_BLACKLISTING
 /* Read initial black list */
 void read_blacklist_file( int foo ) {
-  FILE *  blacklist_filehandle = fopen( blacklist_filename, "r" );
+  FILE *  blacklist_filehandle;
   ot_hash infohash;
   foo = foo;
+
+  signal( SIGHUP, SIG_IGN );
+  blacklist_filehandle = fopen( blacklist_filename, "r" );
 
   /* Free blacklist vector in trackerlogic.c*/
   blacklist_reset();
 
   if( blacklist_filehandle == NULL ) {
     fprintf( stderr, "Warning: Can't open blacklist file: %s (but will try to create it later, if necessary and possible).", blacklist_filename );
+    signal( SIGHUP,  read_blacklist_file );
     return;
   }
 
@@ -789,7 +793,9 @@ void read_blacklist_file( int foo ) {
 ignore_line:
     continue;
   }
+
   fclose( blacklist_filehandle );
+  signal( SIGHUP,  read_blacklist_file );
 }
 #endif
 
