@@ -38,8 +38,13 @@ static time_t ot_start_time;
 static const size_t SUCCESS_HTTP_HEADER_LENGTH = 80;
 static const size_t SUCCESS_HTTP_SIZE_OFF = 17;
 static char g_adminip[4] = {0,0,0,0};
-#ifdef WANT_BLACKLISTING
-static char *blacklist_filename = NULL;
+
+#if defined ( WANT_BLACKLISTING ) && defined (WANT_CLOSED_TRACKER )
+  #error WANT_BLACKLISTING and WANT_CLOSED_TRACKER are exclusive.
+#endif
+#if defined ( WANT_BLACKLISTING ) || defined (WANT_CLOSED_TRACKER )
+static char *accesslist_filename = NULL;
+#define WANT_ACCESS_CONTROL
 #endif
 
 /* To always have space for error messages ;) */
@@ -493,7 +498,13 @@ static void graceful( int s ) {
 }
 
 static void usage( char *name ) {
-  fprintf( stderr, "Usage: %s [-i ip] [-p port] [-P port] [-d dir] [-A ip]\n", name );
+  fprintf( stderr, "Usage: %s [-i ip] [-p port] [-P port] [-d dir] [-A ip]"
+#ifdef WANT_BLACKLISTING
+  " [-b blacklistfile]"
+#elif defined ( WANT_CLOSED_TRACKER )
+  " [-w whitelistfile]"
+#endif
+  "\n", name );
 }
 
 #define HELPLINE(opt,desc) fprintf(stderr, "\t%-10s%s\n",opt,desc)
@@ -507,6 +518,8 @@ static void help( char *name ) {
   HELPLINE("-A ip","bless an ip address as admin address (e.g. to allow syncs from this address)");
 #ifdef WANT_BLACKLISTING
   HELPLINE("-b file","specify blacklist file.");
+#elif defined( WANT_CLOSED_TRACKER )
+  HELPLINE("-w file","specify whitelist file.");
 #endif
 
   fprintf( stderr, "\nExample:   ./opentracker -i 127.0.0.1 -p 6969 -P 6969 -i 10.1.1.23 -p 2710 -p 80\n" );
@@ -756,27 +769,25 @@ static void ot_try_bind( char ip[4], uint16 port, int is_tcp ) {
   ++ot_sockets_count;
 }
 
-#ifdef WANT_BLACKLISTING
-/* Read initial black list */
-void read_blacklist_file( int foo ) {
-  FILE *  blacklist_filehandle;
+#ifdef WANT_ACCESS_CONTROL
+/* Read initial access list */
+void read_accesslist_file( int foo ) {
+  FILE *  accesslist_filehandle;
   ot_hash infohash;
   foo = foo;
 
-  signal( SIGHUP, SIG_IGN );
-  blacklist_filehandle = fopen( blacklist_filename, "r" );
+  accesslist_filehandle = fopen( accesslist_filename, "r" );
 
-  /* Free blacklist vector in trackerlogic.c*/
-  blacklist_reset();
+  /* Free accesslist vector in trackerlogic.c*/
+  accesslist_reset();
 
-  if( blacklist_filehandle == NULL ) {
-    fprintf( stderr, "Warning: Can't open blacklist file: %s (but will try to create it later, if necessary and possible).", blacklist_filename );
-    signal( SIGHUP,  read_blacklist_file );
+  if( accesslist_filehandle == NULL ) {
+    fprintf( stderr, "Warning: Can't open accesslist file: %s (but will try to create it later, if necessary and possible).", accesslist_filename );
     return;
   }
 
   /* We do ignore anything that is not of the form "^[:xdigit:]{40}[^:xdigit:].*" */
-  while( fgets( static_inbuf, sizeof(static_inbuf), blacklist_filehandle ) ) {
+  while( fgets( static_inbuf, sizeof(static_inbuf), accesslist_filehandle ) ) {
     int i;
     for( i=0; i<20; ++i ) {
       int eger = 16 * scan_fromhex( static_inbuf[ 2*i ] ) + scan_fromhex( static_inbuf[ 1 + 2*i ] );
@@ -787,15 +798,14 @@ void read_blacklist_file( int foo ) {
     if( scan_fromhex( static_inbuf[ 40 ] ) >= 0 )
       goto ignore_line;
 
-    /* Append blacklist to blacklist vector */
-    blacklist_addentry( &infohash );
+    /* Append accesslist to accesslist vector */
+    accesslist_addentry( &infohash );
 
 ignore_line:
     continue;
   }
 
-  fclose( blacklist_filehandle );
-  signal( SIGHUP,  read_blacklist_file );
+  fclose( accesslist_filehandle );
 }
 #endif
 
@@ -806,12 +816,20 @@ int main( int argc, char **argv ) {
   int scanon = 1;
 
   while( scanon ) {
-    switch( getopt( argc, argv, ":i:p:A:P:d:b:h" ) ) {
+    switch( getopt( argc, argv, ":i:p:A:P:d:"
+#ifdef WANT_BLACKLISTING
+"b:"
+#elif defined( WANT_CLOSED_TRACKER )
+"w:"
+#endif
+    "h" ) ) {
       case -1 : scanon = 0; break;
       case 'i': scan_ip4( optarg, serverip ); break;
       case 'A': scan_ip4( optarg, g_adminip ); break;
 #ifdef WANT_BLACKLISTING
-      case 'b': blacklist_filename = optarg; break;
+      case 'b': accesslist_filename = optarg; break;
+#elif defined( WANT_CLOSED_TRACKER )
+      case 'w': accesslist_filename = optarg; break;
 #endif
       case 'p': ot_try_bind( serverip, (uint16)atol( optarg ), 1 ); break;
       case 'P': ot_try_bind( serverip, (uint16)atol( optarg ), 0 ); break;
@@ -839,11 +857,11 @@ int main( int argc, char **argv ) {
   }
   endpwent();
 
-#ifdef WANT_BLACKLISTING
+#ifdef WANT_ACCESS_CONTROL
   /* Passing "0" since read_blacklist_file also is SIGHUP handler */
-  if( blacklist_filename ) {
-    read_blacklist_file( 0 );
-    signal( SIGHUP,  read_blacklist_file );
+  if( accesslist_filename ) {
+    read_accesslist_file( 0 );
+    signal( SIGHUP,  read_accesslist_file );
   }
 #endif
 

@@ -98,9 +98,9 @@ size_t return_memstat_for_tracker( char **reply );
 size_t return_changeset_for_tracker( char **reply );
 void   clean_all_torrents( void );
 void   remove_peer_from_torrent( ot_hash *hash, ot_peer *peer );
-#ifdef WANT_BLACKLISTING
-int    blacklist_addentry( ot_hash *hash );
-void   blacklist_reset( void );
+#if defined ( WANT_BLACKLISTING ) || defined ( WANT_CLOSED_TRACKER )
+int    accesslist_addentry( ot_hash *hash );
+void   accesslist_reset( void );
 #endif
 
 #endif

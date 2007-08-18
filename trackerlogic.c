@@ -22,8 +22,9 @@
 /* GLOBAL VARIABLES */
 static ot_vector all_torrents[256];
 static ot_vector changeset;
-#ifdef WANT_BLACKLISTING
-static ot_vector blacklist;
+#if defined ( WANT_BLACKLISTING ) || defined( WANT_CLOSED_TRACKER )
+static ot_vector accesslist;
+#define WANT_ACCESS_CONTROL
 #endif
 
 size_t changeset_size = 0;
@@ -159,9 +160,14 @@ ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer, int from_changese
   ot_vector  *torrents_list = &all_torrents[*hash[0]], *peer_pool;
   int         base_pool = 0;
 
-#ifdef WANT_BLACKLISTING
-  binary_search( hash, blacklist.data, blacklist.size, OT_HASH_COMPARE_SIZE, OT_HASH_COMPARE_SIZE, &exactmatch );
-  if( exactmatch )
+#ifdef WANT_ACCESS_CONTROL
+  binary_search( hash, accesslist.data, accesslist.size, OT_HASH_COMPARE_SIZE, OT_HASH_COMPARE_SIZE, &exactmatch );
+
+#ifdef WANT_CLOSED_TRACKER
+  exactmatch = !exactmatch;
+#endif
+
+  if( !exactmatch )
     return NULL;
 #endif
 
@@ -736,15 +742,15 @@ void deinit_logic( void ) {
   changeset_size = 0;
 }
 
-#ifdef WANT_BLACKLISTING
-void blacklist_reset( void ) {
-  free( blacklist.data );
-  byte_zero( &blacklist, sizeof( blacklist ) );
+#ifdef WANT_ACCESS_CONTROL
+void accesslist_reset( void ) {
+  free( accesslist.data );
+  byte_zero( &accesslist, sizeof( accesslist ) );
 }
 
-int blacklist_addentry( ot_hash *infohash ) {
+int accesslist_addentry( ot_hash *infohash ) {
   int em;
-  void *insert = vector_find_or_insert( &blacklist, infohash, OT_HASH_COMPARE_SIZE, OT_HASH_COMPARE_SIZE, &em );
+  void *insert = vector_find_or_insert( &accesslist, infohash, OT_HASH_COMPARE_SIZE, OT_HASH_COMPARE_SIZE, &em );
 
   if( !insert )
     return -1;
