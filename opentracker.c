@@ -849,6 +849,7 @@ int main( int argc, char **argv ) {
 
   signal( SIGPIPE, SIG_IGN );
   signal( SIGINT,  graceful );
+  signal( SIGALRM, SIG_IGN );
 
   if( init_logic( serverdir ) == -1 )
     panic( "Logic not started" );
