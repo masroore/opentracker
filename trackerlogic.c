@@ -167,7 +167,7 @@ ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer, int from_changese
   exactmatch = !exactmatch;
 #endif
 
-  if( !exactmatch )
+  if( exactmatch )
     return NULL;
 #endif
 
