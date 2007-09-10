@@ -87,7 +87,7 @@ void deinit_logic( void );
 enum { STATS_MRTG, STATS_TOP5, STATS_DMEM, STATS_TCP, STATS_UDP, STATS_SLASH24S, SYNC_IN, SYNC_OUT };
 
 ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer, int from_changeset );
-int    add_changeset_to_tracker( ot_byte *data, size_t len );
+size_t remove_peer_from_torrent( ot_hash *hash, ot_peer *peer, char *reply, int is_tcp );
 size_t return_peers_for_torrent( ot_torrent *torrent, size_t amount, char *reply, int is_tcp );
 size_t return_fullscrape_for_tracker( char **reply );
 size_t return_tcp_scrape_for_torrent( ot_hash *hash, char *reply );
@@ -96,8 +96,9 @@ size_t return_stats_for_tracker( char *reply, int mode );
 size_t return_stats_for_slash24s( char *reply, size_t amount, ot_dword thresh );
 size_t return_memstat_for_tracker( char **reply );
 size_t return_changeset_for_tracker( char **reply );
+int    add_changeset_to_tracker( ot_byte *data, size_t len );
 void   clean_all_torrents( void );
-void   remove_peer_from_torrent( ot_hash *hash, ot_peer *peer );
+
 #if defined ( WANT_BLACKLISTING ) || defined ( WANT_CLOSED_TRACKER )
 int    accesslist_addentry( ot_hash *hash );
 void   accesslist_reset( void );

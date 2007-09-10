@@ -693,19 +693,50 @@ size_t return_stats_for_slash24s( char *reply, size_t amount, ot_dword thresh ) 
   return r - reply;
 }
 
-void remove_peer_from_torrent( ot_hash *hash, ot_peer *peer ) {
-  int          exactmatch, i;
+size_t remove_peer_from_torrent( ot_hash *hash, ot_peer *peer, char *reply, int is_tcp ) {
+  int          exactmatch;
+  size_t       peer_count, seed_count, index;
   ot_vector   *torrents_list = &all_torrents[*hash[0]];
   ot_torrent  *torrent = binary_search( hash, torrents_list->data, torrents_list->size, sizeof( ot_torrent ), OT_HASH_COMPARE_SIZE, &exactmatch );
 
-  if( !exactmatch ) return;
+  if( !exactmatch ) {
+    if( is_tcp )
+      return sprintf( reply, "d8:completei0e10:incompletei0e8:intervali%ie5:peers0:e", OT_CLIENT_REQUEST_INTERVAL_RANDOM );
 
-  for( i=0; i<OT_POOLS_COUNT; ++i )
-    switch( vector_remove_peer( &torrent->peer_list->peers[i], peer, i == 0 ) ) {
+    /* Create fake packet to satisfy parser on the other end */
+    ((ot_dword*)reply)[2] = htonl( OT_CLIENT_REQUEST_INTERVAL_RANDOM );
+    ((ot_dword*)reply)[3] = ((ot_dword*)reply)[4] = 0;
+    return (size_t)20;
+  }
+
+  for( peer_count = seed_count = index = 0; index<OT_POOLS_COUNT; ++index ) {
+    peer_count += torrent->peer_list->peers[index].size;
+    seed_count += torrent->peer_list->seed_count[index];
+
+    switch( vector_remove_peer( &torrent->peer_list->peers[index], peer, index == 0 ) ) {
       case 0: continue;
-      case 2: torrent->peer_list->seed_count[i]--;
-      case 1: default: return;
+      case 2: torrent->peer_list->seed_count[index]--;
+              seed_count--;
+      case 1: default:
+              peer_count--;
+              goto exit_loop;
     }
+  }
+
+exit_loop:
+  for( ++index; index < OT_POOLS_COUNT; ++index ) {
+    peer_count += torrent->peer_list->peers[index].size;
+    seed_count += torrent->peer_list->seed_count[index];
+  }
+
+  if( is_tcp )
+    return sprintf( reply, "d8:completei%zde10:incompletei%zde8:intervali%ie5:peers0:e", seed_count, peer_count - seed_count, OT_CLIENT_REQUEST_INTERVAL_RANDOM );
+
+  /* else { Handle UDP reply */
+  ((ot_dword*)reply)[2] = htonl( OT_CLIENT_REQUEST_INTERVAL_RANDOM );
+  ((ot_dword*)reply)[3] = peer_count - seed_count;
+  ((ot_dword*)reply)[4] = seed_count;
+  return (size_t)20;
 }
 
 int init_logic( const char * const serverdir ) {

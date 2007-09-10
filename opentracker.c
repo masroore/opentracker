@@ -441,10 +441,9 @@ ANNOUNCE_WORKAROUND:
       reply_size = sprintf( static_outbuf + SUCCESS_HTTP_HEADER_LENGTH, "d14:failure reason81:Your client forgot to send your torrent's info_hash. Please upgrade your client.e" );
       break;
     }
-    if( OT_FLAG( &peer ) & PEER_FLAG_STOPPED ) {
-      remove_peer_from_torrent( hash, &peer );
-      reply_size = sprintf( static_outbuf + SUCCESS_HTTP_HEADER_LENGTH, "d8:completei0e10:incompletei0e8:intervali%ie5:peers0:e", OT_CLIENT_REQUEST_INTERVAL_RANDOM );
-    } else {
+    if( OT_FLAG( &peer ) & PEER_FLAG_STOPPED )
+      reply_size = remove_peer_from_torrent( hash, &peer, SUCCESS_HTTP_HEADER_LENGTH + static_outbuf, 1 );
+    else {
       torrent = add_peer_to_torrent( hash, &peer, 0 );
       if( !torrent || !( reply_size = return_peers_for_torrent( torrent, numwant, SUCCESS_HTTP_HEADER_LENGTH + static_outbuf, 1 ) ) ) HTTPERROR_500;
     }
@@ -680,15 +679,9 @@ static void handle_udp4( int64 serversocket ) {
       outpacket[0] = htonl( 1 );    /* announce action */
       outpacket[1] = inpacket[12/4];
 
-      if( OT_FLAG( &peer ) & PEER_FLAG_STOPPED ) {
-        /* Peer is gone. */
-        remove_peer_from_torrent( hash, &peer );
-
-        /* Create fake packet to satisfy parser on the other end */
-        outpacket[2] = htonl( OT_CLIENT_REQUEST_INTERVAL_RANDOM );
-        outpacket[3] = outpacket[4] = 0;
-        r = 20;
-      } else {
+      if( OT_FLAG( &peer ) & PEER_FLAG_STOPPED ) /* Peer is gone. */
+        r = remove_peer_from_torrent( hash, &peer, static_outbuf, 0 );
+      else {
         torrent = add_peer_to_torrent( hash, &peer, 0 );
         if( !torrent )
           return; /* XXX maybe send error */
