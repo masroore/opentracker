@@ -311,7 +311,8 @@ size_t return_fullscrape_for_tracker( char **reply ) {
   for( i=0; i<256; ++i )
     torrent_count += all_torrents[i].size;
 
-  if( !( r = *reply = malloc( 128*torrent_count ) ) ) return 0;
+  // one extra for pro- and epilogue
+  if( !( r = *reply = malloc( 128*(1+torrent_count) ) ) ) return 0;
 
   memmove( r, "d5:filesd", 9 ); r += 9;
   for( i=0; i<256; ++i ) {
@@ -687,7 +688,7 @@ size_t return_stats_for_slash24s( char *reply, size_t amount, ot_dword thresh ) 
   for( i=0; i < amount; ++i )
     if( slash24s[ 2*i ] >= thresh ) {
       unsigned long ip = slash24s[ 2*i +1 ];
-      r += sprintf( r, "% 10ld %d.%d.%d/24\n", (long)slash24s[ 2*i ], (int)(ip >> 16), (int)(255 & ( ip >> 8 )), (int)(ip & 255) );
+      r += sprintf( r, "% 10ld %d.%d.%d.0/24\n", (long)slash24s[ 2*i ], (int)(ip >> 16), (int)(255 & ( ip >> 8 )), (int)(ip & 255) );
     }
 
   return r - reply;
