@@ -281,6 +281,8 @@ static void httpresponse( const int64 s, char *data ) {
           mode = STATS_UDP;
         else if( !byte_diff(data,4,"s24s"))
           mode = STATS_SLASH24S;
+        else if( !byte_diff(data,4,"s24S"))
+          mode = STATS_SLASH24S_OLD;
         else
           HTTPERROR_400_PARAM;
       }
@@ -312,8 +314,21 @@ static void httpresponse( const int64 s, char *data ) {
           if( !( reply_size = return_stats_for_tracker( SUCCESS_HTTP_HEADER_LENGTH + static_outbuf, mode ) ) ) HTTPERROR_500;
           break;
         case STATS_SLASH24S:
-          if( !( reply_size = return_stats_for_slash24s( SUCCESS_HTTP_HEADER_LENGTH + static_outbuf, 25, 64 ) ) ) HTTPERROR_500;
+{
+          ot_dword diff; struct timeval tv1, tv2; gettimeofday( &tv1, NULL );
+          if( !( reply_size = return_stats_for_slash24s( SUCCESS_HTTP_HEADER_LENGTH + static_outbuf, 25, 16 ) ) ) HTTPERROR_500;
+          gettimeofday( &tv2, NULL ); diff = ( tv2.tv_sec - tv1.tv_sec ) * 1000000 + tv2.tv_usec - tv1.tv_usec;
+          reply_size += sprintf( SUCCESS_HTTP_HEADER_LENGTH + static_outbuf + reply_size, "Time taken: %ld\n", diff );
           break;
+}
+        case STATS_SLASH24S_OLD:
+{
+          ot_dword diff; struct timeval tv1, tv2; gettimeofday( &tv1, NULL );
+          if( !( reply_size = return_stats_for_slash24s_old( SUCCESS_HTTP_HEADER_LENGTH + static_outbuf, 25, 16 ) ) ) HTTPERROR_500;
+          gettimeofday( &tv2, NULL ); diff = ( tv2.tv_sec - tv1.tv_sec ) * 1000000 + tv2.tv_usec - tv1.tv_usec;
+          reply_size += sprintf( SUCCESS_HTTP_HEADER_LENGTH + static_outbuf + reply_size, "Time taken: %ld\n", diff );
+          break;
+}
       }
     break;
 

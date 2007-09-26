@@ -641,7 +641,93 @@ size_t return_stats_for_tracker( char *reply, int mode ) {
   return r - reply;
 }
 
+/* This function collects 4096 /24s in 4096 possible
+   malloc blocks
+*/
 size_t return_stats_for_slash24s( char *reply, size_t amount, ot_dword thresh ) {
+
+#define NUM_TOPBITS 12
+#define NUM_LOWBITS (24-NUM_TOPBITS)
+#define NUM_BUFS    (1<<NUM_TOPBITS)
+#define NUM_S24S    (1<<NUM_LOWBITS)
+#define MSK_S24S    (NUM_S24S-1)
+
+  ot_dword *counts[ NUM_BUFS ];
+  ot_dword slash24s[amount*2];  /* first dword amount, second dword subnet */
+  size_t i, j, k, l;
+  char     *r  = reply;
+
+  byte_zero( counts, sizeof( counts ) );
+  byte_zero( slash24s, amount * 2 * sizeof(ot_dword) );
+
+  r += sprintf( r, "Stats for all /24s with more than %ld announced torrents:\n\n", thresh );
+
+  for( i=0; i<256; ++i ) {
+    ot_vector *torrents_list = &all_torrents[i];
+    for( j=0; j<torrents_list->size; ++j ) {
+      ot_peerlist *peer_list = ( ((ot_torrent*)(torrents_list->data))[j] ).peer_list;
+      for( k=0; k<OT_POOLS_COUNT; ++k ) {
+        ot_peer *peers =    peer_list->peers[k].data;
+        size_t   numpeers = peer_list->peers[k].size;
+        for( l=0; l<numpeers; ++l ) {
+          ot_dword s24 = ntohl(*(ot_dword*)(peers+l)) >> 8;
+          ot_dword *count = counts[ s24 >> NUM_LOWBITS ];
+          if( !count ) {
+            count = malloc( sizeof(ot_dword) * NUM_S24S );
+            if( !count )
+              goto bailout_cleanup;
+            byte_zero( count, sizeof( ot_dword ) * NUM_S24S );
+            counts[ s24 >> NUM_LOWBITS ] = count;
+          }
+          count[ s24 & MSK_S24S ]++;
+        }
+      }
+    }
+  }
+
+  k = l = 0; /* Debug: count allocated bufs */
+  for( i=0; i < NUM_BUFS; ++i ) {
+    ot_dword *count = counts[i];
+    if( !counts[i] )
+      continue;
+    ++k; /* Debug: count allocated bufs */
+    for( j=0; j < NUM_S24S; ++j ) {
+      if( count[j] > thresh ) {
+        /* This subnet seems to announce more torrents than the last in our list */
+        int insert_pos = amount - 1;
+        while( ( insert_pos >= 0 ) && ( count[j] > slash24s[ 2 * insert_pos ] ) )
+          --insert_pos;
+        ++insert_pos;
+        memmove( slash24s + 2 * ( insert_pos + 1 ), slash24s + 2 * ( insert_pos ), 2 * sizeof( ot_dword ) * ( amount - insert_pos - 1 ) );
+        slash24s[ 2 * insert_pos     ] = count[j];
+        slash24s[ 2 * insert_pos + 1 ] = ( i << NUM_TOPBITS ) + j;
+        if( slash24s[ 2 * amount - 2 ] > thresh )
+          thresh = slash24s[ 2 * amount - 2 ];
+      }
+      if( count[j] ) ++l;
+    }
+    free( count );
+  }
+
+  r += sprintf( r, "Allocated bufs: %zd, used s24s: %zd\n", k, l );
+
+  for( i=0; i < amount; ++i )
+    if( slash24s[ 2*i ] >= thresh ) {
+      ot_dword ip = slash24s[ 2*i +1 ];
+      r += sprintf( r, "% 10ld %d.%d.%d.0/24\n", (long)slash24s[ 2*i ], (int)(ip >> 16), (int)(255 & ( ip >> 8 )), (int)(ip & 255) );
+    }
+
+  return r - reply;
+
+bailout_cleanup:
+
+  for( i=0; i < NUM_BUFS; ++i )
+    free( counts[i] );
+
+  return 0;
+}
+
+size_t return_stats_for_slash24s_old( char *reply, size_t amount, ot_dword thresh ) {
   ot_word *count = malloc( 0x1000000 * sizeof(ot_word) );
   ot_dword slash24s[amount*2];  /* first dword amount, second dword subnet */
   size_t i, j, k, l;
