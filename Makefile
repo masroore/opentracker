@@ -14,10 +14,10 @@ all: $(BINARY) $(BINARY).debug
 CFLAGS_production = $(CFLAGS) $(OPTS_production) $(FEATURES)
 CFLAGS_debug = $(CFLAGS) $(OPTS_debug) $(FEATURES)
 
-$(BINARY): $(OBJECTS_production)
-	$(CC) $? -o $@ $(SOURCES) $(CFLAGS_production) $(LDFLAGS)
-$(BINARY).debug: $(OBJECTS_debug)
-	$(CC) $? -o $@ $(SOURCES) $(CFLAGS_debug) $(LDFLAGS)
+$(BINARY): $(SOURCES) $(HEADERS)
+	$(CC) -o $@ $(SOURCES) $(CFLAGS_production) $(LDFLAGS)
+$(BINARY).debug: $(SOURCES) $(HEADERS)
+	$(CC) -o $@ $(SOURCES) $(CFLAGS_debug) $(LDFLAGS)
  
 clean:
 	rm -rf opentracker opentracker.debug *.o *~
