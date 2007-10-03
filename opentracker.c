@@ -473,7 +473,7 @@ ANNOUNCE_WORKAROUND:
     t = time( NULL ) - ot_start_time;
     reply_size = sprintf( static_outbuf + SUCCESS_HTTP_HEADER_LENGTH,
                           "%llu\n%llu\n%i seconds (%i hours)\nopentracker - Pretuned by german engineers, currently handling %llu connections per second.",
-                          ot_overall_tcp_connections+ot_overall_udp_connections, ot_overall_tcp_successfulannounces+ot_overall_udp_successfulannounces, (int)t, (int)(t / 3600), ot_overall_tcp_connections / ( (unsigned int)t ? (unsigned int)t : 1 ) );
+                          ot_overall_tcp_connections+ot_overall_udp_connections, ot_overall_tcp_successfulannounces+ot_overall_udp_successfulannounces, (int)t, (int)(t / 3600), (ot_overall_tcp_connections+ot_overall_udp_connections) / ( (unsigned int)t ? (unsigned int)t : 1 ) );
     break;
   case 12:
     if( byte_diff( data, 12, "announce.php" ) ) HTTPERROR_404;
