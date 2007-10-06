@@ -550,8 +550,17 @@ void clean_all_torrents( void ) {
       }
 
       /* If nothing to be cleaned here, handle next torrent */
-      if( timedout > OT_POOLS_COUNT )
-        continue;
+      if( timedout > OT_POOLS_COUNT ) {
+
+        peers_count = 0;
+        for( k = 0; k < OT_POOLS_COUNT; ++k )
+          peers_count += peer_list->peers[k].size;
+
+        if( !peers_count )
+          continue;
+
+        timedout = OT_POOLS_COUNT;
+      }
 
       /* Release vectors that have timed out */
       for( k = OT_POOLS_COUNT - timedout; k < OT_POOLS_COUNT; ++k )
