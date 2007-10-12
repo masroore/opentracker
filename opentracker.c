@@ -318,7 +318,7 @@ static void httpresponse( const int64 s, char *data ) {
           ot_dword diff; struct timeval tv1, tv2; gettimeofday( &tv1, NULL );
           if( !( reply_size = return_stats_for_slash24s( SUCCESS_HTTP_HEADER_LENGTH + static_outbuf, 25, 16 ) ) ) HTTPERROR_500;
           gettimeofday( &tv2, NULL ); diff = ( tv2.tv_sec - tv1.tv_sec ) * 1000000 + tv2.tv_usec - tv1.tv_usec;
-          reply_size += sprintf( SUCCESS_HTTP_HEADER_LENGTH + static_outbuf + reply_size, "Time taken: %ld\n", diff );
+          reply_size += sprintf( SUCCESS_HTTP_HEADER_LENGTH + static_outbuf + reply_size, "Time taken: %u\n", diff );
           break;
 }
         case STATS_SLASH24S_OLD:
@@ -326,7 +326,7 @@ static void httpresponse( const int64 s, char *data ) {
           ot_dword diff; struct timeval tv1, tv2; gettimeofday( &tv1, NULL );
           if( !( reply_size = return_stats_for_slash24s_old( SUCCESS_HTTP_HEADER_LENGTH + static_outbuf, 25, 16 ) ) ) HTTPERROR_500;
           gettimeofday( &tv2, NULL ); diff = ( tv2.tv_sec - tv1.tv_sec ) * 1000000 + tv2.tv_usec - tv1.tv_usec;
-          reply_size += sprintf( SUCCESS_HTTP_HEADER_LENGTH + static_outbuf + reply_size, "Time taken: %ld\n", diff );
+          reply_size += sprintf( SUCCESS_HTTP_HEADER_LENGTH + static_outbuf + reply_size, "Time taken: %u\n", diff );
           break;
 }
       }

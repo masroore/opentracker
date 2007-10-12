@@ -669,7 +669,7 @@ size_t return_stats_for_slash24s( char *reply, size_t amount, ot_dword thresh ) 
   byte_zero( counts, sizeof( counts ) );
   byte_zero( slash24s, amount * 2 * sizeof(ot_dword) );
 
-  r += sprintf( r, "Stats for all /24s with more than %ld announced torrents:\n\n", thresh );
+  r += sprintf( r, "Stats for all /24s with more than %u announced torrents:\n\n", thresh );
 
   for( i=0; i<256; ++i ) {
     ot_vector *torrents_list = &all_torrents[i];

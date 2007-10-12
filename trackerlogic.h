@@ -11,9 +11,9 @@
 /* Should be called BYTE, WORD, DWORD - but some OSs already have that and there's no #iftypedef */
 /* They mark memory used as data instead of integer or human readable string -
    they should be cast before used as integer/text */
-typedef unsigned char  ot_byte;
-typedef unsigned short ot_word;
-typedef unsigned long  ot_dword;
+typedef uint8_t  ot_byte;
+typedef uint16_t ot_word;
+typedef uint32_t ot_dword;
 
 typedef ot_byte        ot_hash[20];
 typedef ot_dword       ot_ip;
