@@ -728,11 +728,9 @@ static void server_mainloop( ) {
   time_t next_timeout_check = g_now + OT_CLIENT_TIMEOUT_CHECKINTERVAL;
 
   for( ; ; ) {
-    tai6464 t;
     int64 i;
 
-    taia_uint( &t, (unsigned int)(g_now + OT_CLIENT_TIMEOUT_CHECKINTERVAL) );
-    io_waituntil( t );
+    io_wait();
 
     while( ( i = io_canread( ) ) != -1 ) {
       const void *cookie = io_getcookie( i );
