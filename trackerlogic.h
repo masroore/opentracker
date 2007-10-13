@@ -7,6 +7,7 @@
 #include <sys/types.h>
 #include <sys/time.h>
 #include <time.h>
+#include <stdint.h>
 
 /* Should be called BYTE, WORD, DWORD - but some OSs already have that and there's no #iftypedef */
 /* They mark memory used as data instead of integer or human readable string -
@@ -39,7 +40,9 @@ typedef time_t         ot_time;
 
 #define OT_POOLS_COUNT   9
 #define OT_POOLS_TIMEOUT (60*5)
-#define NOW              (time(NULL)/OT_POOLS_TIMEOUT)
+
+extern  time_t g_now;
+#define NOW              (g_now/OT_POOLS_TIMEOUT)
 
 #define OT_VECTOR_MIN_MEMBERS   16
 #define OT_VECTOR_GROW_RATIO    4

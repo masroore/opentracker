@@ -38,6 +38,7 @@ static time_t ot_start_time;
 static const size_t SUCCESS_HTTP_HEADER_LENGTH = 80;
 static const size_t SUCCESS_HTTP_SIZE_OFF = 17;
 static char g_adminip[4] = {0,0,0,0};
+time_t g_now;
 
 #if defined ( WANT_BLACKLISTING ) && defined (WANT_CLOSED_TRACKER )
   #error WANT_BLACKLISTING and WANT_CLOSED_TRACKER are exclusive.
@@ -93,7 +94,7 @@ static void help( char *name );
 
 static void carp( const char *routine );
 static void panic( const char *routine );
-static void graceful( int s );
+static void signal_handler( int s );
 
 #define HTTPERROR_400         return httperror( s, "400 Invalid Request",       "This server only understands GET." )
 #define HTTPERROR_400_PARAM   return httperror( s, "400 Invalid Request",       "Invalid parameter" )
@@ -503,11 +504,14 @@ ANNOUNCE_WORKAROUND:
   senddata( s, static_outbuf + reply_off, reply_size );
 }
 
-static void graceful( int s ) {
+static void signal_handler( int s ) {
   if( s == SIGINT ) {
     signal( SIGINT, SIG_IGN);
     deinit_logic();
     exit( 0 );
+  } else if( s == SIGALRM ) {
+    g_now = time(NULL);
+    alarm(5);
   }
 }
 
@@ -612,8 +616,7 @@ static void handle_accept( const int64 serversocket ) {
 
     ++ot_overall_tcp_connections;
 
-    taia_now( &t );
-    taia_addsec( &t, &t, OT_CLIENT_TIMEOUT );
+    taia_uint( &t, (unsigned int)(g_now + OT_CLIENT_TIMEOUT) );
     io_timeout( i, t );
   }
 
@@ -722,15 +725,13 @@ static void handle_udp4( int64 serversocket ) {
 }
 
 static void server_mainloop( ) {
-  tai6464 t, next_timeout_check;
-
-  taia_now( &next_timeout_check );
+  time_t next_timeout_check = g_now + OT_CLIENT_TIMEOUT_CHECKINTERVAL;
 
   for( ; ; ) {
+    tai6464 t;
     int64 i;
 
-    taia_now( &t );
-    taia_addsec( &t, &t, OT_CLIENT_TIMEOUT_CHECKINTERVAL );
+    taia_uint( &t, (unsigned int)(g_now + OT_CLIENT_TIMEOUT_CHECKINTERVAL) );
     io_waituntil( t );
 
     while( ( i = io_canread( ) ) != -1 ) {
@@ -746,11 +747,9 @@ static void server_mainloop( ) {
     while( ( i = io_canwrite( ) ) != -1 )
       handle_write( i );
 
-    taia_now( &t );
-    if( taia_less( &next_timeout_check, &t ) ) {
+    if( g_now > next_timeout_check ) {
       handle_timeouted( );
-      taia_now( &next_timeout_check );
-      taia_addsec( &next_timeout_check, &next_timeout_check, OT_CLIENT_TIMEOUT_CHECKINTERVAL);
+      next_timeout_check = g_now + OT_CLIENT_TIMEOUT_CHECKINTERVAL;
     }
 
     /* See if we need to move our pools */
@@ -874,13 +873,14 @@ int main( int argc, char **argv ) {
 #endif
 
   signal( SIGPIPE, SIG_IGN );
-  signal( SIGINT,  graceful );
-  signal( SIGALRM, SIG_IGN );
+  signal( SIGINT,  signal_handler );
+  signal( SIGALRM, signal_handler );
 
   if( init_logic( serverdir ) == -1 )
     panic( "Logic not started" );
 
-  ot_start_time = time( NULL );
+  g_now = ot_start_time = time( NULL );
+  alarm(5);
 
   server_mainloop( );
 
