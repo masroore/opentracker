@@ -296,7 +296,7 @@ LOG_TO_STDERR( "sync: %d.%d.%d.%d\n", h->ip[0], h->ip[1], h->ip[2], h->ip[3] );
       switch( mode)
       {
         case STATS_DMEM:
-LOG_TO_STDERR( "stats: %d.%d.%d.%d - mode: dmem", h->ip[0], h->ip[1], h->ip[2], h->ip[3] );
+LOG_TO_STDERR( "stats: %d.%d.%d.%d - mode: dmem\n", h->ip[0], h->ip[1], h->ip[2], h->ip[3] );
 
           if( !( reply_size = return_memstat_for_tracker( &reply ) ) ) HTTPERROR_500;
           return sendmallocdata( s, reply, reply_size );
@@ -322,7 +322,7 @@ LOG_TO_STDERR( "stats: %d.%d.%d.%d - mode: dmem", h->ip[0], h->ip[1], h->ip[2], 
           break;
         case STATS_SLASH24S:
 {
-LOG_TO_STDERR( "stats: %d.%d.%d.%d - mode: s24s", h->ip[0], h->ip[1], h->ip[2], h->ip[3] );
+LOG_TO_STDERR( "stats: %d.%d.%d.%d - mode: s24s\n", h->ip[0], h->ip[1], h->ip[2], h->ip[3] );
 
           ot_dword diff; struct timeval tv1, tv2; gettimeofday( &tv1, NULL );
           if( !( reply_size = return_stats_for_slash24s( SUCCESS_HTTP_HEADER_LENGTH + static_outbuf, 25, 16 ) ) ) HTTPERROR_500;
@@ -332,7 +332,7 @@ LOG_TO_STDERR( "stats: %d.%d.%d.%d - mode: s24s", h->ip[0], h->ip[1], h->ip[2], 
 }
         case STATS_SLASH24S_OLD:
 {
-LOG_TO_STDERR( "stats: %d.%d.%d.%d - mode: s24s old", h->ip[0], h->ip[1], h->ip[2], h->ip[3] );
+LOG_TO_STDERR( "stats: %d.%d.%d.%d - mode: s24s old\n", h->ip[0], h->ip[1], h->ip[2], h->ip[3] );
 
           ot_dword diff; struct timeval tv1, tv2; gettimeofday( &tv1, NULL );
           if( !( reply_size = return_stats_for_slash24s_old( SUCCESS_HTTP_HEADER_LENGTH + static_outbuf, 25, 16 ) ) ) HTTPERROR_500;
@@ -371,7 +371,7 @@ SCRAPE_WORKAROUND:
 
     /* Scanned whole query string, no hash means full scrape... you might want to limit that */
     if( !hash ) {
-LOG_TO_STDERR( "scrp: %d.%d.%d.%d - FULL SCRAPE", h->ip[0], h->ip[1], h->ip[2], h->ip[3] );
+LOG_TO_STDERR( "scrp: %d.%d.%d.%d - FULL SCRAPE\n", h->ip[0], h->ip[1], h->ip[2], h->ip[3] );
 
       if( !( reply_size = return_fullscrape_for_tracker( &reply ) ) ) HTTPERROR_500;
       ot_overall_tcp_successfulannounces++;
