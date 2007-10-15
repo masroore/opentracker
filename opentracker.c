@@ -48,6 +48,8 @@ static char *accesslist_filename = NULL;
 #define WANT_ACCESS_CONTROL
 #endif
 
+#define LOG_TO_STDERR( ... ) fprintf( stderr, __VA_ARGS__ )
+
 /* To always have space for error messages ;) */
 
 static char static_inbuf[8192];
@@ -220,6 +222,8 @@ static void httpresponse( const int64 s, char *data ) {
     if( byte_diff( data, 4, "sync") ) HTTPERROR_404;
     if( !h->blessed ) HTTPERROR_403_IP;
 
+LOG_TO_STDERR( "sync: %d.%d.%d.%d\n", h->ip[0], h->ip[1], h->ip[2], h->ip[3] );
+
     mode = SYNC_OUT;
     scanon = 1;
 
@@ -292,6 +296,8 @@ static void httpresponse( const int64 s, char *data ) {
       switch( mode)
       {
         case STATS_DMEM:
+LOG_TO_STDERR( "stats: %d.%d.%d.%d - mode: dmem", h->ip[0], h->ip[1], h->ip[2], h->ip[3] );
+
           if( !( reply_size = return_memstat_for_tracker( &reply ) ) ) HTTPERROR_500;
           return sendmallocdata( s, reply, reply_size );
           
@@ -316,6 +322,8 @@ static void httpresponse( const int64 s, char *data ) {
           break;
         case STATS_SLASH24S:
 {
+LOG_TO_STDERR( "stats: %d.%d.%d.%d - mode: s24s", h->ip[0], h->ip[1], h->ip[2], h->ip[3] );
+
           ot_dword diff; struct timeval tv1, tv2; gettimeofday( &tv1, NULL );
           if( !( reply_size = return_stats_for_slash24s( SUCCESS_HTTP_HEADER_LENGTH + static_outbuf, 25, 16 ) ) ) HTTPERROR_500;
           gettimeofday( &tv2, NULL ); diff = ( tv2.tv_sec - tv1.tv_sec ) * 1000000 + tv2.tv_usec - tv1.tv_usec;
@@ -324,6 +332,8 @@ static void httpresponse( const int64 s, char *data ) {
 }
         case STATS_SLASH24S_OLD:
 {
+LOG_TO_STDERR( "stats: %d.%d.%d.%d - mode: s24s old", h->ip[0], h->ip[1], h->ip[2], h->ip[3] );
+
           ot_dword diff; struct timeval tv1, tv2; gettimeofday( &tv1, NULL );
           if( !( reply_size = return_stats_for_slash24s_old( SUCCESS_HTTP_HEADER_LENGTH + static_outbuf, 25, 16 ) ) ) HTTPERROR_500;
           gettimeofday( &tv2, NULL ); diff = ( tv2.tv_sec - tv1.tv_sec ) * 1000000 + tv2.tv_usec - tv1.tv_usec;
@@ -361,6 +371,8 @@ SCRAPE_WORKAROUND:
 
     /* Scanned whole query string, no hash means full scrape... you might want to limit that */
     if( !hash ) {
+LOG_TO_STDERR( "scrp: %d.%d.%d.%d - FULL SCRAPE", h->ip[0], h->ip[1], h->ip[2], h->ip[3] );
+
       if( !( reply_size = return_fullscrape_for_tracker( &reply ) ) ) HTTPERROR_500;
       ot_overall_tcp_successfulannounces++;
       return sendmallocdata( s, reply, reply_size );
