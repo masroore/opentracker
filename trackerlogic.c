@@ -325,9 +325,11 @@ size_t return_fullscrape_for_tracker( char **reply ) {
         peers += peer_list->peers[k].size;
         seeds += peer_list->seed_count[k];
       }
-      *r++='2'; *r++='0'; *r++=':';
-      memmove( r, hash, 20 ); r+=20;
-      r += sprintf( r, "d8:completei%zde10:downloadedi%zde10:incompletei%zdee", seeds, peer_list->downloaded, peers-seeds );
+      if( peers ) {
+        *r++='2'; *r++='0'; *r++=':';
+        memmove( r, hash, 20 ); r+=20;
+        r += sprintf( r, "d8:completei%zde10:downloadedi%zde10:incompletei%zdee", seeds, peer_list->downloaded, peers-seeds );
+      }
     }
   }
 

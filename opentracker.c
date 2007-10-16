@@ -374,6 +374,7 @@ SCRAPE_WORKAROUND:
 LOG_TO_STDERR( "scrp: %d.%d.%d.%d - FULL SCRAPE\n", h->ip[0], h->ip[1], h->ip[2], h->ip[3] );
 
       if( !( reply_size = return_fullscrape_for_tracker( &reply ) ) ) HTTPERROR_500;
+      if( (c = realloc( reply, reply_size ) ) ) reply = c;
       ot_overall_tcp_successfulannounces++;
       return sendmallocdata( s, reply, reply_size );
     }
