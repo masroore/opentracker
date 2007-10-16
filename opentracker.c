@@ -48,7 +48,11 @@ static char *accesslist_filename = NULL;
 #define WANT_ACCESS_CONTROL
 #endif
 
+#ifndef NO_FULLSCRAPE_LOGGING
 #define LOG_TO_STDERR( ... ) fprintf( stderr, __VA_ARGS__ )
+#else
+#define LOG_TO_STDERR( ... )
+#endif
 
 /* To always have space for error messages ;) */
 
@@ -150,8 +154,9 @@ static void sendmallocdata( const int64 s, char *buffer, size_t size ) {
   iob_addbuf_free( &h->batch, header, header_size );
   iob_addbuf_free( &h->batch, buffer, size );
 
-  /* writeable sockets just have a tcp timeout */
-  taia_uint( &t, 0 ); io_timeout( s, t );
+  /* writeable sockets timeout after twice the pool timeout
+     which defaults to 5 minutes (e.g. after 10 minutes) */
+  taia_uint( &t, 2 * OT_POOLS_TIMEOUT ); io_timeout( s, t );
   io_dontwantread( s );
   io_wantwrite( s );
 }
@@ -180,8 +185,9 @@ static void senddata( const int64 s, char *buffer, size_t size ) {
     memmove( outbuf, buffer + written_size, size - written_size );
     iob_addbuf_free( &h->batch, outbuf, size - written_size );
 
-    /* writeable sockets just have a tcp timeout */
-    taia_uint( &t, 0 ); io_timeout( s, t );
+    /* writeable sockets timeout after twice the pool timeout
+       which defaults to 5 minutes (e.g. after 10 minutes) */
+    taia_uint( &t, 2 * OT_POOLS_TIMEOUT ); io_timeout( s, t );
     io_dontwantread( s );
     io_wantwrite( s );
   }
