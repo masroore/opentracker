@@ -312,7 +312,7 @@ size_t return_fullscrape_for_tracker( char **reply ) {
     torrent_count += all_torrents[i].size;
 
   // one extra for pro- and epilogue
-  if( !( r = *reply = malloc( 128*(1+torrent_count) ) ) ) return 0;
+  if( !( r = *reply = malloc( 100*(1+torrent_count) ) ) ) return 0;
 
   memmove( r, "d5:filesd", 9 ); r += 9;
   for( i=0; i<256; ++i ) {
@@ -325,7 +325,7 @@ size_t return_fullscrape_for_tracker( char **reply ) {
         peers += peer_list->peers[k].size;
         seeds += peer_list->seed_count[k];
       }
-      if( peers ) {
+      if( peers || peer_list->downloaded ) {
         *r++='2'; *r++='0'; *r++=':';
         memmove( r, hash, 20 ); r+=20;
         r += sprintf( r, "d8:completei%zde10:downloadedi%zde10:incompletei%zdee", seeds, peer_list->downloaded, peers-seeds );
@@ -548,7 +548,7 @@ void clean_all_torrents( void ) {
       /* Torrent has idled out */
       if( timedout > OT_TORRENT_TIMEOUT ) {
         vector_remove_torrent( torrents_list, hash );
-        --j;
+        --j; continue;
       }
 
       /* If nothing to be cleaned here, handle next torrent */
@@ -558,8 +558,13 @@ void clean_all_torrents( void ) {
         for( k = 0; k < OT_POOLS_COUNT; ++k )
           peers_count += peer_list->peers[k].size;
 
-        if( !peers_count )
+        if( !peers_count ) {
+          if( !peer_list->downloaded ) {
+            vector_remove_torrent( torrents_list, hash );
+            --j;
+          }
           continue;
+        }
 
         timedout = OT_POOLS_COUNT;
       }
