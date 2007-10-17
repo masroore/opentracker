@@ -156,7 +156,7 @@ static void sendmmapdata( const int64 s, char *buffer, size_t size ) {
 
   /* writeable sockets timeout after twice the pool timeout
      which defaults to 5 minutes (e.g. after 10 minutes) */
-  taia_uint( &t, 2 * OT_POOLS_TIMEOUT ); io_timeout( s, t );
+  taia_uint( &t, (unsigned int)(g_now + 2 * OT_POOLS_TIMEOUT) ); io_timeout( s, t );
   io_dontwantread( s );
   io_wantwrite( s );
 }
@@ -187,7 +187,7 @@ static void senddata( const int64 s, char *buffer, size_t size ) {
 
     /* writeable sockets timeout after twice the pool timeout
        which defaults to 5 minutes (e.g. after 10 minutes) */
-    taia_uint( &t, 2 * OT_POOLS_TIMEOUT ); io_timeout( s, t );
+    taia_uint( &t, (unsigned int)(g_now + 2 * OT_POOLS_TIMEOUT) ); io_timeout( s, t );
     io_dontwantread( s );
     io_wantwrite( s );
   }
