@@ -650,6 +650,7 @@ static void handle_timeouted( void ) {
       array_reset( &h->request );
       free( h );
     }
+    iob_reset( &h->batch );
     io_close(i);
   }
 }
