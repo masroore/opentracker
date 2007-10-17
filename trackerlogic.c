@@ -27,8 +27,8 @@ static ot_vector accesslist;
 #define WANT_ACCESS_CONTROL
 #endif
 
-size_t changeset_size = 0;
-time_t last_clean_time = 0;
+static size_t changeset_size = 0;
+static time_t last_clean_time = 0;
 
 /* Converter function from memory to human readable hex strings
    - definitely not thread safe!!!
@@ -305,14 +305,16 @@ size_t return_peers_for_torrent( ot_torrent *torrent, size_t amount, char *reply
 /* Fetch full scrape info for all torrents */
 size_t return_fullscrape_for_tracker( char **reply ) {
   size_t torrent_count = 0, j;
+  size_t allocated, replysize, usedpages;
   int    i, k;
   char  *r;
 
   for( i=0; i<256; ++i )
     torrent_count += all_torrents[i].size;
 
-  // one extra for pro- and epilogue
-  if( !( r = *reply = malloc( 100*(1+torrent_count) ) ) ) return 0;
+  /* one extra for pro- and epilogue */
+  allocated = 100*(1+torrent_count);
+  if( !( r = *reply = mmap( NULL, allocated, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, -1, 0 ) ) ) return 0;
 
   memmove( r, "d5:filesd", 9 ); r += 9;
   for( i=0; i<256; ++i ) {
@@ -334,11 +336,19 @@ size_t return_fullscrape_for_tracker( char **reply ) {
   }
 
   *r++='e'; *r++='e';
-  return r - *reply;
+
+  replysize = ( r - *reply );
+  if( allocated > replysize ) {
+    usedpages = 1 + ( replysize / getpagesize() );
+    munmap( *reply + usedpages * getpagesize(), allocated - replysize );
+  }
+
+  return replysize;
 }
 
 size_t return_memstat_for_tracker( char **reply ) {
   size_t torrent_count = 0, j;
+  size_t allocated, replysize, usedpages;
   int    i, k;
   char  *r;
 
@@ -347,7 +357,8 @@ size_t return_memstat_for_tracker( char **reply ) {
     torrent_count += torrents_list->size;
   }
 
-  if( !( r = *reply = malloc( 256*32 + (43+OT_POOLS_COUNT*32)*torrent_count ) ) ) return 0;
+  allocated = 256*32 + (43+OT_POOLS_COUNT*32)*torrent_count;
+  if( !( r = *reply = mmap( NULL, allocated, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, -1, 0 ) ) ) return 0;
 
   for( i=0; i<256; ++i )
     r += sprintf( r, "%02X: %08X %08X\n", i, (unsigned int)all_torrents[i].size, (unsigned int)all_torrents[i].space );
@@ -363,7 +374,13 @@ size_t return_memstat_for_tracker( char **reply ) {
     }
   }
 
-  return r - *reply;
+  replysize = ( r - *reply );
+  if( allocated > replysize ) {
+    usedpages = 1 + ( replysize / getpagesize() );
+    munmap( *reply + usedpages * getpagesize(), allocated - replysize );
+  }
+
+  return replysize;
 }
 
 /* Fetches scrape info for a specific torrent */
@@ -506,9 +523,7 @@ size_t return_changeset_for_tracker( char **reply ) {
 
   clean_all_torrents();
 
-  *reply = malloc( 8 + changeset_size + 2 );
-  if( !*reply )
-    return 0;
+  if( !( *reply = mmap( NULL, 8 + changeset_size + 2, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, -1, 0 ) ) ) return 0;
 
   memmove( *reply, "d4:syncd", 8 );
   for( i = 0; i < changeset.size; ++i ) {
