@@ -25,10 +25,10 @@ static const unsigned char is_unreserved[256] = {
   0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
 };
 
-static unsigned char fromhex(unsigned char c) {
-  if (c>='0' && c<='9') return c-'0';
-  c &= 0xdf; /* Toggle off lower case bit */
-  if (c>='A' && c<='F') return c-'A'+10;
+static unsigned char fromhex(unsigned char x) {
+  x-='0'; if( x<=9) return x;
+  x&=~0x20; x-='A'-'0';
+  if( x<6 ) return x+10;
   return 0xff;
 }
 
