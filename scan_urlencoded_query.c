@@ -15,10 +15,10 @@
 */
 
 static const unsigned char is_unreserved[256] = {
-  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-  0,1,0,0,0,1,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1,0,
-  0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,1,
-  0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,1,0,
+  8,0,0,0,0,0,0,0,0,0,8,0,0,8,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+  8,7,0,0,0,7,0,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,0,7,6,
+  0,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,0,0,0,0,7,
+  0,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,0,0,0,7,0,
   0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
   0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
   0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
@@ -32,31 +32,35 @@ static unsigned char fromhex(unsigned char x) {
   return 0xff;
 }
 
-ssize_t scan_urlencoded_query(char **string, char *deststring, int flags) {
+void scan_urlencoded_skipvalue( char **string ) {
+  const unsigned char* s=*(const unsigned char**) string;
+  unsigned char f;
+
+  while( ( f = is_unreserved[ *s++ ] ) & SCAN_SEARCHPATH_VALUE );
+  if( f & SCAN_SEARCHPATH_TERMINATOR ) --s;
+  *string = (char*)s;
+}
+
+ssize_t scan_urlencoded_query(char **string, char *deststring, SCAN_SEARCHPATH_FLAG flags) {
   const unsigned char* s=*(const unsigned char**) string;
   unsigned char *d = (unsigned char*)deststring;
-  register unsigned char b, c;
+  unsigned char b, c, f;
 
-retry_parsing:
-  while( is_unreserved[ c = *s++ ] ) {
+  while( ( f = is_unreserved[ c = *s++ ] ) & flags ) {
     if( c=='%') {
       if( ( b = fromhex(*s++) ) == 0xff ) return -1;
       if( ( c = fromhex(*s++) ) == 0xff ) return -1;
       c|=(b<<4);
     }
-    if( d ) *d++ = c;
+    *d++ = c;
   }
 
   switch( c ) {
   case 0: case '\r': case '\n': case ' ':
-    if( d && ( d == (unsigned char*)deststring ) ) return -2;
+    if( d == (unsigned char*)deststring ) return -2;
     --s;
     break;
   case '?':
-    if( flags != SCAN_PATH ) {
-      if( d ) *d++ = c;
-      goto retry_parsing;
-    }
     break;
   case '=':
     if( flags != SCAN_SEARCHPATH_PARAM ) return -1;

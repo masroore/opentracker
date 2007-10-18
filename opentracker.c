@@ -237,10 +237,10 @@ LOG_TO_STDERR( "sync: %d.%d.%d.%d\n", h->ip[0], h->ip[1], h->ip[2], h->ip[3] );
       switch( scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_PARAM ) ) {
       case -2: scanon = 0; break;   /* TERMINATOR */
       case -1: HTTPERROR_400_PARAM; /* PARSE ERROR */
-      default: scan_urlencoded_query( &c, NULL, SCAN_SEARCHPATH_VALUE ); break;
+      default: scan_urlencoded_skipvalue( &c ); break;
       case 9:
         if(byte_diff(data,9,"changeset")) {
-          scan_urlencoded_query( &c, NULL, SCAN_SEARCHPATH_VALUE );
+          scan_urlencoded_skipvalue( &c );
           continue;
         }
         /* ignore this, when we dont at least see "d4:syncdee" */
@@ -273,10 +273,10 @@ LOG_TO_STDERR( "sync: %d.%d.%d.%d\n", h->ip[0], h->ip[1], h->ip[2], h->ip[3] );
       switch( scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_PARAM ) ) {
       case -2: scanon = 0; break;   /* TERMINATOR */
       case -1: HTTPERROR_400_PARAM; /* PARSE ERROR */
-      default: scan_urlencoded_query( &c, NULL, SCAN_SEARCHPATH_VALUE ); break;
+      default: scan_urlencoded_skipvalue( &c ); break;
       case 4:
         if( byte_diff(data,4,"mode")) {
-          scan_urlencoded_query( &c, NULL, SCAN_SEARCHPATH_VALUE );
+          scan_urlencoded_skipvalue( &c );
           continue;
         }
         if( scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE ) != 4 ) HTTPERROR_400_PARAM;
@@ -362,10 +362,10 @@ SCRAPE_WORKAROUND:
       switch( scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_PARAM ) ) {
       case -2: scanon = 0; break;   /* TERMINATOR */
       case -1: HTTPERROR_400_PARAM; /* PARSE ERROR */
-      default: scan_urlencoded_query( &c, NULL, SCAN_SEARCHPATH_VALUE ); break;
+      default: scan_urlencoded_skipvalue( &c ); break;
       case 9:
         if(byte_diff(data,9,"info_hash")) {
-          scan_urlencoded_query( &c, NULL, SCAN_SEARCHPATH_VALUE );
+          scan_urlencoded_skipvalue( &c );
           continue;
         }
         /* ignore this, when we have less than 20 bytes */
@@ -407,7 +407,7 @@ ANNOUNCE_WORKAROUND:
       switch( scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_PARAM ) ) {
       case -2: scanon = 0; break;   /* TERMINATOR */
       case -1: HTTPERROR_400_PARAM; /* PARSE ERROR */
-      default: scan_urlencoded_query( &c, NULL, SCAN_SEARCHPATH_VALUE ); break;
+      default: scan_urlencoded_skipvalue( &c ); break;
 #ifdef WANT_IP_FROM_QUERY_STRING
       case 2:
         if(!byte_diff(data,2,"ip")) {
@@ -416,7 +416,7 @@ ANNOUNCE_WORKAROUND:
           if( ( len <= 0 ) || scan_fixed_ip( data, len, ip ) ) HTTPERROR_400_PARAM;
           OT_SETIP( &peer, ip );
        } else
-          scan_urlencoded_query( &c, NULL, SCAN_SEARCHPATH_VALUE );
+          scan_urlencoded_skipvalue( &c );
        break;
 #endif
       case 4:
@@ -429,11 +429,11 @@ ANNOUNCE_WORKAROUND:
           if( scan_fixed_int( data, len, &tmp ) ) tmp = 0;
           if( !tmp ) OT_FLAG( &peer ) |= PEER_FLAG_SEEDING;
         } else
-          scan_urlencoded_query( &c, NULL, SCAN_SEARCHPATH_VALUE );
+          scan_urlencoded_skipvalue( &c );
         break;
       case 5:
         if( byte_diff( data, 5, "event" ) )
-          scan_urlencoded_query( &c, NULL, SCAN_SEARCHPATH_VALUE );
+          scan_urlencoded_skipvalue( &c );
         else switch( scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE ) ) {
         case -1:
           HTTPERROR_400_PARAM;
@@ -456,11 +456,11 @@ ANNOUNCE_WORKAROUND:
           if( ( len <= 0 ) || scan_fixed_int( data, len, &tmp ) ) HTTPERROR_400_PARAM;
           if( !tmp ) HTTPERROR_400_COMPACT;
         } else
-          scan_urlencoded_query( &c, NULL, SCAN_SEARCHPATH_VALUE );
+          scan_urlencoded_skipvalue( &c );
         break;
       case 9:
         if(byte_diff(data,9,"info_hash")) {
-          scan_urlencoded_query( &c, NULL, SCAN_SEARCHPATH_VALUE );
+          scan_urlencoded_skipvalue( &c );
           continue;
         }
         /* ignore this, when we have less than 20 bytes */
