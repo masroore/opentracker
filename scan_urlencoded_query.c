@@ -12,39 +12,51 @@
    we add '%' to the matrix to not stop at encoded chars.
    After losing too many requests to being too strict, add the following characters to reserved matrix
          relax         = "+" | "," | "/" | ";" | "<" | ">" | ":"
-
-static const unsigned char reserved_matrix_strict[] = { 0xA2, 0x67, 0xFF, 0x03, 0xFE, 0xFF, 0xFF, 0x87, 0xFE, 0xFF, 0xFF, 0x47};
 */
-static const unsigned char reserved_matrix[] = { 0xA2, 0xFF, 0xFF, 0x5F, 0xFE, 0xFF, 0xFF, 0x87, 0xFE, 0xFF, 0xFF, 0x47};
 
-static int is_unreserved( unsigned char c ) {
-  if( ( c <= 32 ) || ( c >= 127 ) ) return 0; return 1&(reserved_matrix[(c-32)>>3]>>(c&7));
+static const unsigned char is_unreserved[256] = {
+  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+  0,1,0,0,0,1,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1,0,
+  0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,1,
+  0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,1,0,
+  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+};
+
+static unsigned char fromhex(unsigned char c) {
+  if (c>='0' && c<='9') return c-'0';
+  c &= 0xdf; /* Toggle off lower case bit */
+  if (c>='A' && c<='F') return c-'A'+10;
+  return 0xff;
 }
 
 ssize_t scan_urlencoded_query(char **string, char *deststring, int flags) {
-  register const unsigned char* s=*(const unsigned char**) string;
+  const unsigned char* s=*(const unsigned char**) string;
   unsigned char *d = (unsigned char*)deststring;
   register unsigned char b, c;
 
 retry_parsing:
-  while( is_unreserved( c = *s++) ) {
+  while( is_unreserved[ c = *s++ ] ) {
     if( c=='%') {
-      if( ( c = scan_fromhex(*s++) ) == 0xff ) return -1;
-      if( ( b = scan_fromhex(*s++) ) == 0xff ) return -1;
-      c=(c<<4)|b;
+      if( ( b = fromhex(*s++) ) == 0xff ) return -1;
+      if( ( c = fromhex(*s++) ) == 0xff ) return -1;
+      c|=(b<<4);
     }
     if( d ) *d++ = c;
   }
 
   switch( c ) {
   case 0: case '\r': case '\n': case ' ':
-    if( d == (unsigned char*)deststring ) return -2;
+    if( d && ( d == (unsigned char*)deststring ) ) return -2;
     --s;
     break;
   case '?':
-    if( flags == SCAN_PATH ) goto found_terminator;
-    if( d ) *d++ = c;
-    goto retry_parsing;
+    if( flags != SCAN_PATH ) {
+      if( d ) *d++ = c;
+      goto retry_parsing;
+    }
     break;
   case '=':
     if( flags != SCAN_SEARCHPATH_PARAM ) return -1;
@@ -57,7 +69,6 @@ retry_parsing:
     return -1;
   }
 
-found_terminator:
   *string = (char *)s;
   return d - (unsigned char*)deststring;
 }
