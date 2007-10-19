@@ -302,10 +302,20 @@ size_t return_peers_for_torrent( ot_torrent *torrent, size_t amount, char *reply
   return r - reply;
 }
 
+/* Release memory we allocated too much */
+static void fix_mmapallocation( void *buf, size_t old_alloc, size_t new_alloc ) {
+  int res, page_size = getpagesize();
+  size_t old_pages = 1 + old_alloc / page_size;
+  size_t new_pages = 1 + new_alloc / page_size;
+
+  if( old_pages != new_pages )
+    munmap( ((char*)buf) +  new_pages * page_size, old_alloc - new_pages * page_size );
+}
+
 /* Fetch full scrape info for all torrents */
 size_t return_fullscrape_for_tracker( char **reply ) {
   size_t torrent_count = 0, j;
-  size_t allocated, replysize, usedpages;
+  size_t allocated, replysize;
   int    i, k;
   char  *r;
 
@@ -338,17 +348,14 @@ size_t return_fullscrape_for_tracker( char **reply ) {
   *r++='e'; *r++='e';
 
   replysize = ( r - *reply );
-  if( allocated > replysize ) {
-    usedpages = 1 + ( replysize / getpagesize() );
-    munmap( *reply + usedpages * getpagesize(), allocated - replysize );
-  }
+  fix_mmapallocation( *reply, allocated, replysize );
 
   return replysize;
 }
 
 size_t return_memstat_for_tracker( char **reply ) {
   size_t torrent_count = 0, j;
-  size_t allocated, replysize, usedpages;
+  size_t allocated, replysize;
   int    i, k;
   char  *r;
 
@@ -375,10 +382,7 @@ size_t return_memstat_for_tracker( char **reply ) {
   }
 
   replysize = ( r - *reply );
-  if( allocated > replysize ) {
-    usedpages = 1 + ( replysize / getpagesize() );
-    munmap( *reply + usedpages * getpagesize(), allocated - replysize );
-  }
+  fix_mmapallocation( *reply, allocated, replysize );
 
   return replysize;
 }
