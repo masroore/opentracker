@@ -88,7 +88,7 @@ struct http_data {
 int main( int argc, char **argv );
 
 static void httperror( const int64 s, const char *title, const char *message );
-static void httpresponse( const int64 s, char *data );
+static void httpresponse( const int64 s, char *data, size_t l );
 
 static void sendmmapdata( const int64 s, char *buffer, const size_t size );
 static void senddata( const int64 s, char *buffer, const size_t size );
@@ -210,7 +210,7 @@ static void senddata( const int64 s, char *buffer, size_t size ) {
   }
 }
 
-static void httpresponse( const int64 s, char *data ) {
+static void httpresponse( const int64 s, char *data, size_t l ) {
   struct http_data* h = io_getcookie( s );
   char       *c, *reply;
   ot_peer     peer;
@@ -395,7 +395,9 @@ SCRAPE_WORKAROUND:
     /* Scanned whole query string, no hash means full scrape... you might want to limit that */
     if( !hash ) {
 LOG_TO_STDERR( "scrp: %d.%d.%d.%d - FULL SCRAPE\n", h->ip[0], h->ip[1], h->ip[2], h->ip[3] );
-
+LOG_TO_STDERR( "GET /scrape" );
+write( 2, data, l-12 );
+write( 2, "\n", 1 );
       if( !( reply_size = return_fullscrape_for_tracker( &reply ) ) ) HTTPERROR_500;
       ot_overall_tcp_successfulannounces++;
       return sendmmapdata( s, reply, reply_size );
@@ -599,7 +601,7 @@ static void handle_read( const int64 clientsocket ) {
   /* If we get the whole request in one packet, handle it without copying */
   if( !array_start( &h->request ) ) {
     if( memchr( static_inbuf, '\n', l ) )
-      return httpresponse( clientsocket, static_inbuf );
+      return httpresponse( clientsocket, static_inbuf, l );
     h->flag |= STRUCT_HTTP_FLAG_ARRAY_USED;
     return array_catb( &h->request, static_inbuf, l );
   }
@@ -614,7 +616,7 @@ static void handle_read( const int64 clientsocket ) {
      return httperror( clientsocket, "500 request too long", "You sent too much headers");
 
   if( memchr( array_start( &h->request ), '\n', array_length( &h->request, 1 ) ) )
-    return httpresponse( clientsocket, array_start( &h->request ) );
+    return httpresponse( clientsocket, array_start( &h->request ), array_length( &h->request, 1 ) );
 }
 
 static void handle_write( const int64 clientsocket ) {
