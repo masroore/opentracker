@@ -372,6 +372,11 @@ LOG_TO_STDERR( "stats: %d.%d.%d.%d - mode: s24s old\n", h->ip[0], h->ip[1], h->i
   case 6: /* scrape ? */
     if( byte_diff( data, 6, "scrape") ) HTTPERROR_404;
 
+  /* This is to hack around stupid clients that just replace
+     "announce ?info_hash" with "scrape ?info_hash".
+     We do not want to bomb them with full scrapes */
+    if( !byte_diff( c, 2, " ?" ) ) ++c;
+
 SCRAPE_WORKAROUND:
 
     scanon = 1;
@@ -413,6 +418,9 @@ write( 2, "\n", 1 );
  ******************************/
   case 8:
     if( byte_diff( data, 8, "announce" ) ) HTTPERROR_404;
+
+  /* This is to hack around stupid clients that send "announce ?info_hash" */
+    if( !byte_diff( c, 2, " ?" ) ) ++c;
 
 ANNOUNCE_WORKAROUND:
 
