@@ -429,13 +429,16 @@ SCRAPE_WORKAROUND:
 /******************************
  *      A N N O U N C E       *
  ******************************/
+  case 7:
+    if( byte_diff( data, 7, "announc" ) ) HTTPERROR_404;
+    goto ANNOUNCE_WORKAROUND;
   case 8:
     if( byte_diff( data, 8, "announce" ) ) HTTPERROR_404;
 
-  /* This is to hack around stupid clients that send "announce ?info_hash" */
-    if( !byte_diff( c, 2, " ?" ) ) c+=2;
-
 ANNOUNCE_WORKAROUND:
+
+    /* This is to hack around stupid clients that send "announce ?info_hash" */
+    if( !byte_diff( c+1, 5, "?info" ) ) c+=2;
 
     OT_SETIP( &peer, ((struct http_data*)io_getcookie( s ) )->ip );
     OT_SETPORT( &peer, &port );
