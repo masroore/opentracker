@@ -67,14 +67,20 @@ static size_t ot_sockets_count = 0;
 static char debug_request[8192];
 #endif
 
+typedef enum {
+  STRUCT_HTTP_FLAG_ARRAY_USED = 1,
+  STRUCT_HTTP_FLAG_IOB_USED   = 2
+} STRUCT_HTTP_FLAG;
+
 struct http_data {
   union {
-    array    request;
-    io_batch batch;
+    array          request;
+    io_batch       batch;
   };
-  unsigned char ip[4];
-  int        blessed;
+  unsigned char    ip[4];
+  STRUCT_HTTP_FLAG flag;
 };
+#define NOTBLESSED( h ) byte_diff( &h->ip, 4, g_adminip )
 
 /* Prototypes */
 
@@ -140,7 +146,10 @@ static void sendmmapdata( const int64 s, char *buffer, size_t size ) {
 
   if( !h )
     return free( buffer );
-  array_reset( &h->request );
+  if( h->flag & STRUCT_HTTP_FLAG_ARRAY_USED ) {
+    h->flag &= ~STRUCT_HTTP_FLAG_ARRAY_USED;
+    array_reset( &h->request );
+  }
 
   header = malloc( SUCCESS_HTTP_HEADER_LENGTH );
   if( !header ) {
@@ -153,6 +162,7 @@ static void sendmmapdata( const int64 s, char *buffer, size_t size ) {
   iob_reset( &h->batch );
   iob_addbuf_free( &h->batch, header, header_size );
   iob_addbuf_munmap( &h->batch, buffer, size );
+  h->flag |= STRUCT_HTTP_FLAG_IOB_USED;
 
   /* writeable sockets timeout after twice the pool timeout
      which defaults to 5 minutes (e.g. after 10 minutes) */
@@ -166,17 +176,20 @@ static void senddata( const int64 s, char *buffer, size_t size ) {
   ssize_t written_size;
 
   /* whoever sends data is not interested in its input-array */
-  if( h )
+  if( h && ( h->flag & STRUCT_HTTP_FLAG_ARRAY_USED ) ) {
+    h->flag &= ~STRUCT_HTTP_FLAG_ARRAY_USED;
     array_reset( &h->request );
+  }
 
   written_size = write( s, buffer, size );
   if( ( written_size < 0 ) || ( (size_t)written_size == size ) ) {
     free( h ); io_close( s );
   } else {
-    char * outbuf = malloc( size - written_size );
+    char * outbuf;
     tai6464 t;
 
-    if( !outbuf ) {
+    if( !h ) return;
+    if( !( outbuf =  malloc( size - written_size ) ) ) {
       free(h); io_close( s );
       return;
     }
@@ -184,6 +197,7 @@ static void senddata( const int64 s, char *buffer, size_t size ) {
     iob_reset( &h->batch );
     memmove( outbuf, buffer + written_size, size - written_size );
     iob_addbuf_free( &h->batch, outbuf, size - written_size );
+    h->flag |= STRUCT_HTTP_FLAG_IOB_USED;
 
     /* writeable sockets timeout after twice the pool timeout
        which defaults to 5 minutes (e.g. after 10 minutes) */
@@ -226,7 +240,7 @@ static void httpresponse( const int64 s, char *data ) {
  ******************************/
   case 4: /* sync ? */
     if( byte_diff( data, 4, "sync") ) HTTPERROR_404;
-    if( !h->blessed ) HTTPERROR_403_IP;
+    if( NOTBLESSED( h ) ) HTTPERROR_403_IP;
 
 LOG_TO_STDERR( "sync: %d.%d.%d.%d\n", h->ip[0], h->ip[1], h->ip[2], h->ip[3] );
 
@@ -567,7 +581,7 @@ static void handle_read( const int64 clientsocket ) {
   ssize_t l;
 
   if( ( l = io_tryread( clientsocket, static_inbuf, sizeof static_inbuf ) ) <= 0 ) {
-    if( h ) {
+    if( h && ( h->flag & STRUCT_HTTP_FLAG_ARRAY_USED ) ) {
       array_reset( &h->request );
       free( h );
     }
@@ -583,16 +597,18 @@ static void handle_read( const int64 clientsocket ) {
   if( !array_start( &h->request ) ) {
     if( memchr( static_inbuf, '\n', l ) )
       return httpresponse( clientsocket, static_inbuf );
+    h->flag |= STRUCT_HTTP_FLAG_ARRAY_USED;
     return array_catb( &h->request, static_inbuf, l );
   }
 
+  h->flag |= STRUCT_HTTP_FLAG_ARRAY_USED;
   array_catb( &h->request, static_inbuf, l );
 
   if( array_failed( &h->request ) )
     return httperror( clientsocket, "500 Server Error", "Request too long.");
 
-  if( ( !h->blessed ) && ( array_bytes( &h->request ) > 8192 ) )
-    return httperror( clientsocket, "500 request too long", "You sent too much headers");
+  if( ( array_bytes( &h->request ) > 8192 ) && NOTBLESSED( h ) )
+     return httperror( clientsocket, "500 request too long", "You sent too much headers");
 
   if( memchr( array_start( &h->request ), '\n', array_length( &h->request, 1 ) ) )
     return httpresponse( clientsocket, array_start( &h->request ) );
@@ -627,9 +643,6 @@ static void handle_accept( const int64 serversocket ) {
     byte_zero( h, sizeof( struct http_data ) );
     memmove( h->ip, ip, sizeof( ip ) );
 
-    if( !byte_diff( &h->ip, 4, g_adminip ) )
-      h->blessed = 1;
-
     io_setcookie( i, h );
 
     ++ot_overall_tcp_connections;
@@ -647,8 +660,10 @@ static void handle_timeouted( void ) {
   while( ( i = io_timeouted() ) != -1 ) {
     struct http_data* h=io_getcookie( i );
     if( h ) {
-      iob_reset( &h->batch );
-      array_reset( &h->request );
+      if( h->flag & STRUCT_HTTP_FLAG_IOB_USED )
+        iob_reset( &h->batch );
+      if( h->flag & STRUCT_HTTP_FLAG_ARRAY_USED )
+        array_reset( &h->request );
       free( h );
     }
     io_close(i);
