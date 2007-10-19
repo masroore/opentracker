@@ -45,9 +45,9 @@ typedef time_t         ot_time;
 extern  time_t g_now;
 #define NOW              (g_now/OT_POOLS_TIMEOUT)
 
-#define OT_VECTOR_MIN_MEMBERS   16
-#define OT_VECTOR_GROW_RATIO    4
-#define OT_VECTOR_SHRINK_THRESH 5
+#define OT_VECTOR_MIN_MEMBERS   4
+#define OT_VECTOR_GROW_RATIO    8
+#define OT_VECTOR_SHRINK_THRESH 6
 #define OT_VECTOR_SHRINK_RATIO  4
 typedef struct {
   void   *data;
