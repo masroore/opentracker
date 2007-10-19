@@ -59,7 +59,6 @@ static char *accesslist_filename = NULL;
 
 static char static_inbuf[8192];
 static char static_outbuf[8192];
-static char static_tmpbuf[8192];
 
 #define OT_MAXMULTISCRAPE_COUNT 64
 static ot_hash multiscrape_buf[OT_MAXMULTISCRAPE_COUNT];
@@ -227,7 +226,8 @@ static void httpresponse( const int64 s, char *data, size_t l ) {
   size_t      reply_size = 0, reply_off;
 
 #ifdef _DEBUG_HTTPERROR
-  memcpy( debug_request, data, sizeof( debug_request ) );
+  memcpy( debug_request, data, l );
+  data[l] = 0;
 #endif
 
   /* This one implicitely tests strlen < 5, too -- remember, it is \n terminated */
@@ -376,15 +376,13 @@ LOG_TO_STDERR( "stats: %d.%d.%d.%d - mode: s24s old\n", h->ip[0], h->ip[1], h->i
   case 6: /* scrape ? */
     if( byte_diff( data, 6, "scrape") ) HTTPERROR_404;
 
-    /* We want the pure plain un-unescaped text */
-    memmove( static_tmpbuf, static_inbuf, 8192 );
-
     /* Full scrape... you might want to limit that */
     if( !byte_diff( data, 12, "scrape HTTP/" ) ) {
 
 LOG_TO_STDERR( "[%08d] scrp: %d.%d.%d.%d - FULL SCRAPE\n", (unsigned int)(g_now - ot_start_time), h->ip[0], h->ip[1], h->ip[2], h->ip[3] );
-write( 2, static_tmpbuf, l );
-
+#ifdef _DEBUG_HTTPERROR
+write( 2, debug_request, l );
+#endif
       if( !( reply_size = return_fullscrape_for_tracker( &reply ) ) ) HTTPERROR_500;
       ot_overall_tcp_successfulannounces++;
       return sendmmapdata( s, reply, reply_size );
