@@ -61,6 +61,9 @@ static char static_inbuf[8192];
 static char static_outbuf[8192];
 static char static_tmpbuf[8192];
 
+#define OT_MAXMULTISCRAPE_COUNT 64
+static ot_hash multiscrape_buf[OT_MAXMULTISCRAPE_COUNT];
+
 static char *FLAG_TCP = "TCP";
 static char *FLAG_UDP = "UDP";
 static size_t ot_sockets_count = 0;
@@ -217,7 +220,7 @@ static void httpresponse( const int64 s, char *data, size_t l ) {
   ot_peer     peer;
   ot_torrent *torrent;
   ot_hash    *hash = NULL;
-  int         numwant, tmp, scanon, mode;
+  int         numwant, tmp, scanon, mode, scrape_count;
   unsigned short port = htons(6881);
   time_t      t;
   ssize_t     len;
@@ -373,17 +376,18 @@ LOG_TO_STDERR( "stats: %d.%d.%d.%d - mode: s24s old\n", h->ip[0], h->ip[1], h->i
   case 6: /* scrape ? */
     if( byte_diff( data, 6, "scrape") ) HTTPERROR_404;
 
-  /* We want the pure plain un-unescaped text */
-  memmove( static_tmpbuf, static_inbuf, 8192 );
+    /* We want the pure plain un-unescaped text */
+    memmove( static_tmpbuf, static_inbuf, 8192 );
 
-  /* This is to hack around stupid clients that just replace
-     "announce ?info_hash" with "scrape ?info_hash".
-     We do not want to bomb them with full scrapes */
-    if( !byte_diff( c, 2, " ?" ) ) ++c;
+    /* This is to hack around stupid clients that just replace
+       "announce ?info_hash" with "scrape ?info_hash".
+       We do not want to bomb them with full scrapes */
+    if( !byte_diff( c, 2, " ?" ) ) c+=2;
 
 SCRAPE_WORKAROUND:
 
     scanon = 1;
+    scrape_count = 0;
     while( scanon ) {
       switch( scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_PARAM ) ) {
       case -2: scanon = 0; break;   /* TERMINATOR */
@@ -396,13 +400,14 @@ SCRAPE_WORKAROUND:
         }
         /* ignore this, when we have less than 20 bytes */
         if( scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE ) != 20 ) HTTPERROR_400_PARAM;
-        hash = (ot_hash*)data;
+        if( scrape_count < OT_MAXMULTISCRAPE_COUNT )
+          memmove( multiscrape_buf + scrape_count++, data, sizeof(ot_hash) );
         break;
       }
     }
 
     /* Scanned whole query string, no hash means full scrape... you might want to limit that */
-    if( !hash ) {
+    if( !scrape_count ) {
 LOG_TO_STDERR( "scrp: %d.%d.%d.%d - FULL SCRAPE\n", h->ip[0], h->ip[1], h->ip[2], h->ip[3] );
 write( 2, static_tmpbuf, l );
 write( 2, "\n\n\n", 1 );
@@ -412,7 +417,7 @@ write( 2, "\n\n\n", 1 );
     }
 
     /* Enough for http header + whole scrape string */
-    if( !( reply_size = return_tcp_scrape_for_torrent( hash, SUCCESS_HTTP_HEADER_LENGTH + static_outbuf ) ) ) HTTPERROR_500;
+    if( !( reply_size = return_tcp_scrape_for_torrent( multiscrape_buf, scrape_count, SUCCESS_HTTP_HEADER_LENGTH + static_outbuf ) ) ) HTTPERROR_500;
 
     ot_overall_tcp_successfulannounces++;
     break;
@@ -423,7 +428,7 @@ write( 2, "\n\n\n", 1 );
     if( byte_diff( data, 8, "announce" ) ) HTTPERROR_404;
 
   /* This is to hack around stupid clients that send "announce ?info_hash" */
-    if( !byte_diff( c, 2, " ?" ) ) ++c;
+    if( !byte_diff( c, 2, " ?" ) ) c+=2;
 
 ANNOUNCE_WORKAROUND:
 

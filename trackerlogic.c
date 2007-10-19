@@ -411,23 +411,30 @@ size_t return_udp_scrape_for_torrent( ot_hash *hash, char *reply ) {
 }
 
 /* Fetches scrape info for a specific torrent */
-size_t return_tcp_scrape_for_torrent( ot_hash *hash, char *reply ) {
+size_t return_tcp_scrape_for_torrent( ot_hash *hash_list, int amount, char *reply ) {
   char        *r = reply;
-  int          exactmatch, i;
-  size_t       peers = 0, seeds = 0;
-  ot_vector   *torrents_list = &all_torrents[*hash[0]];
-  ot_torrent  *torrent = binary_search( hash, torrents_list->data, torrents_list->size, sizeof( ot_torrent ), OT_HASH_COMPARE_SIZE, &exactmatch );
+  int          exactmatch, i, j;
 
-  if( !exactmatch ) return sprintf( r, "d5:filesdee" );
+  r += sprintf( r, "d5:filesd" );
 
-  for( i=0; i<OT_POOLS_COUNT; ++i ) {
-    peers += torrent->peer_list->peers[i].size;
-    seeds += torrent->peer_list->seed_count[i];
+  for( i=0; i<amount; ++i ) {
+    ot_hash     *hash = hash_list + i;
+    ot_vector   *torrents_list = &all_torrents[*hash[0]];
+    ot_torrent  *torrent = binary_search( hash, torrents_list->data, torrents_list->size, sizeof( ot_torrent ), OT_HASH_COMPARE_SIZE, &exactmatch );
+    size_t       peers = 0, seeds = 0;
+
+    if( !exactmatch ) continue;
+
+    for( j=0; j<OT_POOLS_COUNT; ++j ) {
+      peers += torrent->peer_list->peers[j].size;
+      seeds += torrent->peer_list->seed_count[j];
+    }
+
+    memmove( r, "20:", 3 ); memmove( r+3, hash, 20 );
+    r += sprintf( r+23, "d8:completei%zde10:downloadedi%zde10:incompletei%zdee", seeds, torrent->peer_list->downloaded, peers-seeds ) + 23;
   }
 
-  memmove( r, "d5:filesd20:", 12 ); memmove( r+12, hash, 20 );
-  r += sprintf( r+32, "d8:completei%zde10:downloadedi%zde10:incompletei%zdeeee", seeds, torrent->peer_list->downloaded, peers-seeds ) + 32;
-
+  *r++ = 'e'; *r++ = 'e';
   return r - reply;
 }
 

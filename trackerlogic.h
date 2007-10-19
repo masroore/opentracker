@@ -94,7 +94,7 @@ ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer, int from_changese
 size_t remove_peer_from_torrent( ot_hash *hash, ot_peer *peer, char *reply, int is_tcp );
 size_t return_peers_for_torrent( ot_torrent *torrent, size_t amount, char *reply, int is_tcp );
 size_t return_fullscrape_for_tracker( char **reply );
-size_t return_tcp_scrape_for_torrent( ot_hash *hash, char *reply );
+size_t return_tcp_scrape_for_torrent( ot_hash *hash, int amount, char *reply );
 size_t return_udp_scrape_for_torrent( ot_hash *hash, char *reply );
 size_t return_stats_for_tracker( char *reply, int mode );
 size_t return_stats_for_slash24s( char *reply, size_t amount, ot_dword thresh );
