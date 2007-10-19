@@ -59,6 +59,7 @@ static char *accesslist_filename = NULL;
 
 static char static_inbuf[8192];
 static char static_outbuf[8192];
+static char static_tmpbuf[8192];
 
 static char *FLAG_TCP = "TCP";
 static char *FLAG_UDP = "UDP";
@@ -372,6 +373,9 @@ LOG_TO_STDERR( "stats: %d.%d.%d.%d - mode: s24s old\n", h->ip[0], h->ip[1], h->i
   case 6: /* scrape ? */
     if( byte_diff( data, 6, "scrape") ) HTTPERROR_404;
 
+  /* We want the pure plain un-unescaped text */
+  memmove( static_tmpbuf, static_inbuf, 8192 );
+
   /* This is to hack around stupid clients that just replace
      "announce ?info_hash" with "scrape ?info_hash".
      We do not want to bomb them with full scrapes */
@@ -400,9 +404,8 @@ SCRAPE_WORKAROUND:
     /* Scanned whole query string, no hash means full scrape... you might want to limit that */
     if( !hash ) {
 LOG_TO_STDERR( "scrp: %d.%d.%d.%d - FULL SCRAPE\n", h->ip[0], h->ip[1], h->ip[2], h->ip[3] );
-LOG_TO_STDERR( "GET /scrape" );
-write( 2, data, l-12 );
-write( 2, "\n", 1 );
+write( 2, static_tmpbuf, l );
+write( 2, "\n\n\n", 1 );
       if( !( reply_size = return_fullscrape_for_tracker( &reply ) ) ) HTTPERROR_500;
       ot_overall_tcp_successfulannounces++;
       return sendmmapdata( s, reply, reply_size );
@@ -623,8 +626,8 @@ static void handle_read( const int64 clientsocket ) {
   if( ( array_bytes( &h->request ) > 8192 ) && NOTBLESSED( h ) )
      return httperror( clientsocket, "500 request too long", "You sent too much headers");
 
-  if( memchr( array_start( &h->request ), '\n', array_length( &h->request, 1 ) ) )
-    return httpresponse( clientsocket, array_start( &h->request ), array_length( &h->request, 1 ) );
+  if( memchr( array_start( &h->request ), '\n', array_bytes( &h->request ) ) )
+    return httpresponse( clientsocket, array_start( &h->request ), array_bytes( &h->request ) );
 }
 
 static void handle_write( const int64 clientsocket ) {
