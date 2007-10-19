@@ -647,10 +647,10 @@ static void handle_timeouted( void ) {
   while( ( i = io_timeouted() ) != -1 ) {
     struct http_data* h=io_getcookie( i );
     if( h ) {
+      iob_reset( &h->batch );
       array_reset( &h->request );
       free( h );
     }
-    iob_reset( &h->batch );
     io_close(i);
   }
 }
