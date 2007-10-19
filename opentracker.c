@@ -166,7 +166,8 @@ static void sendmmapdata( const int64 s, char *buffer, size_t size ) {
 
   /* writeable sockets timeout after twice the pool timeout
      which defaults to 5 minutes (e.g. after 10 minutes) */
-  taia_uint( &t, (unsigned int)(g_now + OT_CLIENT_TIMEOUT_SEND) ); io_timeout( s, t );
+  taia_now( &t ); taia_addsec( &t, &t, OT_CLIENT_TIMEOUT_SEND );
+  io_timeout( s, t );
   io_dontwantread( s );
   io_wantwrite( s );
 }
@@ -199,9 +200,8 @@ static void senddata( const int64 s, char *buffer, size_t size ) {
     iob_addbuf_free( &h->batch, outbuf, size - written_size );
     h->flag |= STRUCT_HTTP_FLAG_IOB_USED;
 
-    /* writeable sockets timeout after twice the pool timeout
-       which defaults to 5 minutes (e.g. after 10 minutes) */
-    taia_uint( &t, (unsigned int)(g_now + OT_CLIENT_TIMEOUT_SEND) ); io_timeout( s, t );
+    /* writeable short data sockets just have a tcp timeout */
+    taia_uint( &t, 0 ); io_timeout( s, t );
     io_dontwantread( s );
     io_wantwrite( s );
   }
@@ -647,7 +647,10 @@ static void handle_accept( const int64 serversocket ) {
 
     ++ot_overall_tcp_connections;
 
-    taia_uint( &t, (unsigned int)(g_now + OT_CLIENT_TIMEOUT) );
+    /* That breaks taia encapsulation. But there is no way to take system
+       time this often in FreeBSD and libowfat does not allow to set unix time */
+    taia_uint( &t, 0 ); /* Clear t */
+    tai_unix( &(t.sec), (g_now + OT_CLIENT_TIMEOUT) );
     io_timeout( i, t );
   }
 
