@@ -379,6 +379,17 @@ LOG_TO_STDERR( "stats: %d.%d.%d.%d - mode: s24s old\n", h->ip[0], h->ip[1], h->i
     /* We want the pure plain un-unescaped text */
     memmove( static_tmpbuf, static_inbuf, 8192 );
 
+    /* Full scrape... you might want to limit that */
+    if( !byte_diff( data, 12, "scrape HTTP/" ) ) {
+
+LOG_TO_STDERR( "scrp: %d.%d.%d.%d - FULL SCRAPE\n", h->ip[0], h->ip[1], h->ip[2], h->ip[3] );
+write( 2, static_tmpbuf, l );
+
+      if( !( reply_size = return_fullscrape_for_tracker( &reply ) ) ) HTTPERROR_500;
+      ot_overall_tcp_successfulannounces++;
+      return sendmmapdata( s, reply, reply_size );
+    }
+
     /* This is to hack around stupid clients that just replace
        "announce ?info_hash" with "scrape ?info_hash".
        We do not want to bomb them with full scrapes */
@@ -406,15 +417,8 @@ SCRAPE_WORKAROUND:
       }
     }
 
-    /* Scanned whole query string, no hash means full scrape... you might want to limit that */
-    if( !scrape_count ) {
-LOG_TO_STDERR( "scrp: %d.%d.%d.%d - FULL SCRAPE\n", h->ip[0], h->ip[1], h->ip[2], h->ip[3] );
-write( 2, static_tmpbuf, l );
-write( 2, "\n\n\n", 1 );
-      if( !( reply_size = return_fullscrape_for_tracker( &reply ) ) ) HTTPERROR_500;
-      ot_overall_tcp_successfulannounces++;
-      return sendmmapdata( s, reply, reply_size );
-    }
+    /* No info_hash found? Inform user */
+    if( !scrape_count ) HTTPERROR_400_PARAM;
 
     /* Enough for http header + whole scrape string */
     if( !( reply_size = return_tcp_scrape_for_torrent( multiscrape_buf, scrape_count, SUCCESS_HTTP_HEADER_LENGTH + static_outbuf ) ) ) HTTPERROR_500;
