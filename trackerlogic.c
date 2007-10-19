@@ -304,7 +304,7 @@ size_t return_peers_for_torrent( ot_torrent *torrent, size_t amount, char *reply
 
 /* Release memory we allocated too much */
 static void fix_mmapallocation( void *buf, size_t old_alloc, size_t new_alloc ) {
-  int res, page_size = getpagesize();
+  int page_size = getpagesize();
   size_t old_pages = 1 + old_alloc / page_size;
   size_t new_pages = 1 + new_alloc / page_size;
 
