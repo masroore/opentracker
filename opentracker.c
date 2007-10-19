@@ -226,8 +226,11 @@ static void httpresponse( const int64 s, char *data, size_t l ) {
   size_t      reply_size = 0, reply_off;
 
 #ifdef _DEBUG_HTTPERROR
-  memcpy( debug_request, data, l );
-  data[l] = 0;
+  memcpy( debug_request, data, sizeof( debug_request ) );
+  if( l < sizeof( debug_request ) )
+    debug_request[ l ] = 0;
+  else
+    debug_request[ sizeof( debug_request ) - 1 ] = 0;
 #endif
 
   /* This one implicitely tests strlen < 5, too -- remember, it is \n terminated */
