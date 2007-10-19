@@ -144,8 +144,10 @@ static void sendmmapdata( const int64 s, char *buffer, size_t size ) {
   size_t header_size;
   tai6464 t;
 
-  if( !h )
-    return free( buffer );
+  if( !h ) {
+    munmap( buffer, size );
+    return;
+  }
   if( h->flag & STRUCT_HTTP_FLAG_ARRAY_USED ) {
     h->flag &= ~STRUCT_HTTP_FLAG_ARRAY_USED;
     array_reset( &h->request );
@@ -153,7 +155,7 @@ static void sendmmapdata( const int64 s, char *buffer, size_t size ) {
 
   header = malloc( SUCCESS_HTTP_HEADER_LENGTH );
   if( !header ) {
-    free( buffer );
+    munmap( buffer, size );
     HTTPERROR_500;
   }
 
