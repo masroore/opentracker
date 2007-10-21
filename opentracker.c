@@ -532,8 +532,7 @@ ANNOUNCE_WORKAROUND:
     ot_overall_tcp_successfulannounces++;
     break;
   case 9:
-    if( !byte_diff( data, 9, "announce " ) ) goto ANNOUNCE_WORKAROUND;
-    if( !byte_diff( data, 9, "announce/" ) ) goto ANNOUNCE_WORKAROUND;
+    if( !byte_diff( data, 8, "announce" ) ) goto ANNOUNCE_WORKAROUND;
     HTTPERROR_404;
   case 10:
     if( byte_diff( data, 10, "scrape.php" ) ) HTTPERROR_404;
