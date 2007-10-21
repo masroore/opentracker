@@ -610,8 +610,9 @@ static void handle_read( const int64 clientsocket ) {
   ssize_t l;
 
   if( ( l = io_tryread( clientsocket, static_inbuf, sizeof static_inbuf ) ) <= 0 ) {
-    if( h && ( h->flag & STRUCT_HTTP_FLAG_ARRAY_USED ) ) {
-      array_reset( &h->request );
+    if( h ) {
+      if( h->flag & STRUCT_HTTP_FLAG_ARRAY_USED )
+        array_reset( &h->request );
       free( h );
     }
     io_close( clientsocket );
@@ -645,7 +646,8 @@ static void handle_read( const int64 clientsocket ) {
 
 static void handle_write( const int64 clientsocket ) {
   struct http_data* h=io_getcookie( clientsocket );
-  if( !h || ( iob_send( clientsocket, &h->batch ) <= 0 ) ) {
+  if( !h ) return;
+  if( iob_send( clientsocket, &h->batch ) <= 0 ) {
     iob_reset( &h->batch );
     io_close( clientsocket );
     free( h );
@@ -666,13 +668,11 @@ static void handle_accept( const int64 serversocket ) {
       io_close( i );
       continue;
     }
-
+    io_setcookie( i, h );
     io_wantread( i );
 
     byte_zero( h, sizeof( struct http_data ) );
     memmove( h->ip, ip, sizeof( ip ) );
-
-    io_setcookie( i, h );
 
     ++ot_overall_tcp_connections;
 
