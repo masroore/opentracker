@@ -390,12 +390,13 @@ write( 2, debug_request, l );
       return sendmmapdata( s, reply, reply_size );
     }
 
-    /* This is to hack around stupid clients that just replace
-       "announce ?info_hash" with "scrape ?info_hash".
-       We do not want to bomb them with full scrapes */
-    if( !byte_diff( c, 2, " ?" ) ) c+=2;
-
 SCRAPE_WORKAROUND:
+
+    /* This is to hack around stupid clients that send "announce ?info_hash" */
+    if( c[-1] != '?' ) {
+      while( ( *c != '?' ) && ( *c != '\n' ) ) ++c;
+      if( *c == '\n' ) HTTPERROR_400_PARAM;
+    }
 
     scanon = 1;
     scrape_count = 0;
@@ -429,15 +430,19 @@ SCRAPE_WORKAROUND:
  *      A N N O U N C E       *
  ******************************/
   case 7:
-    if( byte_diff( data, 7, "announc" ) ) HTTPERROR_404;
-    goto ANNOUNCE_WORKAROUND;
+    if( !byte_diff( data, 7, "announc" ) ) goto ANNOUNCE_WORKAROUND;
+    if( !byte_diff( data, 7, "anounce" ) ) goto ANNOUNCE_WORKAROUND;
+    HTTPERROR_404;
   case 8:
     if( byte_diff( data, 8, "announce" ) ) HTTPERROR_404;
 
 ANNOUNCE_WORKAROUND:
 
     /* This is to hack around stupid clients that send "announce ?info_hash" */
-    if( !byte_diff( c+1, 5, "?info" ) ) c+=2;
+    if( c[-1] != '?' ) {
+      while( ( *c != '?' ) && ( *c != '\n' ) ) ++c;
+      if( *c == '\n' ) HTTPERROR_400_PARAM;
+    }
 
     OT_SETIP( &peer, ((struct http_data*)io_getcookie( s ) )->ip );
     OT_SETPORT( &peer, &port );
@@ -525,6 +530,9 @@ ANNOUNCE_WORKAROUND:
     }
     ot_overall_tcp_successfulannounces++;
     break;
+  case 9:
+    if( byte_diff( data, 9, "announce " ) ) HTTPERROR_404;
+    goto ANNOUNCE_WORKAROUND;
   case 10:
     if( byte_diff( data, 10, "scrape.php" ) ) HTTPERROR_404;
     goto SCRAPE_WORKAROUND;
