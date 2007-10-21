@@ -432,6 +432,7 @@ SCRAPE_WORKAROUND:
   case 7:
     if( !byte_diff( data, 7, "announc" ) ) goto ANNOUNCE_WORKAROUND;
     if( !byte_diff( data, 7, "anounce" ) ) goto ANNOUNCE_WORKAROUND;
+    if( !byte_diff( data, 7, "annouce" ) ) goto ANNOUNCE_WORKAROUND;
     HTTPERROR_404;
   case 8:
     if( byte_diff( data, 8, "announce" ) ) HTTPERROR_404;
