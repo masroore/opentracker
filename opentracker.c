@@ -397,7 +397,7 @@ write( 2, debug_request, l );
 
 SCRAPE_WORKAROUND:
 
-    /* This is to hack around stupid clients that send "announce ?info_hash" */
+    /* This is to hack around stupid clients that send "scrape ?info_hash" */
     if( c[-1] != '?' ) {
       while( ( *c != '?' ) && ( *c != '\n' ) ) ++c;
       if( *c == '\n' ) HTTPERROR_400_PARAM;
@@ -408,7 +408,10 @@ SCRAPE_WORKAROUND:
     while( scanon ) {
       switch( scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_PARAM ) ) {
       case -2: scanon = 0; break;   /* TERMINATOR */
-      case -1: HTTPERROR_400_PARAM; /* PARSE ERROR */
+      case -1:
+        if( scrape_count )
+          goto UTORRENT1600_WORKAROUND;
+        HTTPERROR_400_PARAM; /* PARSE ERROR */
       default: scan_urlencoded_skipvalue( &c ); break;
       case 9:
         if(byte_diff(data,9,"info_hash")) {
@@ -425,6 +428,8 @@ SCRAPE_WORKAROUND:
 
     /* No info_hash found? Inform user */
     if( !scrape_count ) HTTPERROR_400_PARAM;
+
+UTORRENT1600_WORKAROUND:
 
     /* Enough for http header + whole scrape string */
     if( !( reply_size = return_tcp_scrape_for_torrent( multiscrape_buf, scrape_count, SUCCESS_HTTP_HEADER_LENGTH + static_outbuf ) ) ) HTTPERROR_500;
