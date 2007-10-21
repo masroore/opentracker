@@ -248,6 +248,8 @@ static void httpresponse( const int64 s, char *data, size_t l ) {
  *         S Y N C            *
  ******************************/
   case 4: /* sync ? */
+    if( !byte_diff( data, 2, "an" ) ) goto ANNOUNCE_WORKAROUND;
+    if( !byte_diff( data, 2, "sc" ) ) goto SCRAPE_WORKAROUND;
     if( byte_diff( data, 4, "sync") ) HTTPERROR_404;
     if( NOTBLESSED( h ) ) HTTPERROR_403_IP;
 
@@ -288,6 +290,8 @@ LOG_TO_STDERR( "sync: %d.%d.%d.%d\n", h->ip[0], h->ip[1], h->ip[2], h->ip[3] );
  *        S T A T S           *
  ******************************/
   case 5: /* stats ? */
+    if( !byte_diff( data, 2, "an" ) ) goto ANNOUNCE_WORKAROUND;
+    if( !byte_diff( data, 2, "sc" ) ) goto SCRAPE_WORKAROUND;
     if( byte_diff(data,5,"stats")) HTTPERROR_404;
     scanon = 1;
     mode = STATS_MRTG;
@@ -376,6 +380,7 @@ LOG_TO_STDERR( "stats: %d.%d.%d.%d - mode: s24s old\n", h->ip[0], h->ip[1], h->i
  *       S C R A P E          *
  ******************************/
   case 6: /* scrape ? */
+    if( !byte_diff( data, 2, "an" ) ) goto ANNOUNCE_WORKAROUND;
     if( byte_diff( data, 6, "scrape") ) HTTPERROR_404;
 
     /* Full scrape... you might want to limit that */
@@ -429,12 +434,8 @@ SCRAPE_WORKAROUND:
 /******************************
  *      A N N O U N C E       *
  ******************************/
-  case 7:
-    if( !byte_diff( data, 7, "announc" ) ) goto ANNOUNCE_WORKAROUND;
-    if( !byte_diff( data, 7, "anounce" ) ) goto ANNOUNCE_WORKAROUND;
-    if( !byte_diff( data, 7, "annouce" ) ) goto ANNOUNCE_WORKAROUND;
-    HTTPERROR_404;
   case 8:
+    if( !byte_diff( data, 2, "sc" ) ) goto SCRAPE_WORKAROUND;
     if( byte_diff( data, 8, "announce" ) ) HTTPERROR_404;
 
 ANNOUNCE_WORKAROUND:
@@ -531,13 +532,9 @@ ANNOUNCE_WORKAROUND:
     }
     ot_overall_tcp_successfulannounces++;
     break;
-  case 9:
-    if( !byte_diff( data, 8, "announce" ) ) goto ANNOUNCE_WORKAROUND;
-    HTTPERROR_404;
-  case 10:
-    if( byte_diff( data, 10, "scrape.php" ) ) HTTPERROR_404;
-    goto SCRAPE_WORKAROUND;
   case 11:
+    if( !byte_diff( data, 2, "an" ) ) goto ANNOUNCE_WORKAROUND;
+    if( !byte_diff( data, 2, "sc" ) ) goto SCRAPE_WORKAROUND;
     if( byte_diff( data, 11, "mrtg_scrape" ) ) HTTPERROR_404;
 
     t = time( NULL ) - ot_start_time;
@@ -545,10 +542,9 @@ ANNOUNCE_WORKAROUND:
                           "%llu\n%llu\n%i seconds (%i hours)\nopentracker - Pretuned by german engineers, currently handling %llu connections per second.",
                           ot_overall_tcp_connections+ot_overall_udp_connections, ot_overall_tcp_successfulannounces+ot_overall_udp_successfulannounces, (int)t, (int)(t / 3600), (ot_overall_tcp_connections+ot_overall_udp_connections) / ( (unsigned int)t ? (unsigned int)t : 1 ) );
     break;
-  case 12:
-    if( byte_diff( data, 12, "announce.php" ) ) HTTPERROR_404;
-    goto ANNOUNCE_WORKAROUND;
-  default: /* neither *scrape nor announce */
+  default:
+    if( !byte_diff( data, 2, "an" ) ) goto ANNOUNCE_WORKAROUND;
+    if( !byte_diff( data, 2, "sc" ) ) goto SCRAPE_WORKAROUND;
     HTTPERROR_404;
   }
 
