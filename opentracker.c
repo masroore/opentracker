@@ -409,7 +409,7 @@ SCRAPE_WORKAROUND:
       switch( scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_PARAM ) ) {
       case -2: scanon = 0; break;   /* TERMINATOR */
       case -1:
-        if( scrape_count )
+      if( scrape_count )
           goto UTORRENT1600_WORKAROUND;
         HTTPERROR_400_PARAM; /* PARSE ERROR */
       default: scan_urlencoded_skipvalue( &c ); break;
@@ -419,7 +419,7 @@ SCRAPE_WORKAROUND:
           continue;
         }
         /* ignore this, when we have less than 20 bytes */
-        if( scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE ) != 20 ) HTTPERROR_400_PARAM;
+        if( scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE ) < sizeof(ot_hash) ) HTTPERROR_400_PARAM;
         if( scrape_count < OT_MAXMULTISCRAPE_COUNT )
           memmove( multiscrape_buf + scrape_count++, data, sizeof(ot_hash) );
         break;
