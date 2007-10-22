@@ -556,6 +556,7 @@ void clean_all_torrents( void ) {
   size_t j;
   time_t time_now = NOW;
   size_t peers_count;
+  ot_dword diff; struct timeval tv1, tv2; gettimeofday( &tv1, NULL );
 
   if( time_now <= last_clean_time )
     return;
@@ -624,6 +625,9 @@ void clean_all_torrents( void ) {
       }
     }
   }
+
+  gettimeofday( &tv2, NULL ); diff = ( tv2.tv_sec - tv1.tv_sec ) * 1000000 + tv2.tv_usec - tv1.tv_usec;
+  fprintf( stderr, "Cleanup time taken: %u\n", diff );
 }
 
 typedef struct { size_t val; ot_torrent * torrent; } ot_record;
