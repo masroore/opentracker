@@ -420,7 +420,7 @@ SCRAPE_WORKAROUND:
           continue;
         }
         /* ignore this, when we have less than 20 bytes */
-        if( scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE ) < sizeof(ot_hash) ) HTTPERROR_400_PARAM;
+        if( scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE ) < (ssize_t)sizeof(ot_hash) ) HTTPERROR_400_PARAM;
         if( scrape_count < OT_MAXMULTISCRAPE_COUNT )
           memmove( multiscrape_buf + scrape_count++, data, sizeof(ot_hash) );
         break;
