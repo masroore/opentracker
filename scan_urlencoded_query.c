@@ -78,8 +78,11 @@ ssize_t scan_urlencoded_query(char **string, char *deststring, SCAN_SEARCHPATH_F
 }
 
 ssize_t scan_fixed_int( char *data, size_t len, int *tmp ) {
+  int minus = 0;
   *tmp = 0;
+  if( *data == '-' ) --len, ++data, ++minus;
   while( (len > 0) && (*data >= '0') && (*data <= '9') ) { --len; *tmp = 10**tmp + *data++-'0'; }
+  if( minus ) *tmp = -*tmp;
   return len;
 }
 

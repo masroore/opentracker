@@ -511,6 +511,7 @@ ANNOUNCE_WORKAROUND:
         if(!byte_diff(data,7,"numwant")) {
           len = scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE );
           if( ( len <= 0 ) || scan_fixed_int( data, len, &numwant ) ) HTTPERROR_400_PARAM;
+          if( numwant < 0 ) numwant = 50;
           if( numwant > 200 ) numwant = 200;
         } else if(!byte_diff(data,7,"compact")) {
           len = scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE );
