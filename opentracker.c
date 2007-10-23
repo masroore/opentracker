@@ -555,7 +555,7 @@ ANNOUNCE_WORKAROUND:
                           ot_overall_tcp_connections+ot_overall_udp_connections, ot_overall_tcp_successfulannounces+ot_overall_udp_successfulannounces, (int)t, (int)(t / 3600), (ot_overall_tcp_connections+ot_overall_udp_connections) / ( (unsigned int)t ? (unsigned int)t : 1 ) );
     break;
   default:
-    if( *data == 'a' ) goto ANNOUNCE_WORKAROUND;
+    if( ( *data == 'a' ) || ( *data == '?' ) ) goto ANNOUNCE_WORKAROUND;
     if( !byte_diff( data, 2, "sc" ) ) goto SCRAPE_WORKAROUND;
     HTTPERROR_404;
   }
