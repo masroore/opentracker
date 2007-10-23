@@ -420,17 +420,22 @@ SCRAPE_WORKAROUND:
           continue;
         }
         /* ignore this, when we have less than 20 bytes */
-        if( scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE ) < (ssize_t)sizeof(ot_hash) ) HTTPERROR_400_PARAM;
+        if( scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE ) != (ssize_t)sizeof(ot_hash) ) {
+#ifdef WANT_UTORRENT1600_WORKAROUND
+          if( data[20] != '?' )
+#endif
+          HTTPERROR_400_PARAM;
+        }
         if( scrape_count < OT_MAXMULTISCRAPE_COUNT )
           memmove( multiscrape_buf + scrape_count++, data, sizeof(ot_hash) );
         break;
       }
     }
 
+UTORRENT1600_WORKAROUND:
+
     /* No info_hash found? Inform user */
     if( !scrape_count ) HTTPERROR_400_PARAM;
-
-UTORRENT1600_WORKAROUND:
 
     /* Enough for http header + whole scrape string */
     if( !( reply_size = return_tcp_scrape_for_torrent( multiscrape_buf, scrape_count, SUCCESS_HTTP_HEADER_LENGTH + static_outbuf ) ) ) HTTPERROR_500;
