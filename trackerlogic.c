@@ -20,7 +20,8 @@
 #include "byte.h"
 
 /* GLOBAL VARIABLES */
-static ot_vector all_torrents[256];
+static ot_vector all_torrents[OT_BUCKET_COUNT];
+static ot_time   all_torrents_clean[OT_BUCKET_COUNT];
 static ot_vector changeset;
 #if defined ( WANT_BLACKLISTING ) || defined( WANT_CLOSED_TRACKER )
 static ot_vector accesslist;
@@ -28,7 +29,8 @@ static ot_vector accesslist;
 #endif
 
 static size_t changeset_size = 0;
-static time_t last_clean_time = 0;
+
+static int clean_single_torrent( ot_torrent *torrent );
 
 /* Converter function from memory to human readable hex strings
    - definitely not thread safe!!!
@@ -127,19 +129,10 @@ static void free_peerlist( ot_peerlist *peer_list ) {
   free( peer_list );
 }
 
-/* This is the non-generic delete from vector-operation specialized for torrents in buckets.
-   it returns 0 if the hash wasn't found in vector
-              1 if the torrent was removed from vector
-*/
-static int vector_remove_torrent( ot_vector *vector, ot_hash *hash ) {
-  int exactmatch;
+static void vector_remove_torrent( ot_vector *vector, ot_torrent *match ) {
   ot_torrent *end = ((ot_torrent*)vector->data) + vector->size;
-  ot_torrent *match;
 
-  if( !vector->size ) return 0;
-
-  match = binary_search( hash, vector->data, vector->size, sizeof( ot_torrent ), OT_HASH_COMPARE_SIZE, &exactmatch );
-  if( !exactmatch ) return 0;
+  if( !vector->size ) return;
 
   /* If this is being called after a unsuccessful malloc() for peer_list
      in add_peer_to_torrent, match->peer_list actually might be NULL */
@@ -150,14 +143,13 @@ static int vector_remove_torrent( ot_vector *vector, ot_hash *hash ) {
     vector->space /= OT_VECTOR_SHRINK_RATIO;
     vector->data = realloc( vector->data, vector->space * sizeof( ot_torrent ) );
   }
-  return 1;
 }
 
 ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer, int from_changeset ) {
   int         exactmatch;
   ot_torrent *torrent;
   ot_peer    *peer_dest;
-  ot_vector  *torrents_list = &all_torrents[*hash[0]], *peer_pool;
+  ot_vector  *torrents_list = hash_to_bucket( all_torrents, hash ), *peer_pool;
   int         base_pool = 0;
 
 #ifdef WANT_ACCESS_CONTROL
@@ -179,13 +171,14 @@ ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer, int from_changese
     memmove( &torrent->hash, hash, sizeof( ot_hash ) );
 
     if( !( torrent->peer_list = malloc( sizeof (ot_peerlist) ) ) ) {
-      vector_remove_torrent( torrents_list, hash );
+      vector_remove_torrent( torrents_list, torrent );
       return NULL;
     }
 
     byte_zero( torrent->peer_list, sizeof( ot_peerlist ) );
     torrent->peer_list->base = NOW;
-  }
+  } else
+    clean_single_torrent( torrent );
 
   /* Sanitize flags: Whoever claims to have completed download, must be a seeder */
   if( ( OT_FLAG( peer ) & ( PEER_FLAG_COMPLETED | PEER_FLAG_SEEDING ) ) == PEER_FLAG_COMPLETED )
@@ -208,27 +201,37 @@ ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer, int from_changese
   if( !exactmatch ) {
     int i;
     memmove( peer_dest, peer, sizeof( ot_peer ) );
+    torrent->peer_list->peer_count++;
 
     if( OT_FLAG( peer ) & PEER_FLAG_COMPLETED )
-      torrent->peer_list->downloaded++;
+      torrent->peer_list->down_count++;
 
-    if( OT_FLAG(peer) & PEER_FLAG_SEEDING )
-      torrent->peer_list->seed_count[ base_pool ]++;
+    if( OT_FLAG(peer) & PEER_FLAG_SEEDING ) {
+      torrent->peer_list->seed_counts[ base_pool ]++;
+      torrent->peer_list->seed_count++;
+    }
 
     for( i= base_pool + 1; i<OT_POOLS_COUNT; ++i ) {
       switch( vector_remove_peer( &torrent->peer_list->peers[i], peer, 0 ) ) {
         case 0: continue;
-        case 2: torrent->peer_list->seed_count[i]--;
-        case 1: default: return torrent;
+        case 2: torrent->peer_list->seed_counts[i]--;
+                torrent->peer_list->seed_count--;
+        case 1: default:
+                torrent->peer_list->peer_count--;
+                return torrent;
       }
     }
   } else {
-    if( (OT_FLAG(peer_dest) & PEER_FLAG_SEEDING ) && !(OT_FLAG(peer) & PEER_FLAG_SEEDING ) )
-      torrent->peer_list->seed_count[ base_pool ]--;
-    if( !(OT_FLAG(peer_dest) & PEER_FLAG_SEEDING ) && (OT_FLAG(peer) & PEER_FLAG_SEEDING ) )
-      torrent->peer_list->seed_count[ base_pool ]++;
+    if( (OT_FLAG(peer_dest) & PEER_FLAG_SEEDING ) && !(OT_FLAG(peer) & PEER_FLAG_SEEDING ) ) {
+      torrent->peer_list->seed_counts[ base_pool ]--;
+      torrent->peer_list->seed_count--;
+    }
+    if( !(OT_FLAG(peer_dest) & PEER_FLAG_SEEDING ) && (OT_FLAG(peer) & PEER_FLAG_SEEDING ) ) {
+      torrent->peer_list->seed_counts[ base_pool ]++;
+      torrent->peer_list->seed_count++;
+    }
     if( !(OT_FLAG( peer_dest ) & PEER_FLAG_COMPLETED ) && (OT_FLAG( peer ) & PEER_FLAG_COMPLETED ) )
-      torrent->peer_list->downloaded++;
+      torrent->peer_list->down_count++;
     if( OT_FLAG( peer_dest ) & PEER_FLAG_COMPLETED )
       OT_FLAG( peer ) |= PEER_FLAG_COMPLETED;
 
@@ -245,29 +248,25 @@ ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer, int from_changese
    * does not yet check not to return self
 */
 size_t return_peers_for_torrent( ot_torrent *torrent, size_t amount, char *reply, int is_tcp ) {
-  char  *r = reply;
-  size_t peer_count, seed_count, index;
+  char        *r = reply;
+  ot_peerlist *peer_list = torrent->peer_list;
+  size_t       index;
 
-  for( peer_count = seed_count = index = 0; index < OT_POOLS_COUNT; ++index ) {
-    peer_count += torrent->peer_list->peers[index].size;
-    seed_count += torrent->peer_list->seed_count[index];
-  }
-
-  if( peer_count < amount )
-    amount = peer_count;
+  if( peer_list->peer_count < amount )
+    amount = peer_list->peer_count;
 
   if( is_tcp )
-    r += sprintf( r, "d8:completei%zde10:incompletei%zde8:intervali%ie5:peers%zd:", seed_count, peer_count-seed_count, OT_CLIENT_REQUEST_INTERVAL_RANDOM, 6*amount );
+    r += sprintf( r, "d8:completei%zde10:incompletei%zde8:intervali%ie5:peers%zd:", peer_list->seed_count, peer_list->peer_count-peer_list->seed_count, OT_CLIENT_REQUEST_INTERVAL_RANDOM, 6*amount );
   else {
     *(ot_dword*)(r+0) = htonl( OT_CLIENT_REQUEST_INTERVAL_RANDOM );
-    *(ot_dword*)(r+4) = htonl( peer_count );
-    *(ot_dword*)(r+8) = htonl( seed_count );
+    *(ot_dword*)(r+4) = htonl( peer_list->peer_count );
+    *(ot_dword*)(r+8) = htonl( peer_list->seed_count );
     r += 12;
   }
 
   if( amount ) {
     unsigned int pool_offset, pool_index = 0;;
-    unsigned int shifted_pc = peer_count;
+    unsigned int shifted_pc = peer_list->peer_count;
     unsigned int shifted_step = 0;
     unsigned int shift = 0;
 
@@ -279,7 +278,7 @@ size_t return_peers_for_torrent( ot_torrent *torrent, size_t amount, char *reply
 
     /* Initialize somewhere in the middle of peers so that
        fixpoint's aliasing doesn't alway miss the same peers */
-    pool_offset = random() % peer_count;
+    pool_offset = random() % peer_list->peer_count;
 
     for( index = 0; index < amount; ++index ) {
       /* This is the aliased, non shifted range, next value may fall into */
@@ -287,12 +286,12 @@ size_t return_peers_for_torrent( ot_torrent *torrent, size_t amount, char *reply
                           ( (   index       * shifted_step ) >> shift );
       pool_offset += 1 + random() % diff;
 
-      while( pool_offset >= torrent->peer_list->peers[pool_index].size ) {
-        pool_offset -= torrent->peer_list->peers[pool_index].size;
+      while( pool_offset >= peer_list->peers[pool_index].size ) {
+        pool_offset -= peer_list->peers[pool_index].size;
         pool_index = ( pool_index + 1 ) % OT_POOLS_COUNT;
       }
 
-      memmove( r, ((ot_peer*)torrent->peer_list->peers[pool_index].data) + pool_offset, 6 );
+      memmove( r, ((ot_peer*)peer_list->peers[pool_index].data) + pool_offset, 6 );
       r += 6;
     }
   }
@@ -316,10 +315,10 @@ static void fix_mmapallocation( void *buf, size_t old_alloc, size_t new_alloc ) 
 size_t return_fullscrape_for_tracker( char **reply ) {
   size_t torrent_count = 0, j;
   size_t allocated, replysize;
-  int    i, k;
+  int    i;
   char  *r;
 
-  for( i=0; i<256; ++i )
+  for( i=0; i<OT_BUCKET_COUNT; ++i )
     torrent_count += all_torrents[i].size;
 
   /* one extra for pro- and epilogue */
@@ -327,20 +326,15 @@ size_t return_fullscrape_for_tracker( char **reply ) {
   if( !( r = *reply = mmap( NULL, allocated, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, -1, 0 ) ) ) return 0;
 
   memmove( r, "d5:filesd", 9 ); r += 9;
-  for( i=0; i<256; ++i ) {
-    ot_vector *torrents_list = &all_torrents[i];
+  for( i=0; i<OT_BUCKET_COUNT; ++i ) {
+    ot_vector *torrents_list = all_torrents + i;
     for( j=0; j<torrents_list->size; ++j ) {
       ot_peerlist *peer_list = ( ((ot_torrent*)(torrents_list->data))[j] ).peer_list;
       ot_hash     *hash      =&( ((ot_torrent*)(torrents_list->data))[j] ).hash;
-      size_t       peers = 0, seeds = 0;
-      for( k=0; k<OT_POOLS_COUNT; ++k ) {
-        peers += peer_list->peers[k].size;
-        seeds += peer_list->seed_count[k];
-      }
-      if( peers || peer_list->downloaded ) {
+      if( peer_list->peer_count || peer_list->down_count ) {
         *r++='2'; *r++='0'; *r++=':';
         memmove( r, hash, 20 ); r+=20;
-        r += sprintf( r, "d8:completei%zde10:downloadedi%zde10:incompletei%zdee", seeds, peer_list->downloaded, peers-seeds );
+        r += sprintf( r, "d8:completei%zde10:downloadedi%zde10:incompletei%zdee", peer_list->seed_count, peer_list->down_count, peer_list->peer_count-peer_list->seed_count );
       }
     }
   }
@@ -359,19 +353,19 @@ size_t return_memstat_for_tracker( char **reply ) {
   int    i, k;
   char  *r;
 
-  for( i=0; i<256; ++i ) {
-    ot_vector *torrents_list = &all_torrents[i];
+  for( i=0; i<OT_BUCKET_COUNT; ++i ) {
+    ot_vector *torrents_list = all_torrents + i;
     torrent_count += torrents_list->size;
   }
 
-  allocated = 256*32 + (43+OT_POOLS_COUNT*32)*torrent_count;
+  allocated = OT_BUCKET_COUNT*32 + (43+OT_POOLS_COUNT*32)*torrent_count;
   if( !( r = *reply = mmap( NULL, allocated, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, -1, 0 ) ) ) return 0;
 
-  for( i=0; i<256; ++i )
+  for( i=0; i<OT_BUCKET_COUNT; ++i )
     r += sprintf( r, "%02X: %08X %08X\n", i, (unsigned int)all_torrents[i].size, (unsigned int)all_torrents[i].space );
 
-  for( i=0; i<256; ++i ) {
-    ot_vector *torrents_list = &all_torrents[i];
+  for( i=0; i<OT_BUCKET_COUNT; ++i ) {
+    ot_vector *torrents_list = all_torrents + i;
     for( j=0; j<torrents_list->size; ++j ) {
       ot_peerlist *peer_list = ( ((ot_torrent*)(torrents_list->data))[j] ).peer_list;
       ot_hash     *hash      =&( ((ot_torrent*)(torrents_list->data))[j] ).hash;
@@ -389,9 +383,8 @@ size_t return_memstat_for_tracker( char **reply ) {
 
 /* Fetches scrape info for a specific torrent */
 size_t return_udp_scrape_for_torrent( ot_hash *hash, char *reply ) {
-  int          exactmatch, i;
-  size_t       peers = 0, seeds = 0;
-  ot_vector   *torrents_list = &all_torrents[*hash[0]];
+  int          exactmatch	;
+  ot_vector   *torrents_list = hash_to_bucket( all_torrents, hash );
   ot_torrent  *torrent = binary_search( hash, torrents_list->data, torrents_list->size, sizeof( ot_torrent ), OT_HASH_COMPARE_SIZE, &exactmatch );
 
   if( !exactmatch ) {
@@ -399,13 +392,14 @@ size_t return_udp_scrape_for_torrent( ot_hash *hash, char *reply ) {
   } else {
     ot_dword *r = (ot_dword*) reply;
 
-    for( i=0; i<OT_POOLS_COUNT; ++i ) {
-      peers += torrent->peer_list->peers[i].size;
-      seeds += torrent->peer_list->seed_count[i];
+    if( clean_single_torrent( torrent ) ) {
+      vector_remove_torrent( torrents_list, torrent );
+      memset( reply, 0, 12);
+    } else {
+      r[0] = htonl( torrent->peer_list->seed_count );
+      r[1] = htonl( torrent->peer_list->down_count );
+      r[2] = htonl( torrent->peer_list->peer_count-torrent->peer_list->seed_count );
     }
-    r[0] = htonl( seeds );
-    r[1] = htonl( torrent->peer_list->downloaded );
-    r[2] = htonl( peers-seeds );
   }
   return 12;
 }
@@ -413,31 +407,30 @@ size_t return_udp_scrape_for_torrent( ot_hash *hash, char *reply ) {
 /* Fetches scrape info for a specific torrent */
 size_t return_tcp_scrape_for_torrent( ot_hash *hash_list, int amount, char *reply ) {
   char        *r = reply;
-  int          exactmatch, i, j;
+  int          exactmatch, i;
 
   r += sprintf( r, "d5:filesd" );
 
   for( i=0; i<amount; ++i ) {
     ot_hash     *hash = hash_list + i;
-    ot_vector   *torrents_list = &all_torrents[*hash[0]];
+    ot_vector   *torrents_list = hash_to_bucket( all_torrents, hash );
     ot_torrent  *torrent = binary_search( hash, torrents_list->data, torrents_list->size, sizeof( ot_torrent ), OT_HASH_COMPARE_SIZE, &exactmatch );
-    size_t       peers = 0, seeds = 0;
 
     if( !exactmatch ) continue;
-
-    for( j=0; j<OT_POOLS_COUNT; ++j ) {
-      peers += torrent->peer_list->peers[j].size;
-      seeds += torrent->peer_list->seed_count[j];
+    if( clean_single_torrent( torrent ) ) {
+      vector_remove_torrent( torrents_list, torrent );
+    } else {
+      memmove( r, "20:", 3 ); memmove( r+3, hash, 20 );
+      r += sprintf( r+23, "d8:completei%zde10:downloadedi%zde10:incompletei%zdee",
+        torrent->peer_list->seed_count, torrent->peer_list->down_count, torrent->peer_list->peer_count-torrent->peer_list->seed_count ) + 23;
     }
-
-    memmove( r, "20:", 3 ); memmove( r+3, hash, 20 );
-    r += sprintf( r+23, "d8:completei%zde10:downloadedi%zde10:incompletei%zdee", seeds, torrent->peer_list->downloaded, peers-seeds ) + 23;
   }
 
   *r++ = 'e'; *r++ = 'e';
   return r - reply;
 }
 
+#ifdef WANT_TRACKER_SYNC
 /* Throw away old changeset */
 static void release_changeset( void ) {
   ot_byte **changeset_ptrs = (ot_byte**)(changeset.data);
@@ -548,86 +541,91 @@ size_t return_changeset_for_tracker( char **reply ) {
 
   return r;
 }
+#endif
 
-/* Clean up all torrents, remove timedout pools and
-   torrents, also prepare new changeset */
-void clean_all_torrents( void ) {
-  int    i, k;
-  size_t j;
-  time_t time_now = NOW;
-  size_t peers_count;
-  ot_dword diff; struct timeval tv1, tv2; gettimeofday( &tv1, NULL );
+/* Clean a single torrent
+   return 1 if torrent timed out
+*/
+static int clean_single_torrent( ot_torrent *torrent ) {
+  ot_peerlist *peer_list = torrent->peer_list;
+  size_t peers_count = 0, seeds_count;
+  time_t timedout = (int)( NOW - peer_list->base );
+  int i;
 
-  if( time_now <= last_clean_time )
-    return;
-  last_clean_time = time_now;
+  /* Torrent has idled out */
+  if( timedout > OT_TORRENT_TIMEOUT )
+    return 1;
 
-  release_changeset();
-
-  for( i=0; i<256; ++i ) {
-    ot_vector *torrents_list = &all_torrents[i];
-    for( j=0; j<torrents_list->size; ++j ) {
-      ot_peerlist *peer_list = ( ((ot_torrent*)(torrents_list->data))[j] ).peer_list;
-      ot_hash     *hash =&( ((ot_torrent*)(torrents_list->data))[j] ).hash;
-
-      time_t timedout = (int)( time_now - peer_list->base );
-
-      /* Torrent has idled out */
-      if( timedout > OT_TORRENT_TIMEOUT ) {
-        vector_remove_torrent( torrents_list, hash );
-        --j; continue;
-      }
-
-      /* If nothing to be cleaned here, handle next torrent */
-      if( timedout > OT_POOLS_COUNT ) {
-
-        peers_count = 0;
-        for( k = 0; k < OT_POOLS_COUNT; ++k )
-          peers_count += peer_list->peers[k].size;
-
-        if( !peers_count ) {
-          if( !peer_list->downloaded ) {
-            vector_remove_torrent( torrents_list, hash );
-            --j;
-          }
-          continue;
-        }
-
-        timedout = OT_POOLS_COUNT;
-      }
-
-      /* Release vectors that have timed out */
-      for( k = OT_POOLS_COUNT - timedout; k < OT_POOLS_COUNT; ++k )
-        free( peer_list->peers[k].data);
-
-      /* Shift vectors back by the amount of pools that were shifted out */
-      memmove( peer_list->peers + timedout, peer_list->peers, sizeof( ot_vector ) * ( OT_POOLS_COUNT - timedout ) );
-      byte_zero( peer_list->peers, sizeof( ot_vector ) * timedout );
-
-      /* Shift back seed counts as well */
-      memmove( peer_list->seed_count + timedout, peer_list->seed_count, sizeof( size_t ) * ( OT_POOLS_COUNT - timedout ) );
-      byte_zero( peer_list->seed_count, sizeof( size_t ) * timedout );
-
-      /* Save the block modified within last OT_POOLS_TIMEOUT */
-      if( peer_list->peers[1].size )
-        add_pool_to_changeset( hash, peer_list->peers[1].data, peer_list->peers[1].size );
-
-      peers_count = 0;
-      for( k = 0; k < OT_POOLS_COUNT; ++k )
-        peers_count += peer_list->peers[k].size;
-
-      if( peers_count ) {
-        peer_list->base = time_now;
-      } else {
-        /* When we got here, the last time that torrent
-           has been touched is OT_POOLS_COUNT units before */
-        peer_list->base = time_now - OT_POOLS_COUNT;
-      }
-    }
+  /* Nothing to be cleaned here? Test if torrent is worth keeping */
+  if( timedout > OT_POOLS_COUNT ) {
+    if( !peer_list->peer_count )
+      return peer_list->down_count ? 0 : 1;
+    timedout = OT_POOLS_COUNT;
   }
 
-  gettimeofday( &tv2, NULL ); diff = ( tv2.tv_sec - tv1.tv_sec ) * 1000000 + tv2.tv_usec - tv1.tv_usec;
-  fprintf( stderr, "Cleanup time taken: %u\n", diff );
+  /* Release vectors that have timed out */
+  for( i = OT_POOLS_COUNT - timedout; i < OT_POOLS_COUNT; ++i )
+    free( peer_list->peers[i].data);
+
+  /* Shift vectors back by the amount of pools that were shifted out */
+  memmove( peer_list->peers + timedout, peer_list->peers, sizeof( ot_vector ) * ( OT_POOLS_COUNT - timedout ) );
+  byte_zero( peer_list->peers, sizeof( ot_vector ) * timedout );
+
+  /* Shift back seed counts as well */
+  memmove( peer_list->seed_counts + timedout, peer_list->seed_counts, sizeof( size_t ) * ( OT_POOLS_COUNT - timedout ) );
+  byte_zero( peer_list->seed_counts, sizeof( size_t ) * timedout );
+
+  /* Save the block modified within last OT_POOLS_TIMEOUT  --- XXX no sync for now
+  if( peer_list->peers[1].size )
+    add_pool_to_changeset( hash, peer_list->peers[1].data, peer_list->peers[1].size );
+  */
+
+  peers_count = seeds_count = 0;
+  for( i = 0; i < OT_POOLS_COUNT; ++i ) {
+    peers_count += peer_list->peers[i].size;
+    seeds_count += peer_list->seed_counts[i];
+  }
+  peer_list->seed_count = seeds_count;
+  peer_list->peer_count = peers_count;
+
+  if( peers_count )
+    peer_list->base = NOW;
+  else {
+    /* When we got here, the last time that torrent
+       has been touched is OT_POOLS_COUNT units before */
+    peer_list->base = NOW - OT_POOLS_COUNT;
+  }
+  return 0;
+}
+
+/* Clean up all peers in current bucket, remove timedout pools and
+   torrents */
+void clean_all_torrents( void ) {
+  ot_vector         *torrents_list;
+  size_t             i;
+  static int         bucket;
+  ot_time time_now = NOW;
+
+/* No sync for now
+  release_changeset();
+*/
+
+  /* Search for an uncleaned bucked */
+  while( ( all_torrents_clean[bucket] == time_now ) && ( ++bucket < OT_BUCKET_COUNT ) );
+  if( bucket >= OT_BUCKET_COUNT ) {
+    bucket = 0; return;
+  }
+
+  all_torrents_clean[bucket] = time_now;
+
+  torrents_list = all_torrents + bucket;
+  for( i=0; i<torrents_list->size; ++i ) {
+    ot_torrent *torrent = ((ot_torrent*)(torrents_list->data)) + i;
+    if( clean_single_torrent( torrent ) ) {
+      vector_remove_torrent( torrents_list, torrent );
+      --i; continue;
+    }
+  }
 }
 
 typedef struct { size_t val; ot_torrent * torrent; } ot_record;
@@ -637,37 +635,31 @@ size_t return_stats_for_tracker( char *reply, int mode ) {
   size_t    torrent_count = 0, peer_count = 0, seed_count = 0, j;
   ot_record top5s[5], top5c[5];
   char     *r  = reply;
-  int       i,k;
+  int       i;
 
   byte_zero( top5s, sizeof( top5s ) );
   byte_zero( top5c, sizeof( top5c ) );
 
-  for( i=0; i<256; ++i ) {
-    ot_vector *torrents_list = &all_torrents[i];
+  for( i=0; i<OT_BUCKET_COUNT; ++i ) {
+    ot_vector *torrents_list = all_torrents + i;
     torrent_count += torrents_list->size;
     for( j=0; j<torrents_list->size; ++j ) {
       ot_peerlist *peer_list = ( ((ot_torrent*)(torrents_list->data))[j] ).peer_list;
-      size_t local_peers = 0, local_seeds = 0;
-
-      for( k=0; k<OT_POOLS_COUNT; ++k ) {
-        local_peers += peer_list->peers[k].size;
-        local_seeds += peer_list->seed_count[k];
-      }
       if( mode == STATS_TOP5 ) {
-        int idx = 4; while( (idx >= 0) && ( local_peers > top5c[idx].val ) ) --idx;
+        int idx = 4; while( (idx >= 0) && ( peer_list->peer_count > top5c[idx].val ) ) --idx;
         if ( idx++ != 4 ) {
           memmove( top5c + idx + 1, top5c + idx, ( 4 - idx ) * sizeof( ot_record ) );
-          top5c[idx].val = local_peers;
+          top5c[idx].val = peer_list->peer_count;
           top5c[idx].torrent = (ot_torrent*)(torrents_list->data) + j;
         }
-        idx = 4; while( (idx >= 0) && ( local_seeds > top5s[idx].val ) ) --idx;
+        idx = 4; while( (idx >= 0) && ( peer_list->seed_count > top5s[idx].val ) ) --idx;
         if ( idx++ != 4 ) {
           memmove( top5s + idx + 1, top5s + idx, ( 4 - idx ) * sizeof( ot_record ) );
-          top5s[idx].val = local_seeds;
+          top5s[idx].val = peer_list->seed_count;
           top5s[idx].torrent = (ot_torrent*)(torrents_list->data) + j;
         }
       }
-      peer_count += local_peers; seed_count += local_seeds;
+      peer_count += peer_list->peer_count; seed_count += peer_list->seed_count;
     }
   }
   if( mode == STATS_TOP5 ) {
@@ -708,8 +700,8 @@ size_t return_stats_for_slash24s( char *reply, size_t amount, ot_dword thresh ) 
 
   r += sprintf( r, "Stats for all /24s with more than %u announced torrents:\n\n", thresh );
 
-  for( i=0; i<256; ++i ) {
-    ot_vector *torrents_list = &all_torrents[i];
+  for( i=0; i<OT_BUCKET_COUNT; ++i ) {
+    ot_vector *torrents_list = all_torrents + i;
     for( j=0; j<torrents_list->size; ++j ) {
       ot_peerlist *peer_list = ( ((ot_torrent*)(torrents_list->data))[j] ).peer_list;
       for( k=0; k<OT_POOLS_COUNT; ++k ) {
@@ -787,8 +779,8 @@ size_t return_stats_for_slash24s_old( char *reply, size_t amount, ot_dword thres
 
   r += sprintf( r, "Stats for all /24s with more than %d announced torrents:\n\n", ((int)thresh) );
 
-  for( i=0; i<256; ++i ) {
-    ot_vector *torrents_list = &all_torrents[i];
+  for( i=0; i<OT_BUCKET_COUNT; ++i ) {
+    ot_vector *torrents_list = all_torrents + i;
     for( j=0; j<torrents_list->size; ++j ) {
       ot_peerlist *peer_list = ( ((ot_torrent*)(torrents_list->data))[j] ).peer_list;
       for( k=0; k<OT_POOLS_COUNT; ++k ) {
@@ -828,9 +820,10 @@ size_t return_stats_for_slash24s_old( char *reply, size_t amount, ot_dword thres
 
 size_t remove_peer_from_torrent( ot_hash *hash, ot_peer *peer, char *reply, int is_tcp ) {
   int          exactmatch;
-  size_t       peer_count, seed_count, index;
-  ot_vector   *torrents_list = &all_torrents[*hash[0]];
+  size_t       index;
+  ot_vector   *torrents_list = hash_to_bucket( all_torrents, hash );
   ot_torrent  *torrent = binary_search( hash, torrents_list->data, torrents_list->size, sizeof( ot_torrent ), OT_HASH_COMPARE_SIZE, &exactmatch );
+  ot_peerlist *peer_list;
 
   if( !exactmatch ) {
     if( is_tcp )
@@ -842,33 +835,27 @@ size_t remove_peer_from_torrent( ot_hash *hash, ot_peer *peer, char *reply, int 
     return (size_t)20;
   }
 
-  for( peer_count = seed_count = index = 0; index<OT_POOLS_COUNT; ++index ) {
-    peer_count += torrent->peer_list->peers[index].size;
-    seed_count += torrent->peer_list->seed_count[index];
-
-    switch( vector_remove_peer( &torrent->peer_list->peers[index], peer, index == 0 ) ) {
+  peer_list = torrent->peer_list;
+  for( index = 0; index<OT_POOLS_COUNT; ++index ) {
+    switch( vector_remove_peer( &peer_list->peers[index], peer, index == 0 ) ) {
       case 0: continue;
-      case 2: torrent->peer_list->seed_count[index]--;
-              seed_count--;
+      case 2: peer_list->seed_counts[index]--;
+              peer_list->seed_count--;
       case 1: default:
-              peer_count--;
+              peer_list->peer_count--;
               goto exit_loop;
     }
   }
 
 exit_loop:
-  for( ++index; index < OT_POOLS_COUNT; ++index ) {
-    peer_count += torrent->peer_list->peers[index].size;
-    seed_count += torrent->peer_list->seed_count[index];
-  }
 
   if( is_tcp )
-    return sprintf( reply, "d8:completei%zde10:incompletei%zde8:intervali%ie5:peers0:e", seed_count, peer_count - seed_count, OT_CLIENT_REQUEST_INTERVAL_RANDOM );
+    return sprintf( reply, "d8:completei%zde10:incompletei%zde8:intervali%ie5:peers0:e", peer_list->seed_count, peer_list->peer_count - peer_list->seed_count, OT_CLIENT_REQUEST_INTERVAL_RANDOM );
 
   /* else { Handle UDP reply */
   ((ot_dword*)reply)[2] = htonl( OT_CLIENT_REQUEST_INTERVAL_RANDOM );
-  ((ot_dword*)reply)[3] = peer_count - seed_count;
-  ((ot_dword*)reply)[4] = seed_count;
+  ((ot_dword*)reply)[3] = peer_list->peer_count - peer_list->seed_count;
+  ((ot_dword*)reply)[4] = peer_list->seed_count;
   return (size_t)20;
 }
 
@@ -893,7 +880,7 @@ void deinit_logic( void ) {
   size_t j;
 
   /* Free all torrents... */
-  for(i=0; i<256; ++i ) {
+  for(i=0; i<OT_BUCKET_COUNT; ++i ) {
     if( all_torrents[i].size ) {
       ot_torrent *torrents_list = (ot_torrent*)all_torrents[i].data;
       for( j=0; j<all_torrents[i].size; ++j )
@@ -902,6 +889,7 @@ void deinit_logic( void ) {
     }
   }
   byte_zero( all_torrents, sizeof (all_torrents));
+  byte_zero( all_torrents_clean, sizeof (all_torrents_clean));
   byte_zero( &changeset, sizeof( changeset ) );
   changeset_size = 0;
 }

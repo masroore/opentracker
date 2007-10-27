@@ -20,6 +20,16 @@ typedef ot_byte        ot_hash[20];
 typedef ot_dword       ot_ip;
 typedef time_t         ot_time;
 
+#define OT_VECTOR_MIN_MEMBERS   4
+#define OT_VECTOR_GROW_RATIO    8
+#define OT_VECTOR_SHRINK_THRESH 6
+#define OT_VECTOR_SHRINK_RATIO  4
+typedef struct {
+  void   *data;
+  size_t  size;
+  size_t  space;
+} ot_vector;
+
 /* Some tracker behaviour tunable */
 #define OT_CLIENT_TIMEOUT 30
 #define OT_CLIENT_TIMEOUT_CHECKINTERVAL 10
@@ -32,8 +42,13 @@ typedef time_t         ot_time;
 
 #define OT_CLIENT_REQUEST_INTERVAL_RANDOM ( OT_CLIENT_REQUEST_INTERVAL - OT_CLIENT_REQUEST_VARIATION/2 + (int)( random( ) % OT_CLIENT_REQUEST_VARIATION ) )
 
-/* We maintain a list of 256 pointers to sorted list of ot_torrent structs
+/* We maintain a list of 4096 pointers to sorted list of ot_torrent structs
    Sort key is, of course, its hash */
+#define OT_BUCKET_COUNT 1024
+static inline ot_vector *hash_to_bucket( ot_vector *vectors, ot_hash *hash ) {
+  unsigned char *local_hash = hash[0];
+  return vectors + ( ( local_hash[0] << 2 ) | ( local_hash[1] >> 6 ) );
+}
 
 /* This list points to 9 pools of peers each grouped in five-minute-intervals
    thus achieving a timeout of 2700s or 45 minutes
@@ -44,16 +59,6 @@ typedef time_t         ot_time;
 
 extern  time_t g_now;
 #define NOW              (g_now/OT_POOLS_TIMEOUT)
-
-#define OT_VECTOR_MIN_MEMBERS   4
-#define OT_VECTOR_GROW_RATIO    8
-#define OT_VECTOR_SHRINK_THRESH 6
-#define OT_VECTOR_SHRINK_RATIO  4
-typedef struct {
-  void   *data;
-  size_t  size;
-  size_t  space;
-} ot_vector;
 
 typedef struct {
   ot_byte data[8];
@@ -71,8 +76,10 @@ static const ot_byte PEER_FLAG_STOPPED   = 0x20;
 
 typedef struct {
   ot_time        base;
-  size_t         seed_count[ OT_POOLS_COUNT ];
-  size_t         downloaded;
+  size_t         seed_count;
+  size_t         peer_count;
+  size_t         down_count;
+  size_t         seed_counts[ OT_POOLS_COUNT ];
   ot_vector      peers[ OT_POOLS_COUNT ];
 } ot_peerlist;
 
@@ -100,9 +107,12 @@ size_t return_stats_for_tracker( char *reply, int mode );
 size_t return_stats_for_slash24s( char *reply, size_t amount, ot_dword thresh );
 size_t return_stats_for_slash24s_old( char *reply, size_t amount, ot_dword thresh );
 size_t return_memstat_for_tracker( char **reply );
+void   clean_all_torrents( void );
+
+#ifdef WANT_TRACKER_SYNC
 size_t return_changeset_for_tracker( char **reply );
 int    add_changeset_to_tracker( ot_byte *data, size_t len );
-void   clean_all_torrents( void );
+#endif
 
 #if defined ( WANT_BLACKLISTING ) || defined ( WANT_CLOSED_TRACKER )
 int    accesslist_addentry( ot_hash *hash );

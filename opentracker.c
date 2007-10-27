@@ -243,7 +243,7 @@ static void httpresponse( const int64 s, char *data, size_t l ) {
   for( c = data+4; *c == '/'; ++c);
 
   switch( scan_urlencoded_query( &c, data = c, SCAN_PATH ) ) {
-
+#ifdef WANT_TRACKER_SYNC
 /******************************
  *         S Y N C            *
  ******************************/
@@ -286,6 +286,7 @@ LOG_TO_STDERR( "sync: %d.%d.%d.%d\n", h->ip[0], h->ip[1], h->ip[2], h->ip[3] );
     reply_size = 2;
 
     break;
+#endif
 /******************************
  *        S T A T S           *
  ******************************/
