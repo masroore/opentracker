@@ -22,13 +22,10 @@
 /* GLOBAL VARIABLES */
 static ot_vector all_torrents[OT_BUCKET_COUNT];
 static ot_time   all_torrents_clean[OT_BUCKET_COUNT];
-static ot_vector changeset;
 #if defined ( WANT_BLACKLISTING ) || defined( WANT_CLOSED_TRACKER )
 static ot_vector accesslist;
 #define WANT_ACCESS_CONTROL
 #endif
-
-static size_t changeset_size = 0;
 
 static int clean_single_torrent( ot_torrent *torrent );
 
@@ -126,6 +123,9 @@ static void free_peerlist( ot_peerlist *peer_list ) {
   for( i=0; i<OT_POOLS_COUNT; ++i )
     if( peer_list->peers[i].data )
       free( peer_list->peers[i].data );
+#ifdef WANT_TRACKER_SYNC
+  free( peer_list->changeset.data );
+#endif
   free( peer_list );
 }
 
@@ -145,7 +145,11 @@ static void vector_remove_torrent( ot_vector *vector, ot_torrent *match ) {
   }
 }
 
+#ifdef WANT_TRACKER_SYNC
 ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer, int from_changeset ) {
+#else
+ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer ) {
+#endif
   int         exactmatch;
   ot_torrent *torrent;
   ot_peer    *peer_dest;
@@ -184,6 +188,7 @@ ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer, int from_changese
   if( ( OT_FLAG( peer ) & ( PEER_FLAG_COMPLETED | PEER_FLAG_SEEDING ) ) == PEER_FLAG_COMPLETED )
     OT_FLAG( peer ) ^= PEER_FLAG_COMPLETED;
 
+#ifdef WANT_TRACKER_SYNC
   if( from_changeset ) {
     /* Check, whether peer already is in current pool, do nothing if so */
     peer_pool = &torrent->peer_list->peers[0];
@@ -192,6 +197,7 @@ ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer, int from_changese
       return torrent;
     base_pool = 1;
   }
+#endif
 
   peer_pool = &torrent->peer_list->peers[ base_pool ];
   peer_dest = vector_find_or_insert( peer_pool, (void*)peer, sizeof( ot_peer ), OT_PEER_COMPARE_SIZE, &exactmatch );
@@ -431,54 +437,6 @@ size_t return_tcp_scrape_for_torrent( ot_hash *hash_list, int amount, char *repl
 }
 
 #ifdef WANT_TRACKER_SYNC
-/* Throw away old changeset */
-static void release_changeset( void ) {
-  ot_byte **changeset_ptrs = (ot_byte**)(changeset.data);
-  size_t i;
-
-  for( i = 0; i < changeset.size; ++i )
-    free( changeset_ptrs[i] );
-
-  free( changeset_ptrs );
-  byte_zero( &changeset, sizeof( changeset ) );
-
-  changeset_size = 0;
-}
-
-static void add_pool_to_changeset( ot_hash *hash, ot_peer *peers, size_t peer_count ) {
-  ot_byte *pool_copy = (ot_byte *)malloc( sizeof( size_t ) + sizeof( ot_hash ) + sizeof( ot_peer ) * peer_count + 13 );
-  size_t r = 0;
-
-  if( !pool_copy )
-    return;
-
-  memmove( pool_copy + sizeof( size_t ), "20:", 3 );
-  memmove( pool_copy + sizeof( size_t ) + 3, hash, sizeof( ot_hash ) );
-  r = sizeof( size_t ) + 3 + sizeof( ot_hash );
-  r += sprintf( (char*)pool_copy + r, "%zd:", sizeof( ot_peer ) * peer_count );
-  memmove( pool_copy + r, peers, sizeof( ot_peer ) * peer_count );
-  r += sizeof( ot_peer ) * peer_count;
-
-  /* Without the length field */
-  *(size_t*)pool_copy = r - sizeof( size_t );
-
-  if( changeset.size + 1 >= changeset.space ) {
-    size_t   new_space = changeset.space ? OT_VECTOR_GROW_RATIO * changeset.space : OT_VECTOR_MIN_MEMBERS;
-    ot_byte *new_data = realloc( changeset.data, new_space * sizeof( ot_byte *) );
-
-    if( !new_data )
-      return free( pool_copy );
-
-    changeset.data = new_data;
-    changeset.space = new_space;
-  }
-
-  ((ot_byte**)changeset.data)[changeset.size++] = pool_copy;
-
-  /* Without the length field */
-  changeset_size += r - sizeof( size_t );
-}
-
 /* Import Changeset from an external authority
    format: d4:syncd[..]ee
    [..]:   ( 20:01234567890abcdefghij16:XXXXYYYY )+
@@ -523,23 +481,45 @@ int add_changeset_to_tracker( ot_byte *data, size_t len ) {
    d4:syncd20:<info_hash>8*N:(xxxxyyyy)*Nee
 */
 size_t return_changeset_for_tracker( char **reply ) {
-  size_t i, r = 8;
+  size_t allocated = 0, i, replysize;
+  int    bucket;
+  char   *r;
 
-  clean_all_torrents();
+  /* Maybe there is time to clean_all_torrents(); */
 
-  if( !( *reply = mmap( NULL, 8 + changeset_size + 2, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, -1, 0 ) ) ) return 0;
-
-  memmove( *reply, "d4:syncd", 8 );
-  for( i = 0; i < changeset.size; ++i ) {
-    ot_byte *data = ((ot_byte**)changeset.data)[i];
-    memmove( *reply + r, data + sizeof( size_t ), *(size_t*)data );
-    r += *(size_t*)data;
+  /* Determine space needed for whole changeset */
+  for( bucket = 0; bucket < OT_BUCKET_COUNT; ++bucket ) {
+    ot_vector *torrents_list = all_torrents + bucket;
+    for( i=0; i<torrents_list->size; ++i ) {
+      ot_torrent *torrent = ((ot_torrent*)(torrents_list->data)) + i;
+      allocated += sizeof( ot_hash ) + sizeof(ot_peer) * torrent->peer_list->changeset.size + 13;
+    }
   }
 
-  (*reply)[r++] = 'e';
-  (*reply)[r++] = 'e';
+  /* add "d4:syncd" and "ee" */
+  allocated += 8 + 2;
 
-  return r;
+  if( !( r = *reply = mmap( NULL, allocated, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, -1, 0 ) ) )
+    return 0;
+
+  memmove( r, "d4:syncd", 8 ); r += 8;
+  for( bucket = 0; bucket < OT_BUCKET_COUNT; ++bucket ) {
+    ot_vector *torrents_list = all_torrents + bucket;
+    for( i=0; i<torrents_list->size; ++i ) {
+      ot_torrent *torrent = ((ot_torrent*)(torrents_list->data)) + i;
+      const size_t byte_count = sizeof(ot_peer) * torrent->peer_list->changeset.size;
+      *r++ = '2'; *r++ = '0'; *r++ = ':';
+      memmove( r, torrent->hash, sizeof( ot_hash ) ); r += sizeof( ot_hash );
+      r += sprintf( r, "%zd:", byte_count );
+      memmove( r, torrent->peer_list->changeset.data, byte_count ); r += byte_count;
+    }
+  }
+  *r++ = 'e'; *r++ = 'e';
+
+  replysize = ( r - *reply );
+  fix_mmapallocation( *reply, allocated, replysize );
+
+  return replysize;
 }
 #endif
 
@@ -551,6 +531,9 @@ static int clean_single_torrent( ot_torrent *torrent ) {
   size_t peers_count = 0, seeds_count;
   time_t timedout = (int)( NOW - peer_list->base );
   int i;
+#ifdef WANT_TRACKER_SYNC
+  char *new_peers;
+#endif
 
   /* Torrent has idled out */
   if( timedout > OT_TORRENT_TIMEOUT )
@@ -575,10 +558,20 @@ static int clean_single_torrent( ot_torrent *torrent ) {
   memmove( peer_list->seed_counts + timedout, peer_list->seed_counts, sizeof( size_t ) * ( OT_POOLS_COUNT - timedout ) );
   byte_zero( peer_list->seed_counts, sizeof( size_t ) * timedout );
 
-  /* Save the block modified within last OT_POOLS_TIMEOUT  --- XXX no sync for now
-  if( peer_list->peers[1].size )
-    add_pool_to_changeset( hash, peer_list->peers[1].data, peer_list->peers[1].size );
-  */
+#ifdef WANT_TRACKER_SYNC
+  /* Save the block modified within last OT_POOLS_TIMEOUT */
+  if( peer_list->peers[1].size &&
+    ( new_peers = realloc( peer_list->changeset.data, sizeof( ot_peer ) * peer_list->peers[1].size ) ) )
+  {
+    memmove( new_peers, peer_list->peers[1].data, peer_list->peers[1].size );
+    peer_list->changeset.data = new_peers;
+    peer_list->changeset.size = sizeof( ot_peer ) * peer_list->peers[1].size;
+  } else {
+    free( peer_list->changeset.data );
+
+    memset( &peer_list->changeset, 0, sizeof( ot_vector ) );
+  }
+#endif
 
   peers_count = seeds_count = 0;
   for( i = 0; i < OT_POOLS_COUNT; ++i ) {
@@ -605,10 +598,6 @@ void clean_all_torrents( void ) {
   size_t             i;
   static int         bucket;
   ot_time time_now = NOW;
-
-/* No sync for now
-  release_changeset();
-*/
 
   /* Search for an uncleaned bucked */
   while( ( all_torrents_clean[bucket] == time_now ) && ( ++bucket < OT_BUCKET_COUNT ) );
@@ -869,8 +858,6 @@ int init_logic( const char * const serverdir ) {
 
   /* Initialize control structures */
   byte_zero( all_torrents, sizeof( all_torrents ) );
-  byte_zero( &changeset, sizeof( changeset ) );
-  changeset_size = 0;
 
   return 0;
 }
@@ -890,8 +877,6 @@ void deinit_logic( void ) {
   }
   byte_zero( all_torrents, sizeof (all_torrents));
   byte_zero( all_torrents_clean, sizeof (all_torrents_clean));
-  byte_zero( &changeset, sizeof( changeset ) );
-  changeset_size = 0;
 }
 
 #ifdef WANT_ACCESS_CONTROL

@@ -49,6 +49,10 @@ static char *accesslist_filename = NULL;
 #define WANT_ACCESS_CONTROL
 #endif
 
+#ifndef WANT_TRACKER_SYNC
+#define add_peer_to_torrent(A,B,C) add_peer_to_torrent(A,B)
+#endif
+
 #ifndef NO_FULLSCRAPE_LOGGING
 #define LOG_TO_STDERR( ... ) fprintf( stderr, __VA_ARGS__ )
 #else
@@ -91,7 +95,12 @@ struct http_data {
 int main( int argc, char **argv );
 
 static void httperror( const int64 s, const char *title, const char *message );
+
+#ifdef _DEBUG_HTTPERROR
 static void httpresponse( const int64 s, char *data, size_t l );
+#else
+static void httpresponse( const int64 s, char *data );
+#endif
 
 static void sendmmapdata( const int64 s, char *buffer, const size_t size );
 static void senddata( const int64 s, char *buffer, const size_t size );
@@ -213,7 +222,11 @@ static void senddata( const int64 s, char *buffer, size_t size ) {
   }
 }
 
+#ifdef _DEBUG_HTTPERROR
 static void httpresponse( const int64 s, char *data, size_t l ) {
+#else
+static void httpresponse( const int64 s, char *data ) {
+#endif
   struct http_data* h = io_getcookie( s );
   char       *c, *reply;
   ot_peer     peer;
@@ -643,8 +656,13 @@ static void handle_read( const int64 clientsocket ) {
 
   /* If we get the whole request in one packet, handle it without copying */
   if( !array_start( &h->request ) ) {
-    if( memchr( static_inbuf, '\n', l ) )
-      return httpresponse( clientsocket, static_inbuf, l );
+    if( memchr( static_inbuf, '\n', l ) ) {
+      return httpresponse( clientsocket, static_inbuf
+#ifdef _DEBUG_HTTPERROR
+                           , l
+#endif
+                         );
+      }
     h->flag |= STRUCT_HTTP_FLAG_ARRAY_USED;
     return array_catb( &h->request, static_inbuf, l );
   }
@@ -658,8 +676,13 @@ static void handle_read( const int64 clientsocket ) {
   if( ( array_bytes( &h->request ) > 8192 ) && NOTBLESSED( h ) )
      return httperror( clientsocket, "500 request too long", "You sent too much headers");
 
-  if( memchr( array_start( &h->request ), '\n', array_bytes( &h->request ) ) )
-    return httpresponse( clientsocket, array_start( &h->request ), array_bytes( &h->request ) );
+  if( memchr( array_start( &h->request ), '\n', array_bytes( &h->request ) ) ) {
+    return httpresponse( clientsocket, array_start( &h->request )
+#ifdef _DEBUG_HTTPERROR
+                         , array_bytes( &h->request )
+#endif
+                       );
+  }
 }
 
 static void handle_write( const int64 clientsocket ) {

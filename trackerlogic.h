@@ -81,6 +81,9 @@ typedef struct {
   size_t         down_count;
   size_t         seed_counts[ OT_POOLS_COUNT ];
   ot_vector      peers[ OT_POOLS_COUNT ];
+#ifdef WANT_TRACKER_SYNC
+  ot_vector      changeset;
+#endif
 } ot_peerlist;
 
 typedef struct {
@@ -97,7 +100,11 @@ void deinit_logic( void );
 
 enum { STATS_MRTG, STATS_TOP5, STATS_DMEM, STATS_TCP, STATS_UDP, STATS_SLASH24S, STATS_SLASH24S_OLD, SYNC_IN, SYNC_OUT };
 
+#ifdef WANT_TRACKER_SYNC
 ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer, int from_changeset );
+#else
+ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer );
+#endif
 size_t remove_peer_from_torrent( ot_hash *hash, ot_peer *peer, char *reply, int is_tcp );
 size_t return_peers_for_torrent( ot_torrent *torrent, size_t amount, char *reply, int is_tcp );
 size_t return_fullscrape_for_tracker( char **reply );
