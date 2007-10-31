@@ -98,7 +98,7 @@ typedef struct {
 int  init_logic( const char * const serverdir );
 void deinit_logic( void );
 
-enum { STATS_MRTG, STATS_TOP5, STATS_DMEM, STATS_TCP, STATS_UDP, STATS_SLASH24S, STATS_SLASH24S_OLD, SYNC_IN, SYNC_OUT };
+enum { STATS_MRTG, STATS_TOP5, STATS_DMEM, STATS_TCP, STATS_UDP, STATS_SLASH24S, STATS_SLASH24S_OLD, SYNC_IN, SYNC_OUT, STATS_FULLSCRAPE };
 
 #ifdef WANT_TRACKER_SYNC
 ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer, int from_changeset );

@@ -35,6 +35,8 @@ static unsigned long long ot_overall_tcp_connections = 0;
 static unsigned long long ot_overall_udp_connections = 0;
 static unsigned long long ot_overall_tcp_successfulannounces = 0;
 static unsigned long long ot_overall_udp_successfulannounces = 0;
+static unsigned long long ot_full_scrape_count = 0;
+static unsigned long long ot_full_scrape_size = 0;
 static time_t ot_start_time;
 static const size_t SUCCESS_HTTP_HEADER_LENGTH = 80;
 static const size_t SUCCESS_HTTP_SIZE_OFF = 17;
@@ -325,6 +327,8 @@ LOG_TO_STDERR( "sync: %d.%d.%d.%d\n", h->ip[0], h->ip[1], h->ip[2], h->ip[3] );
           mode = STATS_MRTG;
         else if( !byte_diff(data,4,"top5"))
           mode = STATS_TOP5;
+        else if( !byte_diff(data,4,"fscr"))
+          mode = STATS_FULLSCRAPE;
         else if( !byte_diff(data,4,"dmem"))
           mode = STATS_DMEM;
         else if( !byte_diff(data,4,"tcp4"))
@@ -367,6 +371,14 @@ LOG_TO_STDERR( "stats: %d.%d.%d.%d - mode: dmem\n", h->ip[0], h->ip[1], h->ip[2]
           /* Enough for http header + whole scrape string */
           if( !( reply_size = return_stats_for_tracker( SUCCESS_HTTP_HEADER_LENGTH + static_outbuf, mode ) ) ) HTTPERROR_500;
           break;
+
+        case STATS_FULLSCRAPE:
+          t = time( NULL ) - ot_start_time;
+          reply_size = sprintf( static_outbuf + SUCCESS_HTTP_HEADER_LENGTH,
+                "%llu\n%llu\n%i seconds (%i hours)\nopentracker full scrape stats.",
+                ot_full_scrape_count * 1000, ot_full_scrape_size, (int)t, (int)(t / 3600) );
+          break;
+
         case STATS_SLASH24S:
 {
 LOG_TO_STDERR( "stats: %d.%d.%d.%d - mode: s24s\n", h->ip[0], h->ip[1], h->ip[2], h->ip[3] );
@@ -405,7 +417,12 @@ LOG_TO_STDERR( "[%08d] scrp: %d.%d.%d.%d - FULL SCRAPE\n", (unsigned int)(g_now 
 write( 2, debug_request, l );
 #endif
       if( !( reply_size = return_fullscrape_for_tracker( &reply ) ) ) HTTPERROR_500;
+
+      /* Stat keeping */
       ot_overall_tcp_successfulannounces++;
+      ot_full_scrape_count++;
+      ot_full_scrape_size += reply_size;
+
       return sendmmapdata( s, reply, reply_size );
     }
 
