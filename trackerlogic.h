@@ -42,6 +42,9 @@ typedef struct {
 
 #define OT_CLIENT_REQUEST_INTERVAL_RANDOM ( OT_CLIENT_REQUEST_INTERVAL - OT_CLIENT_REQUEST_VARIATION/2 + (int)( random( ) % OT_CLIENT_REQUEST_VARIATION ) )
 
+/* Number of tracker admin ip addresses allowed */
+#define OT_ADMINIP_MAX 64
+
 /* We maintain a list of 4096 pointers to sorted list of ot_torrent structs
    Sort key is, of course, its hash */
 #define OT_BUCKET_COUNT 1024

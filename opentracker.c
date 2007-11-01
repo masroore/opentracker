@@ -40,7 +40,8 @@ static unsigned long long ot_full_scrape_size = 0;
 static time_t ot_start_time;
 static const size_t SUCCESS_HTTP_HEADER_LENGTH = 80;
 static const size_t SUCCESS_HTTP_SIZE_OFF = 17;
-static char g_adminip[4] = {0,0,0,0};
+static uint32_t g_adminip_addresses[OT_ADMINIP_MAX];
+static unsigned int g_adminip_count = 0;
 time_t g_now;
 
 #if defined ( WANT_BLACKLISTING ) && defined (WANT_CLOSED_TRACKER )
@@ -90,7 +91,8 @@ struct http_data {
   unsigned char    ip[4];
   STRUCT_HTTP_FLAG flag;
 };
-#define NOTBLESSED( h ) byte_diff( &h->ip, 4, g_adminip )
+#define NOTBLESSED( h ) (!bsearch( &h->ip, g_adminip_addresses, g_adminip_count, 4, ot_ip_compare ))
+static int ot_ip_compare( const void *a, const void *b ) { return memcmp( a,b,4 ); }
 
 /* Prototypes */
 
@@ -954,7 +956,6 @@ int main( int argc, char **argv ) {
     "h" ) ) {
       case -1 : scanon = 0; break;
       case 'i': scan_ip4( optarg, serverip ); break;
-      case 'A': scan_ip4( optarg, g_adminip ); break;
 #ifdef WANT_BLACKLISTING
       case 'b': accesslist_filename = optarg; break;
 #elif defined( WANT_CLOSED_TRACKER )
@@ -963,11 +964,18 @@ int main( int argc, char **argv ) {
       case 'p': ot_try_bind( serverip, (uint16)atol( optarg ), 1 ); break;
       case 'P': ot_try_bind( serverip, (uint16)atol( optarg ), 0 ); break;
       case 'd': serverdir = optarg; break;
+      case 'A':
+        if( g_adminip_count < OT_ADMINIP_MAX )
+          scan_ip4( optarg, (char*)(g_adminip_addresses + g_adminip_count++) );
+        break;
       case 'h': help( argv[0] ); exit( 0 );
       default:
       case '?': usage( argv[0] ); exit( 1 );
     }
   }
+
+  /* Sort our admin ips for quick lookup */
+  qsort( g_adminip_addresses, g_adminip_count, 4, ot_ip_compare );
 
   /* Bind to our default tcp/udp ports */
   if( !ot_sockets_count ) {
