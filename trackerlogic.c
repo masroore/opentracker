@@ -145,11 +145,7 @@ static void vector_remove_torrent( ot_vector *vector, ot_torrent *match ) {
   }
 }
 
-#ifdef WANT_TRACKER_SYNC
-ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer, int from_changeset ) {
-#else
-ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer ) {
-#endif
+ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer  WANT_TRACKER_SYNC_PARAM( int from_changeset ) ) {
   int         exactmatch;
   ot_torrent *torrent;
   ot_peer    *peer_dest;
