@@ -741,6 +741,8 @@ static void handle_accept( const int64 serversocket ) {
     taia_uint( &t, 0 ); /* Clear t */
     tai_unix( &(t.sec), (g_now + OT_CLIENT_TIMEOUT) );
     io_timeout( i, t );
+
+    handle_read( i );
   }
 
   if( errno == EAGAIN )
@@ -892,6 +894,9 @@ static void ot_try_bind( char ip[4], uint16 port, int is_tcp ) {
 
   if( !io_fd( s ) )
     panic( "io_fd" );
+
+  if( is_tcp )
+    socket_deferaccept( s, DATAIN );
 
   io_setcookie( s, is_tcp ? FLAG_TCP : FLAG_UDP );
 
