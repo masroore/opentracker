@@ -6,8 +6,8 @@ CFLAGS+=-I../libowfat -Wall -pipe -Wextra #-pedantic #-ansi
 LDFLAGS+=-L../libowfat/ -lowfat
  
 BINARY = opentracker
-HEADERS=trackerlogic.h scan_urlencoded_query.h
-SOURCES=opentracker.c trackerlogic.c scan_urlencoded_query.c
+HEADERS=trackerlogic.h scan_urlencoded_query.h mutex.h
+SOURCES=opentracker.c trackerlogic.c scan_urlencoded_query.c mutex.c
  
 all: $(BINARY) $(BINARY).debug
 
