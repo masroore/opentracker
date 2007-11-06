@@ -414,6 +414,7 @@ void trackerlogic_deinit( void ) {
       }
       free( torrents_list->data );
     }
+    mutex_bucket_unlock( bucket );
   }
   mutex_deinit( );
   clean_deinit( );

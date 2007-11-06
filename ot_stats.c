@@ -18,7 +18,7 @@
 #include "ot_stats.h"
 
 /* Converter function from memory to human readable hex strings */
-static char*to_hex(char*d,ot_byte*s){const char*m="0123456789ABCDEF";char*e=d+40;while(d<e){*d++=m[*s>>4];*d++=m[*s++&15];}*d=0;return d;}
+static char*to_hex(char*d,ot_byte*s){char*m="0123456789ABCDEF";char *t=d;char*e=d+40;while(d<e){*d++=m[*s>>4];*d++=m[*s++&15];}*d=0;return t;}
 
 typedef struct { size_t val; ot_torrent * torrent; } ot_record;
 
