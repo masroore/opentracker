@@ -325,8 +325,6 @@ LOG_TO_STDERR( "sync: %d.%d.%d.%d\n", h->ip[0], h->ip[1], h->ip[2], h->ip[3] );
           mode = STATS_TOP5;
         else if( !byte_diff(data,4,"fscr"))
           mode = STATS_FULLSCRAPE;
-        else if( !byte_diff(data,4,"dmem"))
-          mode = STATS_DMEM;
         else if( !byte_diff(data,4,"tcp4"))
           mode = STATS_TCP;
         else if( !byte_diff(data,4,"udp4"))
@@ -338,16 +336,8 @@ LOG_TO_STDERR( "sync: %d.%d.%d.%d\n", h->ip[0], h->ip[1], h->ip[2], h->ip[3] );
       }
     }
 
-    switch( mode)
-    {
-      case STATS_DMEM:
-        if( !( reply_size = return_memstat_for_tracker( &reply ) ) ) HTTPERROR_500;
-        return sendmmapdata( s, reply, reply_size );
-      default:
-        // default format for now
-        if( !( reply_size = return_stats_for_tracker( static_outbuf + SUCCESS_HTTP_HEADER_LENGTH, mode, 0 ) ) ) HTTPERROR_500;
-        break;
-      }
+    // default format for now
+    if( !( reply_size = return_stats_for_tracker( static_outbuf + SUCCESS_HTTP_HEADER_LENGTH, mode, 0 ) ) ) HTTPERROR_500;
     break;
 
 /******************************

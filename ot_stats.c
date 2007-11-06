@@ -162,47 +162,6 @@ bailout_cleanup:
   return 0;
 }
 
-size_t return_memstat_for_tracker( char **reply ) {
-  size_t torrent_count = 0, j;
-  size_t allocated, replysize;
-  ot_vector *torrents_list;
-  int    bucket, k;
-  char  *r;
-
-  for( bucket=0; bucket<OT_BUCKET_COUNT; ++bucket ) {
-    torrents_list = mutex_bucket_lock(bucket);
-    torrent_count += torrents_list->size;
-    mutex_bucket_unlock(bucket);
-  }
-
-  allocated = OT_BUCKET_COUNT*32 + (43+OT_POOLS_COUNT*32)*torrent_count;
-  if( !( r = *reply = mmap( NULL, allocated, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, -1, 0 ) ) ) return 0;
-
-  for( bucket=0; bucket<OT_BUCKET_COUNT; ++bucket ) {
-    torrents_list = mutex_bucket_lock(bucket);
-    r += sprintf( r, "%02X: %08X %08X\n", bucket, (unsigned int)torrents_list->size, (unsigned int)torrents_list->space );
-    mutex_bucket_unlock(bucket);
-  }
-
-  for( bucket=0; bucket<OT_BUCKET_COUNT; ++bucket ) {
-    ot_vector *torrents_list = mutex_bucket_lock(bucket);
-    char hex_out[42];
-    for( j=0; j<torrents_list->size; ++j ) {
-      ot_peerlist *peer_list = ( ((ot_torrent*)(torrents_list->data))[j] ).peer_list;
-      ot_hash     *hash      =&( ((ot_torrent*)(torrents_list->data))[j] ).hash;
-      r += sprintf( r, "\n%s:\n", to_hex( hex_out, (ot_byte*)hash) );
-      for( k=0; k<OT_POOLS_COUNT; ++k )
-        r += sprintf( r, "\t%05X %05X\n", ((unsigned int)peer_list->peers[k].size), (unsigned int)peer_list->peers[k].space );
-    }
-    mutex_bucket_unlock(bucket);
-  }
-
-  replysize = ( r - *reply );
-  fix_mmapallocation( *reply, allocated, replysize );
-
-  return replysize;
-}
-
 static unsigned long events_per_time( unsigned long long events, time_t t ) {
   return events / ( (unsigned int)t ? (unsigned int)t : 1 );
 }

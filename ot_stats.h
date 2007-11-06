@@ -4,7 +4,7 @@
 #ifndef __OT_STATS_H__
 #define __OT_STATS_H__
 
-enum { STATS_CONNS, STATS_PEERS, STATS_TOP5, STATS_DMEM, STATS_TCP, STATS_UDP, STATS_SLASH24S, SYNC_IN, SYNC_OUT, STATS_FULLSCRAPE };
+enum { STATS_CONNS, STATS_PEERS, STATS_TOP5, STATS_TCP, STATS_UDP, STATS_SLASH24S, STATS_FULLSCRAPE };
 typedef enum {
   EVENT_ACCEPT,
   EVENT_READ,
@@ -18,8 +18,6 @@ typedef enum {
 } ot_status_event;
 
 size_t return_stats_for_tracker( char *reply, int mode, int format );
-size_t return_memstat_for_tracker( char **reply );
-
 void stats_issue_event( ot_status_event event, int is_tcp, size_t event_data );
 
 #endif
