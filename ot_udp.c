@@ -3,6 +3,7 @@
 
 /* System */
 #include <string.h>
+#include <arpa/inet.h>
 
 /* Libowfat */
 #include "socket.h"
