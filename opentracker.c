@@ -230,7 +230,7 @@ static void httpresponse( const int64 s, char *data _DEBUG_HTTPERROR_PARAM( size
   ot_peer     peer;
   ot_torrent *torrent;
   ot_hash    *hash = NULL;
-  int         numwant, tmp, scanon, mode, scrape_count;
+  int         numwant, tmp, scanon, mode;
   unsigned short port = htons(6881);
   time_t      t;
   ssize_t     len;
@@ -306,7 +306,7 @@ LOG_TO_STDERR( "sync: %d.%d.%d.%d\n", h->ip[0], h->ip[1], h->ip[2], h->ip[3] );
     if( !byte_diff( data, 2, "sc" ) ) goto SCRAPE_WORKAROUND;
     if( byte_diff(data,5,"stats")) HTTPERROR_404;
     scanon = 1;
-    mode = STATS_MRTG;
+    mode = STATS_PEERS;
 
     while( scanon ) {
       switch( scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_PARAM ) ) {
@@ -319,8 +319,10 @@ LOG_TO_STDERR( "sync: %d.%d.%d.%d\n", h->ip[0], h->ip[1], h->ip[2], h->ip[3] );
           continue;
         }
         if( scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE ) != 4 ) HTTPERROR_400_PARAM;
-        if( !byte_diff(data,4,"mrtg"))
-          mode = STATS_MRTG;
+        if( !byte_diff(data,4,"peer"))
+          mode = STATS_PEERS;
+        else if( !byte_diff(data,4,"conn"))
+          mode = STATS_CONNS;
         else if( !byte_diff(data,4,"top5"))
           mode = STATS_TOP5;
         else if( !byte_diff(data,4,"fscr"))
@@ -333,68 +335,58 @@ LOG_TO_STDERR( "sync: %d.%d.%d.%d\n", h->ip[0], h->ip[1], h->ip[2], h->ip[3] );
           mode = STATS_UDP;
         else if( !byte_diff(data,4,"s24s"))
           mode = STATS_SLASH24S;
-        else if( !byte_diff(data,4,"s24S"))
-          mode = STATS_SLASH24S_OLD;
         else
           HTTPERROR_400_PARAM;
       }
     }
 
-      switch( mode)
-      {
-        case STATS_DMEM:
-LOG_TO_STDERR( "stats: %d.%d.%d.%d - mode: dmem\n", h->ip[0], h->ip[1], h->ip[2], h->ip[3] );
+    switch( mode)
+    {
+      case STATS_DMEM:
+        if( !( reply_size = return_memstat_for_tracker( &reply ) ) ) HTTPERROR_500;
+        return sendmmapdata( s, reply, reply_size );
 
-          if( !( reply_size = return_memstat_for_tracker( &reply ) ) ) HTTPERROR_500;
-          return sendmmapdata( s, reply, reply_size );
-          
-        case STATS_UDP:
-          t = time( NULL ) - ot_start_time;
-          reply_size = sprintf( static_outbuf + SUCCESS_HTTP_HEADER_LENGTH,
-                "%llu\n%llu\n%i seconds (%i hours)\nopentracker udp4 stats.",
-                ot_overall_udp_connections, ot_overall_udp_successfulannounces, (int)t, (int)(t / 3600) );
-          break;
+      case STATS_CONNS:
+        t = time( NULL ) - ot_start_time;
+        reply_size = sprintf( static_outbuf + SUCCESS_HTTP_HEADER_LENGTH,
+                          "%llu\n%llu\n%i seconds (%i hours)\nopentracker - Pretuned by german engineers, currently handling %llu connections per second.",
+                          ot_overall_tcp_connections+ot_overall_udp_connections, ot_overall_tcp_successfulannounces+ot_overall_udp_successfulannounces, (int)t, (int)(t / 3600), (ot_overall_tcp_connections+ot_overall_udp_connections) / ( (unsigned int)t ? (unsigned int)t : 1 ) );
+        break;
+      case STATS_UDP:
+        t = time( NULL ) - ot_start_time;
+        reply_size = sprintf( static_outbuf + SUCCESS_HTTP_HEADER_LENGTH,
+              "%llu\n%llu\n%i seconds (%i hours)\nopentracker udp4 stats.",
+              ot_overall_udp_connections, ot_overall_udp_successfulannounces, (int)t, (int)(t / 3600) );
+        break;
 
-        case STATS_TCP:
-          t = time( NULL ) - ot_start_time;
-          reply_size = sprintf( static_outbuf + SUCCESS_HTTP_HEADER_LENGTH,
-                "%llu\n%llu\n%i seconds (%i hours)\nopentracker tcp4 stats.",
-                ot_overall_tcp_connections, ot_overall_tcp_successfulannounces, (int)t, (int)(t / 3600) );
-          break;
+      case STATS_TCP:
+        t = time( NULL ) - ot_start_time;
+        reply_size = sprintf( static_outbuf + SUCCESS_HTTP_HEADER_LENGTH,
+              "%llu\n%llu\n%i seconds (%i hours)\nopentracker tcp4 stats.",
+              ot_overall_tcp_connections, ot_overall_tcp_successfulannounces, (int)t, (int)(t / 3600) );
+        break;
 
-        default:
-        case STATS_MRTG:
-          /* Enough for http header + whole scrape string */
-          if( !( reply_size = return_stats_for_tracker( SUCCESS_HTTP_HEADER_LENGTH + static_outbuf, mode ) ) ) HTTPERROR_500;
-          break;
+      default:
+      case STATS_PEERS:
+        /* Enough for http header + whole scrape string */
+        if( !( reply_size = return_stats_for_tracker( SUCCESS_HTTP_HEADER_LENGTH + static_outbuf, mode ) ) ) HTTPERROR_500;
+        break;
 
-        case STATS_FULLSCRAPE:
-          t = time( NULL ) - ot_start_time;
-          reply_size = sprintf( static_outbuf + SUCCESS_HTTP_HEADER_LENGTH,
-                "%llu\n%llu\n%i seconds (%i hours)\nopentracker full scrape stats.",
-                ot_full_scrape_count * 1000, ot_full_scrape_size, (int)t, (int)(t / 3600) );
-          break;
+      case STATS_FULLSCRAPE:
+        t = time( NULL ) - ot_start_time;
+        reply_size = sprintf( static_outbuf + SUCCESS_HTTP_HEADER_LENGTH,
+              "%llu\n%llu\n%i seconds (%i hours)\nopentracker full scrape stats.",
+              ot_full_scrape_count * 1000, ot_full_scrape_size, (int)t, (int)(t / 3600) );
+        break;
 
-        case STATS_SLASH24S:
-{
-LOG_TO_STDERR( "stats: %d.%d.%d.%d - mode: s24s\n", h->ip[0], h->ip[1], h->ip[2], h->ip[3] );
-
+      case STATS_SLASH24S:
+        {
           ot_dword diff; struct timeval tv1, tv2; gettimeofday( &tv1, NULL );
           if( !( reply_size = return_stats_for_slash24s( SUCCESS_HTTP_HEADER_LENGTH + static_outbuf, 25, 16 ) ) ) HTTPERROR_500;
           gettimeofday( &tv2, NULL ); diff = ( tv2.tv_sec - tv1.tv_sec ) * 1000000 + tv2.tv_usec - tv1.tv_usec;
           reply_size += sprintf( SUCCESS_HTTP_HEADER_LENGTH + static_outbuf + reply_size, "Time taken: %u\n", diff );
-          break;
-}
-        case STATS_SLASH24S_OLD:
-{
-LOG_TO_STDERR( "stats: %d.%d.%d.%d - mode: s24s old\n", h->ip[0], h->ip[1], h->ip[2], h->ip[3] );
-
-          ot_dword diff; struct timeval tv1, tv2; gettimeofday( &tv1, NULL );
-          if( !( reply_size = return_stats_for_slash24s_old( SUCCESS_HTTP_HEADER_LENGTH + static_outbuf, 25, 16 ) ) ) HTTPERROR_500;
-          gettimeofday( &tv2, NULL ); diff = ( tv2.tv_sec - tv1.tv_sec ) * 1000000 + tv2.tv_usec - tv1.tv_usec;
-          reply_size += sprintf( SUCCESS_HTTP_HEADER_LENGTH + static_outbuf + reply_size, "Time taken: %u\n", diff );
-          break;
-}
+        }
+        break;
       }
     break;
 
@@ -432,12 +424,12 @@ SCRAPE_WORKAROUND:
     }
 
     scanon = 1;
-    scrape_count = 0;
+    numwant = 0;
     while( scanon ) {
       switch( scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_PARAM ) ) {
       case -2: scanon = 0; break;   /* TERMINATOR */
       case -1:
-      if( scrape_count )
+      if( numwant )
           goto UTORRENT1600_WORKAROUND;
         HTTPERROR_400_PARAM; /* PARSE ERROR */
       default: scan_urlencoded_skipvalue( &c ); break;
@@ -453,8 +445,8 @@ SCRAPE_WORKAROUND:
 #endif
           HTTPERROR_400_PARAM;
         }
-        if( scrape_count < OT_MAXMULTISCRAPE_COUNT )
-          memmove( multiscrape_buf + scrape_count++, data, sizeof(ot_hash) );
+        if( numwant < OT_MAXMULTISCRAPE_COUNT )
+          memmove( multiscrape_buf + numwant++, data, sizeof(ot_hash) );
         break;
       }
     }
@@ -462,10 +454,10 @@ SCRAPE_WORKAROUND:
 UTORRENT1600_WORKAROUND:
 
     /* No info_hash found? Inform user */
-    if( !scrape_count ) HTTPERROR_400_PARAM;
+    if( !numwant ) HTTPERROR_400_PARAM;
 
     /* Enough for http header + whole scrape string */
-    if( !( reply_size = return_tcp_scrape_for_torrent( multiscrape_buf, scrape_count, SUCCESS_HTTP_HEADER_LENGTH + static_outbuf ) ) ) HTTPERROR_500;
+    if( !( reply_size = return_tcp_scrape_for_torrent( multiscrape_buf, numwant, SUCCESS_HTTP_HEADER_LENGTH + static_outbuf ) ) ) HTTPERROR_500;
 
     ot_overall_tcp_successfulannounces++;
     break;
@@ -568,19 +560,9 @@ ANNOUNCE_WORKAROUND:
       reply_size = remove_peer_from_torrent( hash, &peer, SUCCESS_HTTP_HEADER_LENGTH + static_outbuf, 1 );
     else {
       torrent = add_peer_to_torrent( hash, &peer, 0 );
-      if( !torrent || !( reply_size = return_peers_for_torrent( torrent, numwant, SUCCESS_HTTP_HEADER_LENGTH + static_outbuf, 1 ) ) ) HTTPERROR_500;
+      if( !torrent || !( reply_size = return_peers_for_torrent( hash, numwant, SUCCESS_HTTP_HEADER_LENGTH + static_outbuf, 1 ) ) ) HTTPERROR_500;
     }
     ot_overall_tcp_successfulannounces++;
-    break;
-  case 11:
-    if( *data == 'a' ) goto ANNOUNCE_WORKAROUND;
-    if( !byte_diff( data, 2, "sc" ) ) goto SCRAPE_WORKAROUND;
-    if( byte_diff( data, 11, "mrtg_scrape" ) ) HTTPERROR_404;
-
-    t = time( NULL ) - ot_start_time;
-    reply_size = sprintf( static_outbuf + SUCCESS_HTTP_HEADER_LENGTH,
-                          "%llu\n%llu\n%i seconds (%i hours)\nopentracker - Pretuned by german engineers, currently handling %llu connections per second.",
-                          ot_overall_tcp_connections+ot_overall_udp_connections, ot_overall_tcp_successfulannounces+ot_overall_udp_successfulannounces, (int)t, (int)(t / 3600), (ot_overall_tcp_connections+ot_overall_udp_connections) / ( (unsigned int)t ? (unsigned int)t : 1 ) );
     break;
   default:
     if( ( *data == 'a' ) || ( *data == '?' ) ) goto ANNOUNCE_WORKAROUND;
@@ -612,7 +594,7 @@ ANNOUNCE_WORKAROUND:
 static void signal_handler( int s ) {
   if( s == SIGINT ) {
     signal( SIGINT, SIG_IGN);
-    deinit_logic();
+    trackerlogic_deinit();
     exit( 0 );
   } else if( s == SIGALRM ) {
     g_now = time(NULL);
@@ -815,7 +797,7 @@ static void handle_udp4( int64 serversocket ) {
         if( !torrent )
           return; /* XXX maybe send error */
 
-        r = 8 + return_peers_for_torrent( torrent, numwant, static_outbuf + 8, 0 );
+        r = 8 + return_peers_for_torrent( hash, numwant, static_outbuf + 8, 0 );
       }
 
       socket_send4( serversocket, static_outbuf, r, remoteip, remoteport );
@@ -991,7 +973,7 @@ int main( int argc, char **argv ) {
   signal( SIGINT,  signal_handler );
   signal( SIGALRM, signal_handler );
 
-  if( init_logic( serverdir ) == -1 )
+  if( trackerlogic_init( serverdir ) == -1 )
     panic( "Logic not started" );
 
   g_now = ot_start_time = time( NULL );
