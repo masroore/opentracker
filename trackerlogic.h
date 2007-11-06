@@ -110,7 +110,6 @@ size_t return_tcp_scrape_for_torrent( ot_hash *hash, int amount, char *reply );
 size_t return_udp_scrape_for_torrent( ot_hash *hash, char *reply );
 size_t return_stats_for_tracker( char *reply, int mode );
 size_t return_stats_for_slash24s( char *reply, size_t amount, ot_dword thresh );
-size_t return_stats_for_slash24s_old( char *reply, size_t amount, ot_dword thresh );
 size_t return_memstat_for_tracker( char **reply );
 void   clean_all_torrents( void );
 

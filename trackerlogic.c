@@ -56,10 +56,8 @@ static void *unlock_bucket_by_hash( ot_hash *hash ) {
   return NULL;
 }
 
-/* Converter function from memory to human readable hex strings
-   - definitely not thread safe!!!
-*/
-static char ths[2+2*20]="-";static char*to_hex(ot_byte*s){const char*m="0123456789ABCDEF";char*e=ths+41;char*t=ths+1;while(t<e){*t++=m[*s>>4];*t++=m[*s++&15];}*t=0;return ths+1;}
+/* Converter function from memory to human readable hex strings */
+static char*to_hex(char*d,ot_byte*s){const char*m="0123456789ABCDEF";char*e=d+40;while(d<e){*d++=m[*s>>4];*d++=m[*s++&15];}*d=0;return d;}
 
 /* This function gives us a binary search that returns a pointer, even if
    no exact match is found. In that case it sets exactmatch 0 and gives
@@ -409,10 +407,11 @@ size_t return_memstat_for_tracker( char **reply ) {
 
   for( i=0; i<OT_BUCKET_COUNT; ++i ) {
     ot_vector *torrents_list = all_torrents + i;
+    char hex_out[42];
     for( j=0; j<torrents_list->size; ++j ) {
       ot_peerlist *peer_list = ( ((ot_torrent*)(torrents_list->data))[j] ).peer_list;
       ot_hash     *hash      =&( ((ot_torrent*)(torrents_list->data))[j] ).hash;
-      r += sprintf( r, "\n%s:\n", to_hex( (ot_byte*)hash ) );
+      r += sprintf( r, "\n%s:\n", to_hex( hex_out, (ot_byte*)hash) );
       for( k=0; k<OT_POOLS_COUNT; ++k )
         r += sprintf( r, "\t%05X %05X\n", ((unsigned int)peer_list->peers[k].size), (unsigned int)peer_list->peers[k].space );
     }
@@ -647,6 +646,7 @@ void clean_all_torrents( void ) {
 
   all_torrents_clean[bucket] = time_now;
 
+  mutex_bucket_lock( bucket );
   torrents_list = all_torrents + bucket;
   for( i=0; i<torrents_list->size; ++i ) {
     ot_torrent *torrent = ((ot_torrent*)(torrents_list->data)) + i;
@@ -655,6 +655,7 @@ void clean_all_torrents( void ) {
       --i; continue;
     }
   }
+  mutex_bucket_unlock( bucket );
 }
 
 typedef struct { size_t val; ot_torrent * torrent; } ot_record;
@@ -664,13 +665,14 @@ size_t return_stats_for_tracker( char *reply, int mode ) {
   size_t    torrent_count = 0, peer_count = 0, seed_count = 0, j;
   ot_record top5s[5], top5c[5];
   char     *r  = reply;
-  int       i;
+  int       bucket;
 
   byte_zero( top5s, sizeof( top5s ) );
   byte_zero( top5c, sizeof( top5c ) );
 
-  for( i=0; i<OT_BUCKET_COUNT; ++i ) {
-    ot_vector *torrents_list = all_torrents + i;
+  for( bucket=0; bucket<OT_BUCKET_COUNT; ++bucket ) {
+    ot_vector *torrents_list = all_torrents + bucket;
+    mutex_bucket_lock( bucket );
     torrent_count += torrents_list->size;
     for( j=0; j<torrents_list->size; ++j ) {
       ot_peerlist *peer_list = ( ((ot_torrent*)(torrents_list->data))[j] ).peer_list;
@@ -690,20 +692,21 @@ size_t return_stats_for_tracker( char *reply, int mode ) {
       }
       peer_count += peer_list->peer_count; seed_count += peer_list->seed_count;
     }
+    mutex_bucket_unlock( bucket );
   }
   if( mode == STATS_TOP5 ) {
+    char hex_out[42];
     int idx;
     r += sprintf( r, "Top5 torrents by peers:\n" );
     for( idx=0; idx<5; ++idx )
       if( top5c[idx].torrent )
-        r += sprintf( r, "\t%zd\t%s\n", top5c[idx].val, to_hex(top5c[idx].torrent->hash) );
+        r += sprintf( r, "\t%zd\t%s\n", top5c[idx].val, to_hex( hex_out, top5c[idx].torrent->hash) );
     r += sprintf( r, "Top5 torrents by seeds:\n" );
     for( idx=0; idx<5; ++idx )
       if( top5s[idx].torrent )
-        r += sprintf( r, "\t%zd\t%s\n", top5s[idx].val, to_hex(top5s[idx].torrent->hash) );
-  } else {
+        r += sprintf( r, "\t%zd\t%s\n", top5s[idx].val, to_hex( hex_out, top5s[idx].torrent->hash) );
+  } else
     r += sprintf( r, "%zd\n%zd\nopentracker serving %zd torrents\nopentracker", peer_count, seed_count, torrent_count );
-  }
 
   return r - reply;
 }
@@ -720,8 +723,9 @@ size_t return_stats_for_slash24s( char *reply, size_t amount, ot_dword thresh ) 
 #define MSK_S24S    (NUM_S24S-1)
 
   ot_dword *counts[ NUM_BUFS ];
-  ot_dword slash24s[amount*2];  /* first dword amount, second dword subnet */
-  size_t i, j, k, l;
+  ot_dword  slash24s[amount*2];  /* first dword amount, second dword subnet */
+  int       bucket;
+  size_t    i, j, k, l;
   char     *r  = reply;
 
   byte_zero( counts, sizeof( counts ) );
@@ -729,8 +733,9 @@ size_t return_stats_for_slash24s( char *reply, size_t amount, ot_dword thresh ) 
 
   r += sprintf( r, "Stats for all /24s with more than %u announced torrents:\n\n", thresh );
 
-  for( i=0; i<OT_BUCKET_COUNT; ++i ) {
-    ot_vector *torrents_list = all_torrents + i;
+  for( bucket=0; bucket<OT_BUCKET_COUNT; ++bucket ) {
+    ot_vector *torrents_list = all_torrents + bucket;
+    mutex_bucket_lock( bucket );
     for( j=0; j<torrents_list->size; ++j ) {
       ot_peerlist *peer_list = ( ((ot_torrent*)(torrents_list->data))[j] ).peer_list;
       for( k=0; k<OT_POOLS_COUNT; ++k ) {
@@ -750,6 +755,7 @@ size_t return_stats_for_slash24s( char *reply, size_t amount, ot_dword thresh ) 
         }
       }
     }
+    mutex_bucket_unlock( bucket );
   }
 
   k = l = 0; /* Debug: count allocated bufs */
@@ -792,59 +798,6 @@ bailout_cleanup:
     free( counts[i] );
 
   return 0;
-}
-
-size_t return_stats_for_slash24s_old( char *reply, size_t amount, ot_dword thresh ) {
-  ot_word *count = malloc( 0x1000000 * sizeof(ot_word) );
-  ot_dword slash24s[amount*2];  /* first dword amount, second dword subnet */
-  size_t i, j, k, l;
-  char     *r  = reply;
-
-  if( !count )
-    return 0;
-
-  byte_zero( count, 0x1000000 * sizeof(ot_word) );
-  byte_zero( slash24s, amount * 2 * sizeof(ot_dword) );
-
-  r += sprintf( r, "Stats for all /24s with more than %d announced torrents:\n\n", ((int)thresh) );
-
-  for( i=0; i<OT_BUCKET_COUNT; ++i ) {
-    ot_vector *torrents_list = all_torrents + i;
-    for( j=0; j<torrents_list->size; ++j ) {
-      ot_peerlist *peer_list = ( ((ot_torrent*)(torrents_list->data))[j] ).peer_list;
-      for( k=0; k<OT_POOLS_COUNT; ++k ) {
-        ot_peer *peers =    peer_list->peers[k].data;
-        size_t   numpeers = peer_list->peers[k].size;
-        for( l=0; l<numpeers; ++l )
-          if( ++count[ ntohl(*(ot_dword*)(peers+l))>>8 ] == 65335 )
-            count[ ntohl(*(ot_dword*)(peers+l))>>8 ] = 65334;
-      }
-    }
-  }
-
-  for( i=0; i<0x1000000; ++i )
-    if( count[i] > thresh ) {
-      /* This subnet seems to announce more torrents than the last in our list */
-      int insert_pos = amount - 1;
-      while( ( insert_pos >= 0 ) && ( count[i] > slash24s[ 2 * insert_pos ] ) )
-        --insert_pos;
-      ++insert_pos;
-      memmove( slash24s + 2 * ( insert_pos + 1 ), slash24s + 2 * ( insert_pos ), 2 * sizeof( ot_dword ) * ( amount - insert_pos - 1 ) );
-      slash24s[ 2 * insert_pos     ] = count[i];
-      slash24s[ 2 * insert_pos + 1 ] = i;
-      if( slash24s[ 2 * amount - 2 ] > thresh )
-        thresh = slash24s[ 2 * amount - 2 ];
-    }
-
-  free( count );
-
-  for( i=0; i < amount; ++i )
-    if( slash24s[ 2*i ] >= thresh ) {
-      unsigned long ip = slash24s[ 2*i +1 ];
-      r += sprintf( r, "% 10ld %d.%d.%d.0/24\n", (long)slash24s[ 2*i ], (int)(ip >> 16), (int)(255 & ( ip >> 8 )), (int)(ip & 255) );
-    }
-
-  return r - reply;
 }
 
 size_t remove_peer_from_torrent( ot_hash *hash, ot_peer *peer, char *reply, int is_tcp ) {
@@ -895,6 +848,25 @@ exit_loop:
   return (size_t)20;
 }
 
+#ifdef WANT_ACCESS_CONTROL
+void accesslist_reset( void ) {
+  free( accesslist.data );
+  byte_zero( &accesslist, sizeof( accesslist ) );
+}
+
+int accesslist_addentry( ot_hash *infohash ) {
+  int em;
+  void *insert = vector_find_or_insert( &accesslist, infohash, OT_HASH_COMPARE_SIZE, OT_HASH_COMPARE_SIZE, &em );
+
+  if( !insert )
+    return -1;
+
+  memmove( insert, infohash, OT_HASH_COMPARE_SIZE );
+
+  return 0;
+}
+#endif
+
 int trackerlogic_init( const char * const serverdir ) {
   if( serverdir && chdir( serverdir ) ) {
     fprintf( stderr, "Could not chdir() to %s\n", serverdir );
@@ -929,22 +901,3 @@ void trackerlogic_deinit( void ) {
 
   mutex_deinit( );
 }
-
-#ifdef WANT_ACCESS_CONTROL
-void accesslist_reset( void ) {
-  free( accesslist.data );
-  byte_zero( &accesslist, sizeof( accesslist ) );
-}
-
-int accesslist_addentry( ot_hash *infohash ) {
-  int em;
-  void *insert = vector_find_or_insert( &accesslist, infohash, OT_HASH_COMPARE_SIZE, OT_HASH_COMPARE_SIZE, &em );
-
-  if( !insert )
-    return -1;
-
-  memmove( insert, infohash, OT_HASH_COMPARE_SIZE );
-
-  return 0;
-}
-#endif
