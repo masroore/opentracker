@@ -47,7 +47,11 @@ typedef time_t         ot_time;
 #define OT_POOLS_COUNT   9
 #define OT_POOLS_TIMEOUT (60*5)
 
-extern  time_t g_now;
+/* From opentracker.c */
+extern char static_inbuf[8192];
+extern char static_outbuf[8192];
+extern time_t ot_start_time;
+extern time_t g_now;
 #define NOW              (g_now/OT_POOLS_TIMEOUT)
 
 typedef struct {

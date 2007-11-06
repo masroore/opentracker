@@ -3,17 +3,7 @@
    Some of the stuff below is stolen from Fefes example libowfat httpd.
 */
 
-#include "socket.h"
-#include "io.h"
-#include "iob.h"
-#include "buffer.h"
-#include "array.h"
-#include "byte.h"
-#include "case.h"
-#include "fmt.h"
-#include "str.h"
-#include "scan.h"
-#include "ip4.h"
+/* System */
 #include <string.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -27,23 +17,32 @@
 #include <stdio.h>
 #include <pwd.h>
 
+/* Libowfat */
+#include "socket.h"
+#include "io.h"
+#include "iob.h"
+#include "buffer.h"
+#include "array.h"
+#include "byte.h"
+#include "case.h"
+#include "fmt.h"
+#include "str.h"
+#include "scan.h"
+#include "ip4.h"
+
+/* Opentracker */
 #include "trackerlogic.h"
 #include "scan_urlencoded_query.h"
 #include "ot_stats.h"
 #include "ot_sync.h"
+#include "ot_udp.h"
 
 /* Globals */
-static unsigned long long ot_overall_tcp_connections = 0;
-static unsigned long long ot_overall_udp_connections = 0;
-static unsigned long long ot_overall_tcp_successfulannounces = 0;
-static unsigned long long ot_overall_udp_successfulannounces = 0;
-static unsigned long long ot_full_scrape_count = 0;
-static unsigned long long ot_full_scrape_size = 0;
-static time_t ot_start_time;
 static const size_t SUCCESS_HTTP_HEADER_LENGTH = 80;
 static const size_t SUCCESS_HTTP_SIZE_OFF = 17;
 static uint32_t g_adminip_addresses[OT_ADMINIP_MAX];
 static unsigned int g_adminip_count = 0;
+time_t ot_start_time;
 time_t g_now;
 
 #if defined ( WANT_BLACKLISTING ) && defined (WANT_CLOSED_TRACKER )
@@ -65,9 +64,8 @@ static char *accesslist_filename = NULL;
 #endif
 
 /* To always have space for error messages ;) */
-
-static char static_inbuf[8192];
-static char static_outbuf[8192];
+char static_inbuf[8192];
+char static_outbuf[8192];
 
 #define OT_MAXMULTISCRAPE_COUNT 64
 static ot_hash multiscrape_buf[OT_MAXMULTISCRAPE_COUNT];
@@ -114,7 +112,6 @@ static void handle_timeouted( void );
 static void handle_accept( const int64 serversocket );
 static void handle_read( const int64 clientsocket );
 static void handle_write( const int64 clientsocket );
-static void handle_udp4( const int64 serversocket );
 
 static void ot_try_bind( char ip[4], uint16 port, int is_tcp );
 
@@ -234,7 +231,6 @@ static void httpresponse( const int64 s, char *data _DEBUG_HTTPERROR_PARAM( size
   ot_hash    *hash = NULL;
   int         numwant, tmp, scanon, mode;
   unsigned short port = htons(6881);
-  time_t      t;
   ssize_t     len;
   size_t      reply_size = 0, reply_off;
 
@@ -347,47 +343,9 @@ LOG_TO_STDERR( "sync: %d.%d.%d.%d\n", h->ip[0], h->ip[1], h->ip[2], h->ip[3] );
       case STATS_DMEM:
         if( !( reply_size = return_memstat_for_tracker( &reply ) ) ) HTTPERROR_500;
         return sendmmapdata( s, reply, reply_size );
-
-      case STATS_CONNS:
-        t = time( NULL ) - ot_start_time;
-        reply_size = sprintf( static_outbuf + SUCCESS_HTTP_HEADER_LENGTH,
-                          "%llu\n%llu\n%i seconds (%i hours)\nopentracker - Pretuned by german engineers, currently handling %llu connections per second.",
-                          ot_overall_tcp_connections+ot_overall_udp_connections, ot_overall_tcp_successfulannounces+ot_overall_udp_successfulannounces, (int)t, (int)(t / 3600), (ot_overall_tcp_connections+ot_overall_udp_connections) / ( (unsigned int)t ? (unsigned int)t : 1 ) );
-        break;
-      case STATS_UDP:
-        t = time( NULL ) - ot_start_time;
-        reply_size = sprintf( static_outbuf + SUCCESS_HTTP_HEADER_LENGTH,
-              "%llu\n%llu\n%i seconds (%i hours)\nopentracker udp4 stats.",
-              ot_overall_udp_connections, ot_overall_udp_successfulannounces, (int)t, (int)(t / 3600) );
-        break;
-
-      case STATS_TCP:
-        t = time( NULL ) - ot_start_time;
-        reply_size = sprintf( static_outbuf + SUCCESS_HTTP_HEADER_LENGTH,
-              "%llu\n%llu\n%i seconds (%i hours)\nopentracker tcp4 stats.",
-              ot_overall_tcp_connections, ot_overall_tcp_successfulannounces, (int)t, (int)(t / 3600) );
-        break;
-
       default:
-      case STATS_PEERS:
-        /* Enough for http header + whole scrape string */
-        if( !( reply_size = return_stats_for_tracker( SUCCESS_HTTP_HEADER_LENGTH + static_outbuf, mode ) ) ) HTTPERROR_500;
-        break;
-
-      case STATS_FULLSCRAPE:
-        t = time( NULL ) - ot_start_time;
-        reply_size = sprintf( static_outbuf + SUCCESS_HTTP_HEADER_LENGTH,
-              "%llu\n%llu\n%i seconds (%i hours)\nopentracker full scrape stats.",
-              ot_full_scrape_count * 1000, ot_full_scrape_size, (int)t, (int)(t / 3600) );
-        break;
-
-      case STATS_SLASH24S:
-        {
-          ot_dword diff; struct timeval tv1, tv2; gettimeofday( &tv1, NULL );
-          if( !( reply_size = return_stats_for_slash24s( SUCCESS_HTTP_HEADER_LENGTH + static_outbuf, 25, 16 ) ) ) HTTPERROR_500;
-          gettimeofday( &tv2, NULL ); diff = ( tv2.tv_sec - tv1.tv_sec ) * 1000000 + tv2.tv_usec - tv1.tv_usec;
-          reply_size += sprintf( SUCCESS_HTTP_HEADER_LENGTH + static_outbuf + reply_size, "Time taken: %u\n", diff );
-        }
+        // default format for now
+        if( !( reply_size = return_stats_for_tracker( static_outbuf + SUCCESS_HTTP_HEADER_LENGTH, mode, 0 ) ) ) HTTPERROR_500;
         break;
       }
     break;
@@ -409,10 +367,7 @@ write( 2, debug_request, l );
       if( !( reply_size = return_fullscrape_for_tracker( &reply ) ) ) HTTPERROR_500;
 
       /* Stat keeping */
-      ot_overall_tcp_successfulannounces++;
-      ot_full_scrape_count++;
-      ot_full_scrape_size += reply_size;
-
+      stats_issue_event( EVENT_FULLSCRAPE, 1, reply_size);
       return sendmmapdata( s, reply, reply_size );
     }
 
@@ -460,8 +415,7 @@ UTORRENT1600_WORKAROUND:
 
     /* Enough for http header + whole scrape string */
     if( !( reply_size = return_tcp_scrape_for_torrent( multiscrape_buf, numwant, SUCCESS_HTTP_HEADER_LENGTH + static_outbuf ) ) ) HTTPERROR_500;
-
-    ot_overall_tcp_successfulannounces++;
+    stats_issue_event( EVENT_SCRAPE, 1, reply_size );
     break;
 /******************************
  *      A N N O U N C E       *
@@ -564,7 +518,7 @@ ANNOUNCE_WORKAROUND:
       torrent = add_peer_to_torrent( hash, &peer, 0 );
       if( !torrent || !( reply_size = return_peers_for_torrent( hash, numwant, SUCCESS_HTTP_HEADER_LENGTH + static_outbuf, 1 ) ) ) HTTPERROR_500;
     }
-    ot_overall_tcp_successfulannounces++;
+    stats_issue_event( EVENT_ANNOUNCE, 1, reply_size);
     break;
   default:
     if( ( *data == 'a' ) || ( *data == '?' ) ) goto ANNOUNCE_WORKAROUND;
@@ -702,14 +656,13 @@ static void handle_accept( const int64 serversocket ) {
     byte_zero( h, sizeof( struct http_data ) );
     memmove( h->ip, ip, sizeof( ip ) );
 
-    ++ot_overall_tcp_connections;
+    stats_issue_event( EVENT_ACCEPT, 1, 0);
 
     /* That breaks taia encapsulation. But there is no way to take system
        time this often in FreeBSD and libowfat does not allow to set unix time */
     taia_uint( &t, 0 ); /* Clear t */
     tai_unix( &(t.sec), (g_now + OT_CLIENT_TIMEOUT) );
     io_timeout( i, t );
-
   }
 
   if( errno == EAGAIN )
@@ -728,94 +681,6 @@ static void handle_timeouted( void ) {
       free( h );
     }
     io_close(i);
-  }
-}
-
-/* UDP implementation according to http://xbtt.sourceforge.net/udp_tracker_protocol.html */
-
-static void handle_udp4( int64 serversocket ) {
-  ot_peer     peer;
-  ot_torrent *torrent;
-  ot_hash    *hash = NULL;
-  char        remoteip[4];
-  ot_dword   *inpacket = (ot_dword*)static_inbuf;
-  ot_dword   *outpacket = (ot_dword*)static_outbuf;
-  ot_dword    numwant, left, event;
-  ot_word     port, remoteport;
-  size_t      r, r_out;
-
-  r = socket_recv4( serversocket, static_inbuf, 8192, remoteip, &remoteport);
-
-  ot_overall_udp_connections++;
-
-  /* Minimum udp tracker packet size, also catches error */
-  if( r < 16 )
-    return;
-
-  /* look for udp bittorrent magic id */
-  if( (ntohl(inpacket[0]) != 0x00000417) || (ntohl(inpacket[1]) != 0x27101980) )
-    return;
-
-  switch( ntohl( inpacket[2] ) ) {
-    case 0: /* This is a connect action */
-      outpacket[0] = 0;           outpacket[1] = inpacket[3];
-      outpacket[2] = inpacket[0]; outpacket[3] = inpacket[1];
-      socket_send4( serversocket, static_outbuf, 16, remoteip, remoteport );
-      ot_overall_udp_successfulannounces++;
-      break;
-    case 1: /* This is an announce action */
-      /* Minimum udp announce packet size */
-      if( r < 98 )
-        return;
-
-      numwant = 200;
-      /* We do only want to know, if it is zero */
-      left  = inpacket[64/4] | inpacket[68/4];
-
-      event = ntohl( inpacket[80/4] );
-      port  = *(ot_word*)( static_inbuf + 96 );
-      hash  = (ot_hash*)( static_inbuf + 16 );
-
-      OT_SETIP( &peer, remoteip );
-      OT_SETPORT( &peer, &port );
-      OT_FLAG( &peer ) = 0;
-
-      switch( event ) {
-        case 1: OT_FLAG( &peer ) |= PEER_FLAG_COMPLETED; break;
-        case 3: OT_FLAG( &peer ) |= PEER_FLAG_STOPPED; break;
-        default: break;
-      }
-
-      if( !left )
-        OT_FLAG( &peer )         |= PEER_FLAG_SEEDING;
-
-      outpacket[0] = htonl( 1 );    /* announce action */
-      outpacket[1] = inpacket[12/4];
-
-      if( OT_FLAG( &peer ) & PEER_FLAG_STOPPED ) /* Peer is gone. */
-        r = remove_peer_from_torrent( hash, &peer, static_outbuf, 0 );
-      else {
-        torrent = add_peer_to_torrent( hash, &peer, 0 );
-        if( !torrent )
-          return; /* XXX maybe send error */
-
-        r = 8 + return_peers_for_torrent( hash, numwant, static_outbuf + 8, 0 );
-      }
-
-      socket_send4( serversocket, static_outbuf, r, remoteip, remoteport );
-      ot_overall_udp_successfulannounces++;
-      break;
-
-    case 2: /* This is a scrape action */
-      outpacket[0] = htonl( 2 );    /* scrape action */
-      outpacket[1] = inpacket[12/4];
-
-      for( r_out = 0; ( r_out * 20 < r - 16) && ( r_out <= 74 ); r_out++ )
-        return_udp_scrape_for_torrent( (ot_hash*)( static_inbuf + 16 + 20 * r_out ), static_outbuf + 8 + 12 * r_out );
-
-      socket_send4( serversocket, static_outbuf, 8 + 12 * r_out, remoteip, remoteport );
-      ot_overall_udp_successfulannounces++;
-      break;
   }
 }
 
@@ -892,17 +757,14 @@ void read_accesslist_file( int foo ) {
     for( i=0; i<20; ++i ) {
       int eger = 16 * scan_fromhex( static_inbuf[ 2*i ] ) + scan_fromhex( static_inbuf[ 1 + 2*i ] );
       if( eger < 0 )
-        goto ignore_line;
+        continue;
       infohash[i] = eger;
     }
     if( scan_fromhex( static_inbuf[ 40 ] ) >= 0 )
-      goto ignore_line;
+      continue;
 
     /* Append accesslist to accesslist vector */
     accesslist_addentry( &infohash );
-
-ignore_line:
-    continue;
   }
 
   fclose( accesslist_filehandle );
