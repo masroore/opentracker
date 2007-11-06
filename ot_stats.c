@@ -3,6 +3,7 @@
 
 /* System */
 #include <stdlib.h>
+#include <arpa/inet.h>
 #include <sys/types.h>
 #include <sys/mman.h>
 #include <stdio.h>
