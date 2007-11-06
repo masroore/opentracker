@@ -29,6 +29,8 @@
 
 #include "trackerlogic.h"
 #include "scan_urlencoded_query.h"
+#include "ot_stats.h"
+#include "ot_sync.h"
 
 /* Globals */
 static unsigned long long ot_overall_tcp_connections = 0;

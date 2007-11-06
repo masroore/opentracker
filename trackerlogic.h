@@ -1,8 +1,8 @@
 /* This software was written by Dirk Engling <erdgeist@erdgeist.org>
    It is considered beerware. Prost. Skol. Cheers or whatever. */
 
-#ifndef __TRACKERLOGIC_H__
-#define __TRACKERLOGIC_H__
+#ifndef __OT_TRACKERLOGIC_H__
+#define __OT_TRACKERLOGIC_H__
 
 #include <sys/types.h>
 #include <sys/time.h>
@@ -20,16 +20,6 @@ typedef ot_byte        ot_hash[20];
 typedef ot_dword       ot_ip;
 typedef time_t         ot_time;
 
-#define OT_VECTOR_MIN_MEMBERS   4
-#define OT_VECTOR_GROW_RATIO    8
-#define OT_VECTOR_SHRINK_THRESH 6
-#define OT_VECTOR_SHRINK_RATIO  4
-typedef struct {
-  void   *data;
-  size_t  size;
-  size_t  space;
-} ot_vector;
-
 /* Some tracker behaviour tunable */
 #define OT_CLIENT_TIMEOUT 30
 #define OT_CLIENT_TIMEOUT_CHECKINTERVAL 10
@@ -41,6 +31,10 @@ typedef struct {
 #define OT_TORRENT_TIMEOUT ((60*60*OT_TORRENT_TIMEOUT_HOURS)/OT_POOLS_TIMEOUT)
 
 #define OT_CLIENT_REQUEST_INTERVAL_RANDOM ( OT_CLIENT_REQUEST_INTERVAL - OT_CLIENT_REQUEST_VARIATION/2 + (int)( random( ) % OT_CLIENT_REQUEST_VARIATION ) )
+
+/* We maintain a list of 1024 pointers to sorted list of ot_torrent structs
+   Sort key is, of course, its hash */
+#define OT_BUCKET_COUNT 1024
 
 /* Number of tracker admin ip addresses allowed */
 #define OT_ADMINIP_MAX 64
@@ -70,7 +64,16 @@ static const ot_byte PEER_FLAG_STOPPED   = 0x20;
 #define OT_PEER_COMPARE_SIZE ((size_t)6)
 #define OT_HASH_COMPARE_SIZE (sizeof(ot_hash))
 
+struct ot_peerlist;
+typedef struct ot_peerlist ot_peerlist;
 typedef struct {
+  ot_hash      hash;
+  ot_peerlist *peer_list;
+} ot_torrent;
+
+#include "ot_vector.h"
+
+struct ot_peerlist {
   ot_time        base;
   size_t         seed_count;
   size_t         peer_count;
@@ -80,12 +83,7 @@ typedef struct {
 #ifdef WANT_TRACKER_SYNC
   ot_vector      changeset;
 #endif
-} ot_peerlist;
-
-typedef struct {
-  ot_hash      hash;
-  ot_peerlist *peer_list;
-} ot_torrent;
+};
 
 /*
    Exported functions
@@ -100,27 +98,21 @@ typedef struct {
 int  trackerlogic_init( const char * const serverdir );
 void trackerlogic_deinit( void );
 
-enum { STATS_CONNS, STATS_PEERS, STATS_TOP5, STATS_DMEM, STATS_TCP, STATS_UDP, STATS_SLASH24S, SYNC_IN, SYNC_OUT, STATS_FULLSCRAPE };
-
 ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer  WANT_TRACKER_SYNC_PARAM( int from_changeset ) );
 size_t remove_peer_from_torrent( ot_hash *hash, ot_peer *peer, char *reply, int is_tcp );
 size_t return_peers_for_torrent( ot_hash *hash, size_t amount, char *reply, int is_tcp );
 size_t return_fullscrape_for_tracker( char **reply );
 size_t return_tcp_scrape_for_torrent( ot_hash *hash, int amount, char *reply );
 size_t return_udp_scrape_for_torrent( ot_hash *hash, char *reply );
-size_t return_stats_for_tracker( char *reply, int mode );
-size_t return_stats_for_slash24s( char *reply, size_t amount, ot_dword thresh );
-size_t return_memstat_for_tracker( char **reply );
 void   clean_all_torrents( void );
-
-#ifdef WANT_TRACKER_SYNC
-size_t return_changeset_for_tracker( char **reply );
-int    add_changeset_to_tracker( ot_byte *data, size_t len );
-#endif
 
 #if defined ( WANT_BLACKLISTING ) || defined ( WANT_CLOSED_TRACKER )
 int    accesslist_addentry( ot_hash *hash );
 void   accesslist_reset( void );
 #endif
+
+/* Helper, before it moves to its own object */
+void fix_mmapallocation( void *buf, size_t old_alloc, size_t new_alloc );
+void free_peerlist( ot_peerlist *peer_list );
 
 #endif
