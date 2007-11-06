@@ -18,8 +18,13 @@
 #include <errno.h>
 #include "scan.h"
 #include "byte.h"
+#include "mutex.h"
 
 /* GLOBAL VARIABLES */
+
+/* We maintain a list of 1024 pointers to sorted list of ot_torrent structs
+   Sort key is, of course, its hash */
+#define OT_BUCKET_COUNT 1024
 static ot_vector all_torrents[OT_BUCKET_COUNT];
 static ot_time   all_torrents_clean[OT_BUCKET_COUNT];
 #if defined ( WANT_BLACKLISTING ) || defined( WANT_CLOSED_TRACKER )
@@ -28,6 +33,28 @@ static ot_vector accesslist;
 #endif
 
 static int clean_single_torrent( ot_torrent *torrent );
+
+/* these functions protect our buckets from other threads that
+   try to commit announces or clean up */
+static ot_vector *lock_bucket_by_hash( ot_hash *hash ) {
+  unsigned char *local_hash = hash[0];
+  int bucket = ( local_hash[0] << 2 ) | ( local_hash[1] >> 6 );
+
+  /* Can block */
+  mutex_bucket_lock( bucket );
+
+  return all_torrents + bucket;
+}
+
+static void *unlock_bucket_by_hash( ot_hash *hash ) {
+  unsigned char *local_hash = hash[0];
+  int bucket = ( local_hash[0] << 2 ) | ( local_hash[1] >> 6 );
+  mutex_bucket_unlock( bucket );
+
+  /* To make caller's code look better, allow
+     return unlock_bucket_by_hash() */
+  return NULL;
+}
 
 /* Converter function from memory to human readable hex strings
    - definitely not thread safe!!!
@@ -149,7 +176,7 @@ ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer  WANT_TRACKER_SYNC
   int         exactmatch;
   ot_torrent *torrent;
   ot_peer    *peer_dest;
-  ot_vector  *torrents_list = hash_to_bucket( all_torrents, hash ), *peer_pool;
+  ot_vector  *torrents_list = lock_bucket_by_hash( hash ), *peer_pool;
   int         base_pool = 0;
 
 #ifdef WANT_ACCESS_CONTROL
@@ -160,11 +187,12 @@ ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer  WANT_TRACKER_SYNC
 #endif
 
   if( exactmatch )
-    return NULL;
+    return unlock_bucket_by_hash( hash );
 #endif
 
   torrent = vector_find_or_insert( torrents_list, (void*)hash, sizeof( ot_torrent ), OT_HASH_COMPARE_SIZE, &exactmatch );
-  if( !torrent ) return NULL;
+  if( !torrent )
+    return unlock_bucket_by_hash( hash );
 
   if( !exactmatch ) {
     /* Create a new torrent entry, then */
@@ -172,7 +200,7 @@ ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer  WANT_TRACKER_SYNC
 
     if( !( torrent->peer_list = malloc( sizeof (ot_peerlist) ) ) ) {
       vector_remove_torrent( torrents_list, torrent );
-      return NULL;
+      return unlock_bucket_by_hash( hash );
     }
 
     byte_zero( torrent->peer_list, sizeof( ot_peerlist ) );
@@ -189,8 +217,10 @@ ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer  WANT_TRACKER_SYNC
     /* Check, whether peer already is in current pool, do nothing if so */
     peer_pool = &torrent->peer_list->peers[0];
     binary_search( peer, peer_pool->data, peer_pool->size, sizeof(ot_peer), OT_PEER_COMPARE_SIZE, &exactmatch );
-    if( exactmatch )
+    if( exactmatch ) {
+      unlock_bucket_by_hash( hash );
       return torrent;
+    }
     base_pool = 1;
   }
 #endif
@@ -220,6 +250,7 @@ ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer  WANT_TRACKER_SYNC
                 torrent->peer_list->seed_count--;
         case 1: default:
                 torrent->peer_list->peer_count--;
+                unlock_bucket_by_hash( hash );
                 return torrent;
       }
     }
@@ -240,6 +271,7 @@ ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer  WANT_TRACKER_SYNC
     memmove( peer_dest, peer, sizeof( ot_peer ) );
   }
 
+  unlock_bucket_by_hash( hash );
   return torrent;
 }
 
@@ -249,10 +281,18 @@ ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer  WANT_TRACKER_SYNC
    * RANDOM may return huge values
    * does not yet check not to return self
 */
-size_t return_peers_for_torrent( ot_torrent *torrent, size_t amount, char *reply, int is_tcp ) {
+size_t return_peers_for_torrent( ot_hash *hash, size_t amount, char *reply, int is_tcp ) {
   char        *r = reply;
+  int          exactmatch;
+  ot_vector   *torrents_list = lock_bucket_by_hash( hash );
+  ot_torrent  *torrent = binary_search( hash, torrents_list->data, torrents_list->size, sizeof( ot_torrent ), OT_HASH_COMPARE_SIZE, &exactmatch );
   ot_peerlist *peer_list = torrent->peer_list;
   size_t       index;
+
+  if( !torrent ) {
+    unlock_bucket_by_hash( hash );
+    return 0;
+  }
 
   if( peer_list->peer_count < amount )
     amount = peer_list->peer_count;
@@ -300,6 +340,7 @@ size_t return_peers_for_torrent( ot_torrent *torrent, size_t amount, char *reply
   if( is_tcp )
     *r++ = 'e';
 
+  unlock_bucket_by_hash( hash );
   return r - reply;
 }
 
@@ -385,8 +426,8 @@ size_t return_memstat_for_tracker( char **reply ) {
 
 /* Fetches scrape info for a specific torrent */
 size_t return_udp_scrape_for_torrent( ot_hash *hash, char *reply ) {
-  int          exactmatch	;
-  ot_vector   *torrents_list = hash_to_bucket( all_torrents, hash );
+  int          exactmatch;
+  ot_vector   *torrents_list = lock_bucket_by_hash( hash );
   ot_torrent  *torrent = binary_search( hash, torrents_list->data, torrents_list->size, sizeof( ot_torrent ), OT_HASH_COMPARE_SIZE, &exactmatch );
 
   if( !exactmatch ) {
@@ -403,6 +444,7 @@ size_t return_udp_scrape_for_torrent( ot_hash *hash, char *reply ) {
       r[2] = htonl( torrent->peer_list->peer_count-torrent->peer_list->seed_count );
     }
   }
+  unlock_bucket_by_hash( hash );
   return 12;
 }
 
@@ -415,17 +457,19 @@ size_t return_tcp_scrape_for_torrent( ot_hash *hash_list, int amount, char *repl
 
   for( i=0; i<amount; ++i ) {
     ot_hash     *hash = hash_list + i;
-    ot_vector   *torrents_list = hash_to_bucket( all_torrents, hash );
+    ot_vector   *torrents_list = lock_bucket_by_hash( hash );
     ot_torrent  *torrent = binary_search( hash, torrents_list->data, torrents_list->size, sizeof( ot_torrent ), OT_HASH_COMPARE_SIZE, &exactmatch );
 
-    if( !exactmatch ) continue;
-    if( clean_single_torrent( torrent ) ) {
-      vector_remove_torrent( torrents_list, torrent );
-    } else {
-      memmove( r, "20:", 3 ); memmove( r+3, hash, 20 );
-      r += sprintf( r+23, "d8:completei%zde10:downloadedi%zde10:incompletei%zdee",
-        torrent->peer_list->seed_count, torrent->peer_list->down_count, torrent->peer_list->peer_count-torrent->peer_list->seed_count ) + 23;
+    if( exactmatch ) {
+      if( clean_single_torrent( torrent ) ) {
+        vector_remove_torrent( torrents_list, torrent );
+      } else {
+        memmove( r, "20:", 3 ); memmove( r+3, hash, 20 );
+        r += sprintf( r+23, "d8:completei%zde10:downloadedi%zde10:incompletei%zdee",
+          torrent->peer_list->seed_count, torrent->peer_list->down_count, torrent->peer_list->peer_count-torrent->peer_list->seed_count ) + 23;
+      }
     }
+    unlock_bucket_by_hash( hash );
   }
 
   *r++ = 'e'; *r++ = 'e';
@@ -806,11 +850,13 @@ size_t return_stats_for_slash24s_old( char *reply, size_t amount, ot_dword thres
 size_t remove_peer_from_torrent( ot_hash *hash, ot_peer *peer, char *reply, int is_tcp ) {
   int          exactmatch;
   size_t       index;
-  ot_vector   *torrents_list = hash_to_bucket( all_torrents, hash );
+  ot_vector   *torrents_list = lock_bucket_by_hash( hash );
   ot_torrent  *torrent = binary_search( hash, torrents_list->data, torrents_list->size, sizeof( ot_torrent ), OT_HASH_COMPARE_SIZE, &exactmatch );
   ot_peerlist *peer_list;
 
   if( !exactmatch ) {
+    unlock_bucket_by_hash( hash );
+
     if( is_tcp )
       return sprintf( reply, "d8:completei0e10:incompletei0e8:intervali%ie5:peers0:e", OT_CLIENT_REQUEST_INTERVAL_RANDOM );
 
@@ -834,17 +880,22 @@ size_t remove_peer_from_torrent( ot_hash *hash, ot_peer *peer, char *reply, int 
 
 exit_loop:
 
-  if( is_tcp )
-    return sprintf( reply, "d8:completei%zde10:incompletei%zde8:intervali%ie5:peers0:e", peer_list->seed_count, peer_list->peer_count - peer_list->seed_count, OT_CLIENT_REQUEST_INTERVAL_RANDOM );
+  if( is_tcp ) {
+    size_t reply_size = sprintf( reply, "d8:completei%zde10:incompletei%zde8:intervali%ie5:peers0:e", peer_list->seed_count, peer_list->peer_count - peer_list->seed_count, OT_CLIENT_REQUEST_INTERVAL_RANDOM );
+    unlock_bucket_by_hash( hash );
+    return reply_size;
+  }
 
   /* else { Handle UDP reply */
   ((ot_dword*)reply)[2] = htonl( OT_CLIENT_REQUEST_INTERVAL_RANDOM );
   ((ot_dword*)reply)[3] = peer_list->peer_count - peer_list->seed_count;
   ((ot_dword*)reply)[4] = peer_list->seed_count;
+
+  unlock_bucket_by_hash( hash );
   return (size_t)20;
 }
 
-int init_logic( const char * const serverdir ) {
+int trackerlogic_init( const char * const serverdir ) {
   if( serverdir && chdir( serverdir ) ) {
     fprintf( stderr, "Could not chdir() to %s\n", serverdir );
     return -1;
@@ -855,10 +906,12 @@ int init_logic( const char * const serverdir ) {
   /* Initialize control structures */
   byte_zero( all_torrents, sizeof( all_torrents ) );
 
+  mutex_init( );
+
   return 0;
 }
 
-void deinit_logic( void ) {
+void trackerlogic_deinit( void ) {
   int i;
   size_t j;
 
@@ -873,6 +926,8 @@ void deinit_logic( void ) {
   }
   byte_zero( all_torrents, sizeof (all_torrents));
   byte_zero( all_torrents_clean, sizeof (all_torrents_clean));
+
+  mutex_deinit( );
 }
 
 #ifdef WANT_ACCESS_CONTROL

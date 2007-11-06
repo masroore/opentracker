@@ -46,14 +46,6 @@ typedef struct {
 #define OT_ADMINIP_MAX 64
 #define OT_MAX_THREADS 16
 
-/* We maintain a list of 4096 pointers to sorted list of ot_torrent structs
-   Sort key is, of course, its hash */
-#define OT_BUCKET_COUNT 1024
-static inline ot_vector *hash_to_bucket( ot_vector *vectors, ot_hash *hash ) {
-  unsigned char *local_hash = hash[0];
-  return vectors + ( ( local_hash[0] << 2 ) | ( local_hash[1] >> 6 ) );
-}
-
 /* This list points to 9 pools of peers each grouped in five-minute-intervals
    thus achieving a timeout of 2700s or 45 minutes
    These pools are sorted by its binary content */
@@ -105,14 +97,14 @@ typedef struct {
 #define WANT_TRACKER_SYNC_PARAM( param )
 #endif
 
-int  init_logic( const char * const serverdir );
-void deinit_logic( void );
+int  trackerlogic_init( const char * const serverdir );
+void trackerlogic_deinit( void );
 
-enum { STATS_MRTG, STATS_TOP5, STATS_DMEM, STATS_TCP, STATS_UDP, STATS_SLASH24S, STATS_SLASH24S_OLD, SYNC_IN, SYNC_OUT, STATS_FULLSCRAPE };
+enum { STATS_CONNS, STATS_PEERS, STATS_TOP5, STATS_DMEM, STATS_TCP, STATS_UDP, STATS_SLASH24S, SYNC_IN, SYNC_OUT, STATS_FULLSCRAPE };
 
 ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer  WANT_TRACKER_SYNC_PARAM( int from_changeset ) );
 size_t remove_peer_from_torrent( ot_hash *hash, ot_peer *peer, char *reply, int is_tcp );
-size_t return_peers_for_torrent( ot_torrent *torrent, size_t amount, char *reply, int is_tcp );
+size_t return_peers_for_torrent( ot_hash *hash, size_t amount, char *reply, int is_tcp );
 size_t return_fullscrape_for_tracker( char **reply );
 size_t return_tcp_scrape_for_torrent( ot_hash *hash, int amount, char *reply );
 size_t return_udp_scrape_for_torrent( ot_hash *hash, char *reply );
