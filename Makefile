@@ -1,16 +1,18 @@
 CC?=gcc
-FEATURES=#-DWANT_CLOSED_TRACKER -DWANT_UTORRENT1600_WORKAROUND -DWANT_IP_FROM_QUERY_STRING -D_DEBUG_HTTPERROR -DWANT_TRACKER_SYNC
+FEATURES=#-DWANT_TRACKER_SYNC -DWANT_BLACKLISTING -DWANT_CLOSED_TRACKER -DWANT_UTORRENT1600_WORKAROUND #-DWANT_IP_FROM_QUERY_STRING -D_DEBUG_HTTPERROR
 OPTS_debug=-g -ggdb #-pg # -fprofile-arcs -ftest-coverage
 OPTS_production=-Os
 CFLAGS+=-I../libowfat -Wall -pipe -Wextra #-pedantic -ansi
 LDFLAGS+=-L../libowfat/ -lowfat
  
-BINARY = opentracker
+BINARY =opentracker
 HEADERS=trackerlogic.h scan_urlencoded_query.h ot_mutex.h ot_stats.h ot_sync.h ot_vector.h ot_clean.h
 SOURCES=opentracker.c trackerlogic.c scan_urlencoded_query.c ot_mutex.c ot_stats.c ot_sync.c ot_vector.c ot_clean.c
 
 OBJECTS = $(SOURCES:%.c=%.o)
 OBJECTS_debug = $(SOURCES:%.c=%.debug.o)
+
+.SUFFIXES: .debug.o .o .c
 
 all: $(BINARY) $(BINARY).debug
 
@@ -23,10 +25,10 @@ $(BINARY): $(OBJECTS)
 $(BINARY).debug: $(OBJECTS_debug) $(HEADERS)
 	$(CC) -o $@ $(OBJECTS_debug) $(LDFLAGS)
 
-%.debug.o : %.c $(HEADERS)
-	$(CC) -c -o $@ $(CFLAGS_debug) $<
+.c.debug.o : $(HEADERS)
+	$(CC) -c -o $@ $(CFLAGS_debug) $(<:.debug.o=.c)
 
-%.o : %.c $(HEADERS)
+.c.o : $(HEADERS)
 	$(CC) -c -o $@ $(CFLAGS_production) $<
 
 clean:
