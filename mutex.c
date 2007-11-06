@@ -53,7 +53,7 @@ static void bucket_remove( int bucket ) {
 
 void mutex_bucket_lock( int bucket ) {
   pthread_mutex_lock( &bucket_mutex );
-  while( !bucket_check( bucket ) )
+  while( bucket_check( bucket ) )
     pthread_cond_wait( &bucket_being_unlocked, &bucket_mutex );
   bucket_push( bucket );
   pthread_mutex_unlock( &bucket_mutex );
