@@ -226,47 +226,6 @@ void fix_mmapallocation( void *buf, size_t old_alloc, size_t new_alloc ) {
     munmap( ((char*)buf) +  new_pages * page_size, old_alloc - new_pages * page_size );
 }
 
-/* Fetch full scrape info for all torrents */
-size_t return_fullscrape_for_tracker( char **reply ) {
-  size_t torrent_count = 0, j;
-  size_t allocated, replysize;
-  ot_vector *torrents_list;
-  int    bucket;
-  char  *r;
-
-  for( bucket=0; bucket<OT_BUCKET_COUNT; ++bucket ) {
-    ot_vector *torrents_list = mutex_bucket_lock( bucket );
-    torrent_count += torrents_list->size;
-    mutex_bucket_unlock( bucket );
-  }
-
-  /* one extra for pro- and epilogue */
-  allocated = 100*(1+torrent_count);
-  if( !( r = *reply = mmap( NULL, allocated, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, -1, 0 ) ) ) return 0;
-
-  memmove( r, "d5:filesd", 9 ); r += 9;
-  for( bucket=0; bucket<OT_BUCKET_COUNT; ++bucket ) {
-    torrents_list = mutex_bucket_lock( bucket );
-    for( j=0; j<torrents_list->size; ++j ) {
-      ot_peerlist *peer_list = ( ((ot_torrent*)(torrents_list->data))[j] ).peer_list;
-      ot_hash     *hash      =&( ((ot_torrent*)(torrents_list->data))[j] ).hash;
-      if( peer_list->peer_count || peer_list->down_count ) {
-        *r++='2'; *r++='0'; *r++=':';
-        memmove( r, hash, 20 ); r+=20;
-        r += sprintf( r, "d8:completei%zde10:downloadedi%zde10:incompletei%zdee", peer_list->seed_count, peer_list->down_count, peer_list->peer_count-peer_list->seed_count );
-      }
-    }
-    mutex_bucket_unlock( bucket );
-  }
-
-  *r++='e'; *r++='e';
-
-  replysize = ( r - *reply );
-  fix_mmapallocation( *reply, allocated, replysize );
-
-  return replysize;
-}
-
 /* Fetches scrape info for a specific torrent */
 size_t return_udp_scrape_for_torrent( ot_hash *hash, char *reply ) {
   int          exactmatch;

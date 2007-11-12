@@ -17,7 +17,6 @@ typedef uint16_t ot_word;
 typedef uint32_t ot_dword;
 
 typedef ot_byte        ot_hash[20];
-typedef ot_dword       ot_ip;
 typedef time_t         ot_time;
 
 /* Some tracker behaviour tunable */
@@ -43,7 +42,6 @@ typedef time_t         ot_time;
 /* This list points to 9 pools of peers each grouped in five-minute-intervals
    thus achieving a timeout of 2700s or 45 minutes
    These pools are sorted by its binary content */
-
 #define OT_POOLS_COUNT   9
 #define OT_POOLS_TIMEOUT (60*5)
 
@@ -105,7 +103,6 @@ void trackerlogic_deinit( void );
 ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer  WANT_TRACKER_SYNC_PARAM( int from_changeset ) );
 size_t remove_peer_from_torrent( ot_hash *hash, ot_peer *peer, char *reply, int is_tcp );
 size_t return_peers_for_torrent( ot_hash *hash, size_t amount, char *reply, int is_tcp );
-size_t return_fullscrape_for_tracker( char **reply );
 size_t return_tcp_scrape_for_torrent( ot_hash *hash, int amount, char *reply );
 size_t return_udp_scrape_for_torrent( ot_hash *hash, char *reply );
 void   clean_all_torrents( void );
