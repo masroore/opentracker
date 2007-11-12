@@ -38,6 +38,7 @@
 #include "ot_udp.h"
 #include "ot_fullscrape.h"
 #include "ot_iovec.h"
+#include "ot_accesslist.h"
 
 /* Globals */
 static const size_t SUCCESS_HTTP_HEADER_LENGTH = 80;
@@ -46,14 +47,6 @@ static uint32_t g_adminip_addresses[OT_ADMINIP_MAX];
 static unsigned int g_adminip_count = 0;
 time_t ot_start_time;
 time_t g_now;
-
-#if defined ( WANT_BLACKLISTING ) && defined (WANT_CLOSED_TRACKER )
-  #error WANT_BLACKLISTING and WANT_CLOSED_TRACKER are exclusive.
-#endif
-#if defined ( WANT_BLACKLISTING ) || defined (WANT_CLOSED_TRACKER )
-static char *accesslist_filename = NULL;
-#define WANT_ACCESS_CONTROL
-#endif
 
 #ifndef WANT_TRACKER_SYNC
 #define add_peer_to_torrent(A,B,C) add_peer_to_torrent(A,B)
@@ -331,12 +324,13 @@ LOG_TO_STDERR( "sync: %d.%d.%d.%d\n", h->ip[0], h->ip[1], h->ip[2], h->ip[3] );
     }
 
     if( mode == SYNC_OUT ) {
+      char *reply;
       if( !( reply_size = return_changeset_for_tracker( &reply ) ) ) HTTPERROR_500;
       return sendmmapdata( s, reply, reply_size );
     }
 
     /* Simple but proof for now */
-    reply = "OK";
+    memmove( static_outbuf + SUCCESS_HTTP_HEADER_LENGTH, "OK", 2);
     reply_size = 2;
 
     break;
@@ -772,48 +766,14 @@ static void ot_try_bind( char ip[4], uint16 port, int is_tcp ) {
   ++ot_sockets_count;
 }
 
-#ifdef WANT_ACCESS_CONTROL
-/* Read initial access list */
-void read_accesslist_file( int foo ) {
-  FILE *  accesslist_filehandle;
-  ot_hash infohash;
-  foo = foo;
-
-  accesslist_filehandle = fopen( accesslist_filename, "r" );
-
-  /* Free accesslist vector in trackerlogic.c*/
-  accesslist_reset();
-
-  if( accesslist_filehandle == NULL ) {
-    fprintf( stderr, "Warning: Can't open accesslist file: %s (but will try to create it later, if necessary and possible).", accesslist_filename );
-    return;
-  }
-
-  /* We do ignore anything that is not of the form "^[:xdigit:]{40}[^:xdigit:].*" */
-  while( fgets( static_inbuf, sizeof(static_inbuf), accesslist_filehandle ) ) {
-    int i;
-    for( i=0; i<20; ++i ) {
-      int eger = 16 * scan_fromhex( static_inbuf[ 2*i ] ) + scan_fromhex( static_inbuf[ 1 + 2*i ] );
-      if( eger < 0 )
-        continue;
-      infohash[i] = eger;
-    }
-    if( scan_fromhex( static_inbuf[ 40 ] ) >= 0 )
-      continue;
-
-    /* Append accesslist to accesslist vector */
-    accesslist_addentry( &infohash );
-  }
-
-  fclose( accesslist_filehandle );
-}
-#endif
-
 int main( int argc, char **argv ) {
   struct passwd *pws = NULL;
   char serverip[4] = {0,0,0,0};
   char *serverdir = ".";
   int scanon = 1;
+#ifdef WANT_ACCESS_CONTROL
+  char *accesslist_filename = NULL;
+#endif
 
   while( scanon ) {
     switch( getopt( argc, argv, ":i:p:A:P:d:"
@@ -863,13 +823,7 @@ int main( int argc, char **argv ) {
   }
   endpwent();
 
-#ifdef WANT_ACCESS_CONTROL
-  /* Passing "0" since read_blacklist_file also is SIGHUP handler */
-  if( accesslist_filename ) {
-    read_accesslist_file( 0 );
-    signal( SIGHUP,  read_accesslist_file );
-  }
-#endif
+  accesslist_init( accesslist_filename );
 
   signal( SIGPIPE, SIG_IGN );
   signal( SIGINT,  signal_handler );

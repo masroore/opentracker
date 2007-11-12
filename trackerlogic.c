@@ -21,12 +21,7 @@
 #include "ot_mutex.h"
 #include "ot_stats.h"
 #include "ot_clean.h"
-
-/* GLOBAL VARIABLES */
-#if defined ( WANT_BLACKLISTING ) || defined( WANT_CLOSED_TRACKER )
-static ot_vector accesslist;
-#define WANT_ACCESS_CONTROL
-#endif
+#include "ot_accesslist.h"
 
 void free_peerlist( ot_peerlist *peer_list ) {
   size_t i;
@@ -46,18 +41,10 @@ ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer  WANT_TRACKER_SYNC
   ot_vector  *torrents_list = mutex_bucket_lock_by_hash( hash ), *peer_pool;
   int         base_pool = 0;
 
-#ifdef WANT_ACCESS_CONTROL
-  binary_search( hash, accesslist.data, accesslist.size, OT_HASH_COMPARE_SIZE, OT_HASH_COMPARE_SIZE, &exactmatch );
-
-#ifdef WANT_CLOSED_TRACKER
-  exactmatch = !exactmatch;
-#endif
-
-  if( exactmatch ) {
+  if( !accesslist_hashisvalid( hash ) ) {
     mutex_bucket_unlock_by_hash( hash );
     return NULL;
   }
-#endif
 
   torrent = vector_find_or_insert( torrents_list, (void*)hash, sizeof( ot_torrent ), OT_HASH_COMPARE_SIZE, &exactmatch );
   if( !torrent ) {
@@ -326,25 +313,6 @@ exit_loop:
   return (size_t)20;
 }
 
-#ifdef WANT_ACCESS_CONTROL
-void accesslist_reset( void ) {
-  free( accesslist.data );
-  byte_zero( &accesslist, sizeof( accesslist ) );
-}
-
-int accesslist_addentry( ot_hash *infohash ) {
-  int em;
-  void *insert = vector_find_or_insert( &accesslist, infohash, OT_HASH_COMPARE_SIZE, OT_HASH_COMPARE_SIZE, &em );
-
-  if( !insert )
-    return -1;
-
-  memmove( insert, infohash, OT_HASH_COMPARE_SIZE );
-
-  return 0;
-}
-#endif
-
 int trackerlogic_init( const char * const serverdir ) {
   if( serverdir && chdir( serverdir ) ) {
     fprintf( stderr, "Could not chdir() to %s\n", serverdir );
@@ -352,7 +320,7 @@ int trackerlogic_init( const char * const serverdir ) {
   }
 
   srandom( time(NULL) );
-  
+
   clean_init( );
   mutex_init( );
 

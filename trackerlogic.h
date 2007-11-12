@@ -107,11 +107,6 @@ size_t return_tcp_scrape_for_torrent( ot_hash *hash, int amount, char *reply );
 size_t return_udp_scrape_for_torrent( ot_hash *hash, char *reply );
 void   clean_all_torrents( void );
 
-#if defined ( WANT_BLACKLISTING ) || defined ( WANT_CLOSED_TRACKER )
-int    accesslist_addentry( ot_hash *hash );
-void   accesslist_reset( void );
-#endif
-
 /* Helper, before it moves to its own object */
 void fix_mmapallocation( void *buf, size_t old_alloc, size_t new_alloc );
 void free_peerlist( ot_peerlist *peer_list );
