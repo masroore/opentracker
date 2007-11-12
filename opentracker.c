@@ -36,6 +36,8 @@
 #include "ot_stats.h"
 #include "ot_sync.h"
 #include "ot_udp.h"
+#include "ot_fullscrape.h"
+#include "ot_iovec.h"
 
 /* Globals */
 static const size_t SUCCESS_HTTP_HEADER_LENGTH = 80;
@@ -105,6 +107,7 @@ static void httperror( const int64 s, const char *title, const char *message );
 static void httpresponse( const int64 s, char *data _DEBUG_HTTPERROR_PARAM(size_t l ) );
 
 static void sendmmapdata( const int64 s, char *buffer, const size_t size );
+static void sendiovecdata( const int64 s, int iovec_entries, struct iovec *iovector );
 static void senddata( const int64 s, char *buffer, const size_t size );
 
 static void server_mainloop( );
@@ -188,6 +191,48 @@ static void sendmmapdata( const int64 s, char *buffer, size_t size ) {
   io_wantwrite( s );
 }
 
+static void sendiovecdata( const int64 s, int iovec_entries, struct iovec *iovector ) {
+  struct http_data *h = io_getcookie( s );
+  char *header;
+  int i;
+  size_t header_size, size = iovec_length( &iovec_entries, &iovector );
+  tai6464 t;
+
+  if( !h ) {
+    iovec_free( &iovec_entries, &iovector );
+    return;
+  }
+  if( h->flag & STRUCT_HTTP_FLAG_ARRAY_USED ) {
+    h->flag &= ~STRUCT_HTTP_FLAG_ARRAY_USED;
+    array_reset( &h->request );
+  }
+
+  header = malloc( SUCCESS_HTTP_HEADER_LENGTH );
+  if( !header ) {
+    iovec_free( &iovec_entries, &iovector );
+    HTTPERROR_500;
+  }
+
+  header_size = sprintf( header, "HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %zd\r\n\r\n", size );
+
+  iob_reset( &h->batch );
+  iob_addbuf_free( &h->batch, header, header_size );
+  
+  /* Will move to ot_iovec.c */
+  for( i=0; i<iovec_entries; ++i )
+    iob_addbuf_munmap( &h->batch, iovector[i].iov_base, iovector[i].iov_len );
+  free( iovector );
+
+  h->flag |= STRUCT_HTTP_FLAG_IOB_USED;
+
+  /* writeable sockets timeout after twice the pool timeout
+     which defaults to 5 minutes (e.g. after 10 minutes) */
+  taia_now( &t ); taia_addsec( &t, &t, OT_CLIENT_TIMEOUT_SEND );
+  io_timeout( s, t );
+  io_dontwantread( s );
+  io_wantwrite( s );
+}
+
 static void senddata( const int64 s, char *buffer, size_t size ) {
   struct http_data *h = io_getcookie( s );
   ssize_t written_size;
@@ -225,7 +270,7 @@ static void senddata( const int64 s, char *buffer, size_t size ) {
 
 static void httpresponse( const int64 s, char *data _DEBUG_HTTPERROR_PARAM( size_t l ) ) {
   struct http_data* h = io_getcookie( s );
-  char       *c, *reply;
+  char       *c;
   ot_peer     peer;
   ot_torrent *torrent;
   ot_hash    *hash = NULL;
@@ -349,16 +394,19 @@ LOG_TO_STDERR( "sync: %d.%d.%d.%d\n", h->ip[0], h->ip[1], h->ip[2], h->ip[3] );
 
     /* Full scrape... you might want to limit that */
     if( !byte_diff( data, 12, "scrape HTTP/" ) ) {
+      int iovec_entries = 0;
+      struct iovec * iovector = NULL;
+      reply_size = return_fullscrape_for_tracker( &iovec_entries, &iovector );
 
 LOG_TO_STDERR( "[%08d] scrp: %d.%d.%d.%d - FULL SCRAPE\n", (unsigned int)(g_now - ot_start_time), h->ip[0], h->ip[1], h->ip[2], h->ip[3] );
 #ifdef _DEBUG_HTTPERROR
 write( 2, debug_request, l );
 #endif
-      if( !( reply_size = return_fullscrape_for_tracker( &reply ) ) ) HTTPERROR_500;
+      if( !reply_size ) HTTPERROR_500;
 
       /* Stat keeping */
       stats_issue_event( EVENT_FULLSCRAPE, 1, reply_size);
-      return sendmmapdata( s, reply, reply_size );
+      return sendiovecdata( s, iovec_entries, iovector );
     }
 
 SCRAPE_WORKAROUND:
