@@ -27,13 +27,13 @@ size_t return_fullscrape_for_tracker( int *iovec_entries, struct iovec **iovecto
   int    bucket;
   char  *r, *re;
 
-  /* Setup return vector */
+  /* Setup return vector... */
   *iovec_entries = 0;
   if( !( r = iovec_increase( iovec_entries, iovector, OT_SCRAPE_CHUNK_SIZE ) ) )
     return 0;
 
-  /* ... and pointer end of current output buffer
-     this works as a low watermark */
+  /* ... and pointer to end of current output buffer.
+     This works as a low watermark */
   re = r + OT_SCRAPE_CHUNK_SIZE;
 
   /* Start reply dictionary */
