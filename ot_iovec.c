@@ -14,7 +14,7 @@
 #include "ot_iovec.h"
 
 void *iovec_increase( int *iovec_entries, struct iovec **iovector, size_t new_alloc ) {
-  void *new_ptr = realloc( *iovector, 1 + *iovec_entries * sizeof( struct iovec ) );
+  void *new_ptr = realloc( *iovector, (1 + *iovec_entries ) * sizeof( struct iovec ) );
   if( !new_ptr )
     return NULL;
   *iovector = new_ptr;
