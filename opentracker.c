@@ -39,6 +39,7 @@
 #include "ot_fullscrape.h"
 #include "ot_iovec.h"
 #include "ot_accesslist.h"
+#include "ot_mutex.h"
 
 /* Globals */
 static const size_t SUCCESS_HTTP_HEADER_LENGTH = 80;
@@ -77,8 +78,9 @@ static char debug_request[8192];
 #endif
 
 typedef enum {
-  STRUCT_HTTP_FLAG_ARRAY_USED = 1,
-  STRUCT_HTTP_FLAG_IOB_USED   = 2
+  STRUCT_HTTP_FLAG_ARRAY_USED     = 1,
+  STRUCT_HTTP_FLAG_IOB_USED       = 2,
+  STRUCT_HTTP_FLAG_WAITINGFORTASK = 4
 } STRUCT_HTTP_FLAG;
 
 struct http_data {
@@ -619,19 +621,26 @@ static void help( char *name ) {
 }
 #undef HELPLINE
 
+static void handle_dead( const int64 socket ) {
+  struct http_data* h=io_getcookie( socket );
+  if( h ) {
+    if( h->flag & STRUCT_HTTP_FLAG_IOB_USED )
+      iob_reset( &h->batch );
+    if( h->flag & STRUCT_HTTP_FLAG_ARRAY_USED )
+      array_reset( &h->request );
+    if( h->flag & STRUCT_HTTP_FLAG_WAITINGFORTASK )
+      mutex_workqueue_canceltask( socket );
+    free( h );
+  }
+  io_close( socket );
+}
+
 static void handle_read( const int64 clientsocket ) {
   struct http_data* h = io_getcookie( clientsocket );
   ssize_t l;
 
-  if( ( l = io_tryread( clientsocket, static_inbuf, sizeof static_inbuf ) ) <= 0 ) {
-    if( h ) {
-      if( h->flag & STRUCT_HTTP_FLAG_ARRAY_USED )
-        array_reset( &h->request );
-      free( h );
-    }
-    io_close( clientsocket );
-    return;
-  }
+  if( ( l = io_tryread( clientsocket, static_inbuf, sizeof static_inbuf ) ) <= 0 )
+    return handle_dead( clientsocket );
 
 #ifdef _DEBUG_HTTPERROR
   memcpy( debug_request, "500!\0", 5 );
@@ -660,12 +669,8 @@ static void handle_read( const int64 clientsocket ) {
 
 static void handle_write( const int64 clientsocket ) {
   struct http_data* h=io_getcookie( clientsocket );
-  if( !h ) return;
-  if( iob_send( clientsocket, &h->batch ) <= 0 ) {
-    iob_reset( &h->batch );
-    io_close( clientsocket );
-    free( h );
-  }
+  if( !h || ( iob_send( clientsocket, &h->batch ) <= 0 ) )
+    handle_dead( clientsocket );
 }
 
 static void handle_accept( const int64 serversocket ) {
@@ -703,21 +708,15 @@ static void handle_accept( const int64 serversocket ) {
 
 static void handle_timeouted( void ) {
   int64 i;
-  while( ( i = io_timeouted() ) != -1 ) {
-    struct http_data* h=io_getcookie( i );
-    if( h ) {
-      if( h->flag & STRUCT_HTTP_FLAG_IOB_USED )
-        iob_reset( &h->batch );
-      if( h->flag & STRUCT_HTTP_FLAG_ARRAY_USED )
-        array_reset( &h->request );
-      free( h );
-    }
-    io_close(i);
-  }
+  while( ( i = io_timeouted() ) != -1 )
+    handle_dead( i );
 }
 
 static void server_mainloop( ) {
   time_t next_timeout_check = g_now + OT_CLIENT_TIMEOUT_CHECKINTERVAL;
+/* Later we will poll for finished tasks
+  struct iovec *iovector;
+  int iovec_entries;*/
 
   for( ; ; ) {
     int64 i;
@@ -733,6 +732,10 @@ static void server_mainloop( ) {
       else
         handle_read( i );
     }
+
+/*  Later we will poll for finished tasks
+    while( ( i = mutex_workqueue_popresult( &iovec_entries, &iovector ) ) != -1 )
+      sendiovecdata( i, iovec_entries, iovector ); */
 
     while( ( i = io_canwrite( ) ) != -1 )
       handle_write( i );
