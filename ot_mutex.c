@@ -14,6 +14,9 @@
 #include "trackerlogic.h"
 #include "ot_mutex.h"
 
+//#define MTX_DBG( STRING ) fprintf( stderr, STRING )
+#define MTX_DBG( STRING )
+
 /* Our global all torrents list */
 static ot_vector all_torrents[OT_BUCKET_COUNT];
 
@@ -114,14 +117,18 @@ int mutex_workqueue_pushtask( int64 socket, ot_tasktype tasktype ) {
   struct ot_task ** tmptask, * task;
 
   /* Want exclusive access to tasklist */
+  MTX_DBG( "pushtask locks.\n" );
   pthread_mutex_lock( &tasklist_mutex );
+  MTX_DBG( "pushtask locked.\n" );
 
   task = malloc(sizeof( struct ot_task));
   if( !task ) {
+    MTX_DBG( "pushtask fail unlocks.\n" );
     pthread_mutex_unlock( &tasklist_mutex );
+    MTX_DBG( "pushtask fail unlocked.\n" );
     return -1;
   }
-    
+
   /* Skip to end of list */
   tmptask = &tasklist; 
   while( *tmptask )
@@ -136,8 +143,11 @@ int mutex_workqueue_pushtask( int64 socket, ot_tasktype tasktype ) {
   task->next          = 0;
 
   /* Inform waiting workers and release lock */
+  MTX_DBG( "pushtask broadcasts.\n" );
   pthread_cond_broadcast( &tasklist_being_filled );
+  MTX_DBG( "pushtask broadcasted, mutex unlocks.\n" );
   pthread_mutex_unlock( &tasklist_mutex );
+  MTX_DBG( "pushtask end mutex unlocked.\n" );
   return 0;
 }
 
@@ -145,7 +155,9 @@ void mutex_workqueue_canceltask( int64 socket ) {
   struct ot_task ** task;
 
   /* Want exclusive access to tasklist */
+  MTX_DBG( "canceltask locks.\n" );
   pthread_mutex_lock( &tasklist_mutex );
+  MTX_DBG( "canceltask locked.\n" );
 
   task = &tasklist;
   while( *task && ( (*task)->socket != socket ) )
@@ -165,7 +177,9 @@ void mutex_workqueue_canceltask( int64 socket ) {
   }
 
   /* Release lock */
+  MTX_DBG( "canceltask unlocks.\n" );
   pthread_mutex_unlock( &tasklist_mutex );
+  MTX_DBG( "canceltask unlocked.\n" );
 }
 
 ot_taskid mutex_workqueue_poptask( ot_tasktype tasktype ) {
@@ -173,7 +187,9 @@ ot_taskid mutex_workqueue_poptask( ot_tasktype tasktype ) {
   ot_taskid taskid = 0;
 
   /* Want exclusive access to tasklist */
+  MTX_DBG( "poptask mutex locks.\n" );
   pthread_mutex_lock( &tasklist_mutex );
+  MTX_DBG( "poptask mutex locked.\n" );
 
   while( !taskid ) {
     /* Skip to the first unassigned task this worker wants to do */
@@ -185,15 +201,18 @@ ot_taskid mutex_workqueue_poptask( ot_tasktype tasktype ) {
        and leave the loop */
     if( task ) {
       task->taskid = taskid = ++next_free_taskid;
-      break;
+    } else {
+      /* Wait until the next task is being fed */
+      MTX_DBG( "poptask cond waits.\n" );
+      pthread_cond_wait( &tasklist_being_filled, &tasklist_mutex );
+      MTX_DBG( "poptask cond waited.\n" );
     }
-
-    /* Wait until the next task is being fed */
-    pthread_cond_wait( &tasklist_being_filled, &tasklist_mutex );
   }
 
   /* Release lock */
+  MTX_DBG( "poptask end mutex unlocks.\n" );
   pthread_mutex_unlock( &tasklist_mutex );
+  MTX_DBG( "poptask end mutex unlocked.\n" );
 
   return taskid;
 }
@@ -201,7 +220,9 @@ ot_taskid mutex_workqueue_poptask( ot_tasktype tasktype ) {
 int mutex_workqueue_pushresult( ot_taskid taskid, int iovec_entries, struct iovec *iovec ) {
   struct ot_task * task;
   /* Want exclusive access to tasklist */
+  MTX_DBG( "pushresult locks.\n" );
   pthread_mutex_lock( &tasklist_mutex );
+  MTX_DBG( "pushresult locked.\n" );
 
   task = tasklist;
   while( task && ( task->taskid != taskid ) )
@@ -214,7 +235,9 @@ int mutex_workqueue_pushresult( ot_taskid taskid, int iovec_entries, struct iove
   }
 
   /* Release lock */
+  MTX_DBG( "pushresult unlocks.\n" );
   pthread_mutex_unlock( &tasklist_mutex );
+  MTX_DBG( "pushresult unlocked.\n" );
   
   /* Indicate whether the worker has to throw away results */
   return task ? 0 : -1;
@@ -225,11 +248,13 @@ int64 mutex_workqueue_popresult( int *iovec_entries, struct iovec ** iovec ) {
   int64 socket = -1;
 
   /* Want exclusive access to tasklist */
+  MTX_DBG( "popresult locks.\n" );
   pthread_mutex_lock( &tasklist_mutex );
+  MTX_DBG( "popresult locked.\n" );
 
   task = &tasklist;
   while( *task && ( (*task)->tasktype != OT_TASKTYPE_DONE ) )
-    *task = (*task)->next;
+    task = &(*task)->next;
 
   if( *task && ( (*task)->tasktype == OT_TASKTYPE_DONE ) ) {
     struct ot_task *ptask = *task;
@@ -243,11 +268,15 @@ int64 mutex_workqueue_popresult( int *iovec_entries, struct iovec ** iovec ) {
   }
 
   /* Release lock */
+  MTX_DBG( "popresult unlocks.\n" );
   pthread_mutex_unlock( &tasklist_mutex );
+  MTX_DBG( "popresult unlocked.\n" );
   return socket;
 }
 
 void mutex_init( ) {
+  pthread_mutex_init(&tasklist_mutex, NULL);
+  pthread_cond_init (&tasklist_being_filled, NULL);
   pthread_mutex_init(&bucket_mutex, NULL);
   pthread_cond_init (&bucket_being_unlocked, NULL);
   byte_zero( all_torrents, sizeof( all_torrents ) );
@@ -256,5 +285,7 @@ void mutex_init( ) {
 void mutex_deinit( ) {
   pthread_mutex_destroy(&bucket_mutex);
   pthread_cond_destroy(&bucket_being_unlocked);
+  pthread_mutex_destroy(&tasklist_mutex);
+  pthread_cond_destroy(&tasklist_being_filled);
   byte_zero( all_torrents, sizeof( all_torrents ) );
 }
