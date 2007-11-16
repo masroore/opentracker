@@ -8,7 +8,7 @@ CC?=gcc
 OPTS_debug=-g -ggdb #-pg # -fprofile-arcs -ftest-coverage
 OPTS_production=-Os
 CFLAGS+=-I../libowfat -Wall -pipe -Wextra #-pedantic -ansi
-LDFLAGS+=-L../libowfat/ -lowfat
+LDFLAGS+=-L../libowfat/ -lowfat -pthread
  
 BINARY =opentracker
 HEADERS=trackerlogic.h scan_urlencoded_query.h ot_mutex.h ot_stats.h ot_sync.h ot_vector.h ot_clean.h ot_udp.h ot_iovec.h ot_fullscrape.h ot_accesslist.h
