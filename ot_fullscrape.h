@@ -4,8 +4,9 @@
 #ifndef __OT_FULLSCRAPE_H__
 #define __OT_FULLSCRAPE_H__
 
-#include <sys/uio.h>
+#include <io.h>
 
-size_t return_fullscrape_for_tracker( int *iovec_entries, struct iovec **iovector );
+void fullscrape_init( );
+void fullscrape_deliver( int64 socket );
 
 #endif

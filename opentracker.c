@@ -193,15 +193,29 @@ static void sendiovecdata( const int64 s, int iovec_entries, struct iovec *iovec
   size_t header_size, size = iovec_length( &iovec_entries, &iovector );
   tai6464 t;
 
+  /* No cookie? Bad socket. Leave. */
   if( !h ) {
     iovec_free( &iovec_entries, &iovector );
-    return;
+    HTTPERROR_500;
   }
+  
+  /* If this socket collected request in a buffer,
+     free it now */
   if( h->flag & STRUCT_HTTP_FLAG_ARRAY_USED ) {
     h->flag &= ~STRUCT_HTTP_FLAG_ARRAY_USED;
     array_reset( &h->request );
   }
 
+  /* If we came here, wait for the answer is over */
+  h->flag &= ~STRUCT_HTTP_FLAG_WAITINGFORTASK;
+
+  /* Our answers never are 0 bytes. Return an error. */
+  if( !iovec_entries || !iovector[0].iov_len ) {
+    iovec_free( &iovec_entries, &iovector );
+    HTTPERROR_500;
+  }
+
+  /* Prepare space for http header */
   header = malloc( SUCCESS_HTTP_HEADER_LENGTH );
   if( !header ) {
     iovec_free( &iovec_entries, &iovector );
@@ -212,7 +226,7 @@ static void sendiovecdata( const int64 s, int iovec_entries, struct iovec *iovec
 
   iob_reset( &h->batch );
   iob_addbuf_free( &h->batch, header, header_size );
-  
+
   /* Will move to ot_iovec.c */
   for( i=0; i<iovec_entries; ++i )
     iob_addbuf_munmap( &h->batch, iovector[i].iov_base, iovector[i].iov_len );
@@ -390,19 +404,15 @@ LOG_TO_STDERR( "sync: %d.%d.%d.%d\n", h->ip[0], h->ip[1], h->ip[2], h->ip[3] );
 
     /* Full scrape... you might want to limit that */
     if( !byte_diff( data, 12, "scrape HTTP/" ) ) {
-      int iovec_entries = 0;
-      struct iovec * iovector = NULL;
-      reply_size = return_fullscrape_for_tracker( &iovec_entries, &iovector );
-
 LOG_TO_STDERR( "[%08d] scrp: %d.%d.%d.%d - FULL SCRAPE\n", (unsigned int)(g_now - ot_start_time), h->ip[0], h->ip[1], h->ip[2], h->ip[3] );
 #ifdef _DEBUG_HTTPERROR
 write( 2, debug_request, l );
 #endif
-      if( !reply_size ) HTTPERROR_500;
-
-      /* Stat keeping */
-      stats_issue_event( EVENT_FULLSCRAPE, 1, reply_size);
-      return sendiovecdata( s, iovec_entries, iovector );
+      /* Pass this task to the worker thread */
+      h->flag |= STRUCT_HTTP_FLAG_WAITINGFORTASK;
+      fullscrape_deliver( s );
+      io_dontwantread( s );
+      return;
     }
 
 SCRAPE_WORKAROUND:
@@ -714,9 +724,8 @@ static void handle_timeouted( void ) {
 
 static void server_mainloop( ) {
   time_t next_timeout_check = g_now + OT_CLIENT_TIMEOUT_CHECKINTERVAL;
-/* Later we will poll for finished tasks
   struct iovec *iovector;
-  int iovec_entries;*/
+  int iovec_entries;
 
   for( ; ; ) {
     int64 i;
@@ -733,9 +742,8 @@ static void server_mainloop( ) {
         handle_read( i );
     }
 
-/*  Later we will poll for finished tasks
     while( ( i = mutex_workqueue_popresult( &iovec_entries, &iovector ) ) != -1 )
-      sendiovecdata( i, iovec_entries, iovector ); */
+      sendiovecdata( i, iovec_entries, iovector );
 
     while( ( i = io_canwrite( ) ) != -1 )
       handle_write( i );
@@ -834,6 +842,8 @@ int main( int argc, char **argv ) {
 
   if( trackerlogic_init( serverdir ) == -1 )
     panic( "Logic not started" );
+
+  fullscrape_init( );
 
   g_now = ot_start_time = time( NULL );
   alarm(5);

@@ -5,6 +5,7 @@
 #include <sys/uio.h>
 #include <stdio.h>
 #include <string.h>
+#include <pthread.h>
 
 /* Libowfat */
 
@@ -23,14 +24,45 @@
 /* "d8:completei%zde10:downloadedi%zde10:incompletei%zdee" */
 #define OT_FULLSCRAPE_MAXENTRYLEN 100
 
-size_t return_fullscrape_for_tracker( int *iovec_entries, struct iovec **iovector ) {
+/* Forward declaration */
+static void fullscrape_make( int *iovec_entries, struct iovec **iovector );
+
+/* This is the entry point into this worker thread
+   It grabs tasks from mutex_tasklist and delivers results back
+*/
+static void * fullscrape_worker( void * args) {
+  int iovec_entries;
+  struct iovec *iovector;
+
+  args = args;
+
+  while( 1 ) {
+    ot_taskid taskid = mutex_workqueue_poptask( OT_TASKTYPE_FULLSCRAPE );
+    fullscrape_make( &iovec_entries, &iovector );
+    if( mutex_workqueue_pushresult( taskid, iovec_entries, iovector ) )
+      iovec_free( &iovec_entries, &iovector );
+  }
+  return NULL;
+}
+
+void fullscrape_init( ) {
+  pthread_t thread_id;
+  pthread_create( &thread_id, NULL, fullscrape_worker, NULL );
+}
+
+void fullscrape_deliver( int64 socket ) {
+  mutex_workqueue_pushtask( socket, OT_TASKTYPE_FULLSCRAPE );
+}
+
+static void fullscrape_make( int *iovec_entries, struct iovec **iovector ) {
   int    bucket;
   char  *r, *re;
 
   /* Setup return vector... */
   *iovec_entries = 0;
+  *iovector = NULL;
   if( !( r = iovec_increase( iovec_entries, iovector, OT_SCRAPE_CHUNK_SIZE ) ) )
-    return 0;
+    return;
 
   /* ... and pointer to end of current output buffer.
      This works as a low watermark */
@@ -76,7 +108,7 @@ size_t return_fullscrape_for_tracker( int *iovec_entries, struct iovec **iovecto
 
           /* Release lock on current bucket and return */
           mutex_bucket_unlock( bucket );
-          return 0;
+          return;
         }
         
         /* Adjust new end of output buffer */
@@ -93,7 +125,4 @@ size_t return_fullscrape_for_tracker( int *iovec_entries, struct iovec **iovecto
 
   /* Release unused memory in current output buffer */
   iovec_fixlast( iovec_entries, iovector, OT_SCRAPE_CHUNK_SIZE - ( re - r ) );
-
-  /* Return answer size */
-  return iovec_length( iovec_entries, iovector );
 }
