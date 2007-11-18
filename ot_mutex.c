@@ -182,7 +182,7 @@ void mutex_workqueue_canceltask( int64 socket ) {
   MTX_DBG( "canceltask unlocked.\n" );
 }
 
-ot_taskid mutex_workqueue_poptask( ot_tasktype tasktype ) {
+ot_taskid mutex_workqueue_poptask( ot_tasktype *tasktype ) {
   struct ot_task * task;
   ot_taskid taskid = 0;
 
@@ -194,13 +194,14 @@ ot_taskid mutex_workqueue_poptask( ot_tasktype tasktype ) {
   while( !taskid ) {
     /* Skip to the first unassigned task this worker wants to do */
     task = tasklist;
-    while( task && ( task->tasktype != tasktype ) && ( task->taskid ) )
+    while( task && ( ( TASK_MASK & task->tasktype ) != *tasktype ) && ( task->taskid ) )
       task = task->next;
 
     /* If we found an outstanding task, assign a taskid to it
        and leave the loop */
     if( task ) {
       task->taskid = taskid = ++next_free_taskid;
+      *tasktype = task->tasktype;
     } else {
       /* Wait until the next task is being fed */
       MTX_DBG( "poptask cond waits.\n" );
@@ -231,7 +232,7 @@ int mutex_workqueue_pushresult( ot_taskid taskid, int iovec_entries, struct iove
   if( task ) {
     task->iovec_entries = iovec_entries;
     task->iovec         = iovec;
-    task->tasktype      = OT_TASKTYPE_DONE;
+    task->tasktype      = TASK_DONE;
   }
 
   /* Release lock */
@@ -253,10 +254,10 @@ int64 mutex_workqueue_popresult( int *iovec_entries, struct iovec ** iovec ) {
   MTX_DBG( "popresult locked.\n" );
 
   task = &tasklist;
-  while( *task && ( (*task)->tasktype != OT_TASKTYPE_DONE ) )
+  while( *task && ( (*task)->tasktype != TASK_DONE ) )
     task = &(*task)->next;
 
-  if( *task && ( (*task)->tasktype == OT_TASKTYPE_DONE ) ) {
+  if( *task && ( (*task)->tasktype == TASK_DONE ) ) {
     struct ot_task *ptask = *task;
 
     *iovec_entries = (*task)->iovec_entries;
