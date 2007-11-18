@@ -242,19 +242,19 @@ static size_t stats_peers_mrtg( char * reply ) {
 size_t return_stats_for_tracker( char *reply, int mode, int format ) {
   format = format;
   switch( mode ) {
-    case STATS_CONNS:
+    case TASK_STATS_CONNS:
       return stats_connections_mrtg( reply );
-    case STATS_UDP:
+    case TASK_STATS_UDP:
       return stats_udpconnections_mrtg( reply );
-    case STATS_TCP:
+    case TASK_STATS_TCP:
       return stats_tcpconnections_mrtg( reply );
-    case STATS_PEERS:
+    case TASK_STATS_PEERS:
       return stats_peers_mrtg( reply );
-    case STATS_SLASH24S:
+    case TASK_STATS_SLASH24S:
       return stats_slash24s_txt( reply, 25, 16 );
-    case STATS_TOP5:
+    case TASK_STATS_TOP5:
       return stats_top5_txt( reply );
-    case STATS_FULLSCRAPE:
+    case TASK_STATS_FULLSCRAPE:
       return stats_fullscrapes_mrtg( reply );
     default:
       return 0;
