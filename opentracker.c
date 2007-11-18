@@ -284,6 +284,7 @@ static void httpresponse( const int64 s, char *data _DEBUG_HTTPERROR_PARAM( size
   ot_torrent *torrent;
   ot_hash    *hash = NULL;
   int         numwant, tmp, scanon, mode;
+  ot_tasktype format = TASK_FULLSCRAPE;
   unsigned short port = htons(6881);
   ssize_t     len;
   size_t      reply_size = 0, reply_off;
@@ -359,7 +360,7 @@ LOG_TO_STDERR( "sync: %d.%d.%d.%d\n", h->ip[0], h->ip[1], h->ip[2], h->ip[3] );
     if( !byte_diff( data, 2, "sc" ) ) goto SCRAPE_WORKAROUND;
     if( byte_diff(data,5,"stats")) HTTPERROR_404;
     scanon = 1;
-    mode = STATS_PEERS;
+    mode = TASK_STATS_PEERS;
 
     while( scanon ) {
       switch( scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_PARAM ) ) {
@@ -373,22 +374,50 @@ LOG_TO_STDERR( "sync: %d.%d.%d.%d\n", h->ip[0], h->ip[1], h->ip[2], h->ip[3] );
         }
         if( scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE ) != 4 ) HTTPERROR_400_PARAM;
         if( !byte_diff(data,4,"peer"))
-          mode = STATS_PEERS;
+          mode = TASK_STATS_PEERS;
         else if( !byte_diff(data,4,"conn"))
-          mode = STATS_CONNS;
+          mode = TASK_STATS_CONNS;
         else if( !byte_diff(data,4,"top5"))
-          mode = STATS_TOP5;
+          mode = TASK_STATS_TOP5;
         else if( !byte_diff(data,4,"fscr"))
-          mode = STATS_FULLSCRAPE;
+          mode = TASK_STATS_FULLSCRAPE;
         else if( !byte_diff(data,4,"tcp4"))
-          mode = STATS_TCP;
+          mode = TASK_STATS_TCP;
         else if( !byte_diff(data,4,"udp4"))
-          mode = STATS_UDP;
+          mode = TASK_STATS_UDP;
         else if( !byte_diff(data,4,"s24s"))
-          mode = STATS_SLASH24S;
+          mode = TASK_STATS_SLASH24S;
+        else if( !byte_diff(data,4,"tpbs"))
+          mode = TASK_STATS_TPB;
         else
           HTTPERROR_400_PARAM;
+        break;
+      case 6:
+        if( byte_diff(data,6,"format")) {
+          scan_urlencoded_skipvalue( &c );
+          continue;
+        }
+        if( scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE ) != 3 ) HTTPERROR_400_PARAM;
+        if( !byte_diff(data,3,"bin"))
+          format = TASK_FULLSCRAPE_TPB_BINARY;
+        else if( !byte_diff(data,3,"ben"))
+          format = TASK_FULLSCRAPE;
+        else if( !byte_diff(data,3,"url"))
+          format = TASK_FULLSCRAPE_TPB_URLENCODED;
+        else if( !byte_diff(data,3,"txt"))
+          format = TASK_FULLSCRAPE_TPB_ASCII;
+        else
+          HTTPERROR_400_PARAM;
+        break;
       }
+    }
+
+    if( mode == TASK_STATS_TPB ) {
+      /* Pass this task to the worker thread */
+      h->flag |= STRUCT_HTTP_FLAG_WAITINGFORTASK;
+      fullscrape_deliver( s, format );
+      io_dontwantread( s );
+      return;
     }
 
     // default format for now
@@ -410,7 +439,7 @@ write( 2, debug_request, l );
 #endif
       /* Pass this task to the worker thread */
       h->flag |= STRUCT_HTTP_FLAG_WAITINGFORTASK;
-      fullscrape_deliver( s );
+      fullscrape_deliver( s, TASK_FULLSCRAPE );
       io_dontwantread( s );
       return;
     }

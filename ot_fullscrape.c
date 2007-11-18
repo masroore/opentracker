@@ -8,6 +8,7 @@
 #include <pthread.h>
 
 /* Libowfat */
+#include "textcode.h"
 
 /* Opentracker */
 #include "trackerlogic.h"
@@ -25,7 +26,11 @@
 #define OT_FULLSCRAPE_MAXENTRYLEN 100
 
 /* Forward declaration */
-static void fullscrape_make( int *iovec_entries, struct iovec **iovector );
+static void fullscrape_make( int *iovec_entries, struct iovec **iovector, ot_tasktype mode );
+
+/* Converter function from memory to human readable hex strings
+   XXX - Duplicated from ot_stats. Needs fix. */
+static char*to_hex(char*d,ot_byte*s){char*m="0123456789ABCDEF";char *t=d;char*e=d+40;while(d<e){*d++=m[*s>>4];*d++=m[*s++&15];}*d=0;return t;}
 
 /* This is the entry point into this worker thread
    It grabs tasks from mutex_tasklist and delivers results back
@@ -37,8 +42,9 @@ static void * fullscrape_worker( void * args) {
   args = args;
 
   while( 1 ) {
-    ot_taskid taskid = mutex_workqueue_poptask( OT_TASKTYPE_FULLSCRAPE );
-    fullscrape_make( &iovec_entries, &iovector );
+    ot_tasktype tasktype = TASK_FULLSCRAPE;
+    ot_taskid   taskid   = mutex_workqueue_poptask( &tasktype );
+    fullscrape_make( &iovec_entries, &iovector, tasktype );
     if( mutex_workqueue_pushresult( taskid, iovec_entries, iovector ) )
       iovec_free( &iovec_entries, &iovector );
   }
@@ -50,11 +56,11 @@ void fullscrape_init( ) {
   pthread_create( &thread_id, NULL, fullscrape_worker, NULL );
 }
 
-void fullscrape_deliver( int64 socket ) {
-  mutex_workqueue_pushtask( socket, OT_TASKTYPE_FULLSCRAPE );
+void fullscrape_deliver( int64 socket, ot_tasktype tasktype ) {
+  mutex_workqueue_pushtask( socket, tasktype );
 }
 
-static void fullscrape_make( int *iovec_entries, struct iovec **iovector ) {
+static void fullscrape_make( int *iovec_entries, struct iovec **iovector, ot_tasktype mode ) {
   int    bucket;
   char  *r, *re;
 
@@ -68,8 +74,11 @@ static void fullscrape_make( int *iovec_entries, struct iovec **iovector ) {
      This works as a low watermark */
   re = r + OT_SCRAPE_CHUNK_SIZE;
 
-  /* Start reply dictionary */
-  memmove( r, "d5:filesd", 9 ); r += 9;
+  /* Reply dictionary only needed for bencoded fullscrape */
+  if( mode == TASK_FULLSCRAPE ) {
+    memmove( r, "d5:filesd", 9 );
+    r += 9;
+  }
 
   /* For each bucket... */
   for( bucket=0; bucket<OT_BUCKET_COUNT; ++bucket ) {
@@ -83,15 +92,29 @@ static void fullscrape_make( int *iovec_entries, struct iovec **iovector ) {
       ot_peerlist *peer_list = ( ((ot_torrent*)(torrents_list->data))[tor_offset] ).peer_list;
       ot_hash     *hash      =&( ((ot_torrent*)(torrents_list->data))[tor_offset] ).hash;
 
-      /* If torrent has peers or download count, its interesting */
-      if( peer_list->peer_count || peer_list->down_count ) {
-
+      switch( mode ) {
+      case TASK_FULLSCRAPE:
+      default:
         /* push hash as bencoded string */
         *r++='2'; *r++='0'; *r++=':';
         memmove( r, hash, 20 ); r+=20;
 
         /* push rest of the scrape string */
         r += sprintf( r, "d8:completei%zde10:downloadedi%zde10:incompletei%zdee", peer_list->seed_count, peer_list->down_count, peer_list->peer_count-peer_list->seed_count );
+        break;
+      case TASK_FULLSCRAPE_TPB_ASCII:
+        to_hex( r, *hash ); r+=40;
+        r += sprintf( r, ":%zd:%zd\n", peer_list->seed_count, peer_list->peer_count-peer_list->seed_count );
+        break;
+      case TASK_FULLSCRAPE_TPB_BINARY:
+        memmove( r, hash, 20 ); r+=20;
+        *(ot_dword*)r++ = htonl( (uint32_t)peer_list->seed_count );
+        *(ot_dword*)r++ = htonl( (uint32_t)( peer_list->peer_count-peer_list->seed_count) );
+        break;
+      case TASK_FULLSCRAPE_TPB_URLENCODED:
+        r += fmt_urlencoded( r, (char *)*hash, 20 );
+        r += sprintf( r, ":%zd:%zd\n", peer_list->seed_count, peer_list->peer_count-peer_list->seed_count );
+        break;        
       }
 
       /* If we reached our low watermark in buffer... */
@@ -120,8 +143,10 @@ static void fullscrape_make( int *iovec_entries, struct iovec **iovector ) {
     mutex_bucket_unlock( bucket );
   }
 
-  /* Close bencoded scrape dictionary */
-  *r++='e'; *r++='e';
+  /* Close bencoded scrape dictionary if necessary */
+  if( mode == TASK_FULLSCRAPE ) {
+    *r++='e'; *r++='e';
+  }
 
   /* Release unused memory in current output buffer */
   iovec_fixlast( iovec_entries, iovector, OT_SCRAPE_CHUNK_SIZE - ( re - r ) );
