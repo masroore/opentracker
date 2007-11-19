@@ -8,6 +8,7 @@
 #include "ot_mutex.h"
 
 void fullscrape_init( );
+void fullscrape_deinit( );
 void fullscrape_deliver( int64 socket, ot_tasktype tasktype );
 
 #endif

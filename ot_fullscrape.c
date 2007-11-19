@@ -52,9 +52,13 @@ static void * fullscrape_worker( void * args) {
   return NULL;
 }
 
+static pthread_t thread_id;
 void fullscrape_init( ) {
-  pthread_t thread_id;
   pthread_create( &thread_id, NULL, fullscrape_worker, NULL );
+}
+
+void fullscrape_deinit( ) {
+  pthread_cancel( thread_id );
 }
 
 void fullscrape_deliver( int64 socket, ot_tasktype tasktype ) {
