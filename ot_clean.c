@@ -4,6 +4,7 @@
 /* System */
 #include <stdlib.h>
 #include <string.h>
+#include <pthread.h>
 
 /* Libowfat */
 #include "byte.h"
@@ -11,9 +12,6 @@
 /* Opentracker */
 #include "trackerlogic.h"
 #include "ot_mutex.h"
-
-/* To remember, when we last cleaned up */
-static ot_time   all_torrents_clean[OT_BUCKET_COUNT];
 
 /* Clean a single torrent
    return 1 if torrent timed out
@@ -83,37 +81,46 @@ int clean_single_torrent( ot_torrent *torrent ) {
   return 0;
 }
 
-/* Clean up all peers in current bucket, remove timedout pools and
-   torrents */
-void clean_all_torrents( void ) {
-  ot_vector         *torrents_list;
-  size_t             i;
-  static int         bucket;
-  ot_time time_now = NOW;
+static void clean_make() {
+  int bucket;
 
-  /* Search for an uncleaned bucked */
-  while( ( all_torrents_clean[bucket] == time_now ) && ( ++bucket < OT_BUCKET_COUNT ) );
-  if( bucket >= OT_BUCKET_COUNT ) {
-    bucket = 0; return;
-  }
+  for( bucket = OT_BUCKET_COUNT - 1; bucket >= 0; --bucket ) {
+    ot_vector *torrents_list = mutex_bucket_lock( bucket );
+    size_t     toffs;
 
-  all_torrents_clean[bucket] = time_now;
-
-  torrents_list = mutex_bucket_lock( bucket );
-  for( i=0; i<torrents_list->size; ++i ) {
-    ot_torrent *torrent = ((ot_torrent*)(torrents_list->data)) + i;
-    if( clean_single_torrent( torrent ) ) {
-      vector_remove_torrent( torrents_list, torrent );
-      --i; continue;
+    for( toffs=0; toffs<torrents_list->size; ++toffs ) {
+      ot_torrent *torrent = ((ot_torrent*)(torrents_list->data)) + toffs;
+      if( clean_single_torrent( torrent ) ) {
+        vector_remove_torrent( torrents_list, torrent );
+        --toffs; continue;
+      }
     }
+    mutex_bucket_unlock( bucket );
   }
-  mutex_bucket_unlock( bucket );
 }
 
+/* Clean up all peers in current bucket, remove timedout pools and
+   torrents */
+static void * clean_worker( void * args ) {
+  args = args;
+  while( 1 ) {
+    ot_tasktype tasktype = TASK_CLEAN;
+    ot_taskid   taskid   = mutex_workqueue_poptask( &tasktype );
+    clean_make(  );
+    mutex_workqueue_pushsuccess( taskid );
+  }
+  return NULL;
+}
+
+void clean_all_torrents( ) {
+  mutex_workqueue_pushtask( 0, TASK_CLEAN );
+}
+
+static pthread_t thread_id;
 void clean_init( void ) {
-  byte_zero( all_torrents_clean, sizeof( all_torrents_clean ) );
+  pthread_create( &thread_id, NULL, clean_worker, NULL );
 }
 
 void clean_deinit( void ) {
-  byte_zero( all_torrents_clean, sizeof( all_torrents_clean ) );
+  pthread_cancel( thread_id );
 }

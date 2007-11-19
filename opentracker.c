@@ -40,12 +40,14 @@
 #include "ot_iovec.h"
 #include "ot_accesslist.h"
 #include "ot_mutex.h"
+#include "ot_clean.h"
 
 /* Globals */
 static const size_t SUCCESS_HTTP_HEADER_LENGTH = 80;
 static const size_t SUCCESS_HTTP_SIZE_OFF = 17;
 static uint32_t g_adminip_addresses[OT_ADMINIP_MAX];
 static unsigned int g_adminip_count = 0;
+static time_t ot_last_clean_time;
 time_t ot_start_time;
 time_t g_now;
 
@@ -623,6 +625,7 @@ ANNOUNCE_WORKAROUND:
 static void signal_handler( int s ) {
   if( s == SIGINT ) {
     signal( SIGINT, SIG_IGN);
+
     trackerlogic_deinit();
     exit( 0 );
   } else if( s == SIGALRM ) {
@@ -783,7 +786,10 @@ static void server_mainloop( ) {
     }
 
     /* See if we need to move our pools */
-    clean_all_torrents();
+    if( g_now != ot_last_clean_time ) {
+      ot_last_clean_time = g_now;
+      clean_all_torrents();
+    }
   }
 }
 
@@ -872,9 +878,7 @@ int main( int argc, char **argv ) {
   if( trackerlogic_init( serverdir ) == -1 )
     panic( "Logic not started" );
 
-  fullscrape_init( );
-
-  g_now = ot_start_time = time( NULL );
+  g_now = ot_start_time = ot_last_clean_time = time( NULL );
   alarm(5);
 
   server_mainloop( );

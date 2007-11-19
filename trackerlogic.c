@@ -22,6 +22,7 @@
 #include "ot_stats.h"
 #include "ot_clean.h"
 #include "ot_accesslist.h"
+#include "ot_fullscrape.h"
 
 void free_peerlist( ot_peerlist *peer_list ) {
   size_t i;
@@ -321,8 +322,10 @@ int trackerlogic_init( const char * const serverdir ) {
 
   srandom( time(NULL) );
 
-  clean_init( );
+  /* Initialise background worker threads */
   mutex_init( );
+  clean_init( );
+  fullscrape_init( );
 
   return 0;
 }
@@ -343,6 +346,9 @@ void trackerlogic_deinit( void ) {
     }
     mutex_bucket_unlock( bucket );
   }
-  mutex_deinit( );
+
+  /* Deinitialise background worker threads */
+  fullscrape_init( );
   clean_deinit( );
+  mutex_deinit( );
 }

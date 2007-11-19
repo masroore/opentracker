@@ -32,9 +32,11 @@ typedef enum {
   TASK_FULLSCRAPE_TPB_ASCII        = 0x0202,
   TASK_FULLSCRAPE_TPB_URLENCODED   = 0x0203,
 
-  TASK_SYNC                        = 0x0300,
+  TASK_CLEAN                       = 0x0300,
 
-  TASK_DMEM                        = 0x0400,
+  TASK_SYNC                        = 0x0400,
+
+  TASK_DMEM                        = 0x0500,
 
   TASK_DONE                        = 0x0f00,
   TASK_MASK                        = 0xff00
@@ -44,6 +46,7 @@ typedef unsigned long ot_taskid;
 
 int       mutex_workqueue_pushtask( int64 socket, ot_tasktype tasktype );
 void      mutex_workqueue_canceltask( int64 socket );
+void      mutex_workqueue_pushsuccess( ot_taskid taskid );
 ot_taskid mutex_workqueue_poptask( ot_tasktype *tasktype );
 int       mutex_workqueue_pushresult( ot_taskid taskid, int iovec_entries, struct iovec *iovector );
 int64     mutex_workqueue_popresult( int *iovec_entries, struct iovec ** iovector );

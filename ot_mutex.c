@@ -218,6 +218,30 @@ ot_taskid mutex_workqueue_poptask( ot_tasktype *tasktype ) {
   return taskid;
 }
 
+void mutex_workqueue_pushsuccess( ot_taskid taskid ) {
+  struct ot_task ** task;
+
+  /* Want exclusive access to tasklist */
+  MTX_DBG( "pushsuccess locks.\n" );
+  pthread_mutex_lock( &tasklist_mutex );
+  MTX_DBG( "pushsuccess locked.\n" );
+
+  task = &tasklist;
+  while( *task && ( (*task)->taskid != taskid ) )
+    *task = (*task)->next;
+
+  if( *task && ( (*task)->taskid == taskid ) ) {
+    struct ot_task *ptask = *task;
+    *task = (*task)->next;
+    free( ptask );
+  }
+
+  /* Release lock */
+  MTX_DBG( "pushsuccess unlocks.\n" );
+  pthread_mutex_unlock( &tasklist_mutex );
+  MTX_DBG( "pushsuccess unlocked.\n" );
+}
+
 int mutex_workqueue_pushresult( ot_taskid taskid, int iovec_entries, struct iovec *iovec ) {
   struct ot_task * task;
   /* Want exclusive access to tasklist */
