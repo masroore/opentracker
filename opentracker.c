@@ -724,6 +724,9 @@ static void handle_accept( const int64 serversocket ) {
 
   while( ( i = socket_accept4( serversocket, (char*)ip, &port) ) != -1 ) {
 
+    /* Put fd into a non-blocking mode */
+    io_nonblock( i );
+
     if( !io_fd( i ) ||
         !( h = (struct http_data*)malloc( sizeof( struct http_data ) ) ) ) {
       io_close( i );
