@@ -25,6 +25,9 @@ int clean_single_torrent( ot_torrent *torrent ) {
   char *new_peers;
 #endif
 
+  if( !timedout )
+    return 0;
+
   /* Torrent has idled out */
   if( timedout > OT_TORRENT_TIMEOUT )
     return 1;
