@@ -194,7 +194,7 @@ ot_taskid mutex_workqueue_poptask( ot_tasktype *tasktype ) {
   while( !taskid ) {
     /* Skip to the first unassigned task this worker wants to do */
     task = tasklist;
-    while( task && ( ( TASK_MASK & task->tasktype ) != *tasktype ) && ( task->taskid ) )
+    while( task && ( ( ( TASK_MASK & task->tasktype ) != *tasktype ) || task->taskid ) )
       task = task->next;
 
     /* If we found an outstanding task, assign a taskid to it
