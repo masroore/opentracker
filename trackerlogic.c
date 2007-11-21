@@ -23,6 +23,7 @@
 #include "ot_clean.h"
 #include "ot_accesslist.h"
 #include "ot_fullscrape.h"
+#include "ot_sync.h"
 
 void free_peerlist( ot_peerlist *peer_list ) {
   size_t i;
@@ -204,16 +205,6 @@ size_t return_peers_for_torrent( ot_hash *hash, size_t amount, char *reply, int 
   return r - reply;
 }
 
-/* Release memory we allocated too much */
-void fix_mmapallocation( void *buf, size_t old_alloc, size_t new_alloc ) {
-  int page_size = getpagesize();
-  size_t old_pages = 1 + old_alloc / page_size;
-  size_t new_pages = 1 + new_alloc / page_size;
-
-  if( old_pages != new_pages )
-    munmap( ((char*)buf) +  new_pages * page_size, old_alloc - new_pages * page_size );
-}
-
 /* Fetches scrape info for a specific torrent */
 size_t return_udp_scrape_for_torrent( ot_hash *hash, char *reply ) {
   int          exactmatch;
@@ -326,7 +317,9 @@ int trackerlogic_init( const char * const serverdir ) {
   mutex_init( );
   clean_init( );
   fullscrape_init( );
-
+#ifdef WANT_TRACKER_SYNC
+  sync_init( );
+#endif
   return 0;
 }
 
@@ -348,7 +341,10 @@ void trackerlogic_deinit( void ) {
   }
 
   /* Deinitialise background worker threads */
-  fullscrape_init( );
+#ifdef WANT_TRACKER_SYNC
+  sync_deinit( );
+#endif
+  fullscrape_deinit( );
   clean_deinit( );
   mutex_deinit( );
 }
