@@ -8,7 +8,6 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/socket.h>
-#include <sys/mman.h>
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -62,8 +61,8 @@ time_t g_now;
 #endif
 
 /* To always have space for error messages ;) */
-char static_inbuf[8192];
-char static_outbuf[8192];
+static char static_inbuf[8192];
+static char static_outbuf[8192];
 
 #define OT_MAXMULTISCRAPE_COUNT 64
 static ot_hash multiscrape_buf[OT_MAXMULTISCRAPE_COUNT];
@@ -103,7 +102,6 @@ int main( int argc, char **argv );
 static void httperror( const int64 s, const char *title, const char *message );
 static void httpresponse( const int64 s, char *data _DEBUG_HTTPERROR_PARAM(size_t l ) );
 
-static void sendmmapdata( const int64 s, char *buffer, const size_t size );
 static void sendiovecdata( const int64 s, int iovec_entries, struct iovec *iovector );
 static void senddata( const int64 s, char *buffer, const size_t size );
 
@@ -150,42 +148,6 @@ static void httperror( const int64 s, const char *title, const char *message ) {
   fprintf( stderr, "DEBUG: invalid request was: %s\n", debug_request );
 #endif
   senddata(s,static_outbuf,reply_size);
-}
-
-static void sendmmapdata( const int64 s, char *buffer, size_t size ) {
-  struct http_data *h = io_getcookie( s );
-  char *header;
-  size_t header_size;
-  tai6464 t;
-
-  if( !h ) {
-    munmap( buffer, size );
-    return;
-  }
-  if( h->flag & STRUCT_HTTP_FLAG_ARRAY_USED ) {
-    h->flag &= ~STRUCT_HTTP_FLAG_ARRAY_USED;
-    array_reset( &h->request );
-  }
-
-  header = malloc( SUCCESS_HTTP_HEADER_LENGTH );
-  if( !header ) {
-    munmap( buffer, size );
-    HTTPERROR_500;
-  }
-
-  header_size = sprintf( header, "HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %zd\r\n\r\n", size );
-
-  iob_reset( &h->batch );
-  iob_addbuf_free( &h->batch, header, header_size );
-  iob_addbuf_munmap( &h->batch, buffer, size );
-  h->flag |= STRUCT_HTTP_FLAG_IOB_USED;
-
-  /* writeable sockets timeout after twice the pool timeout
-     which defaults to 5 minutes (e.g. after 10 minutes) */
-  taia_now( &t ); taia_addsec( &t, &t, OT_CLIENT_TIMEOUT_SEND );
-  io_timeout( s, t );
-  io_dontwantread( s );
-  io_wantwrite( s );
 }
 
 static void sendiovecdata( const int64 s, int iovec_entries, struct iovec *iovector ) {
@@ -343,9 +305,11 @@ LOG_TO_STDERR( "sync: %d.%d.%d.%d\n", h->ip[0], h->ip[1], h->ip[2], h->ip[3] );
     }
 
     if( mode == SYNC_OUT ) {
-      char *reply;
-      if( !( reply_size = return_changeset_for_tracker( &reply ) ) ) HTTPERROR_500;
-      return sendmmapdata( s, reply, reply_size );
+      /* Pass this task to the worker thread */
+      h->flag |= STRUCT_HTTP_FLAG_WAITINGFORTASK;
+      sync_deliver( s );
+      io_dontwantread( s );
+      return;
     }
 
     /* Simple but proof for now */
@@ -789,8 +753,8 @@ static void server_mainloop( ) {
     }
 
     /* See if we need to move our pools */
-    if( g_now != ot_last_clean_time ) {
-      ot_last_clean_time = g_now;
+    if( NOW != ot_last_clean_time ) {
+      ot_last_clean_time = NOW;
       clean_all_torrents();
     }
   }
@@ -881,7 +845,8 @@ int main( int argc, char **argv ) {
   if( trackerlogic_init( serverdir ) == -1 )
     panic( "Logic not started" );
 
-  g_now = ot_start_time = ot_last_clean_time = time( NULL );
+  g_now = ot_start_time = time( NULL );
+  ot_last_clean_time = NOW;
   alarm(5);
 
   server_mainloop( );
