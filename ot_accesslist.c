@@ -18,6 +18,7 @@
 #ifdef WANT_ACCESS_CONTROL
 static char *accesslist_filename = NULL;
 static ot_vector accesslist;
+static char static_inbuf[8192];
 
 static void accesslist_reset( void ) {
   free( accesslist.data );

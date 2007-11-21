@@ -14,6 +14,9 @@
 #include "ot_udp.h"
 #include "ot_stats.h"
 
+static char static_inbuf[8192];
+static char static_outbuf[8192];
+
 /* UDP implementation according to http://xbtt.sourceforge.net/udp_tracker_protocol.html */
 void handle_udp4( int64 serversocket ) {
   ot_peer     peer;
