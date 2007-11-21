@@ -34,7 +34,8 @@ typedef enum {
 
   TASK_CLEAN                       = 0x0300,
 
-  TASK_SYNC                        = 0x0400,
+  TASK_SYNC_OUT                    = 0x0400,
+  TASK_SYNC_IN                     = 0x0401,
 
   TASK_DMEM                        = 0x0500,
 
