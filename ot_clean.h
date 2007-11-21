@@ -10,6 +10,6 @@ void clean_init( void );
 void clean_deinit( void );
 
 void clean_all_torrents( void );
-int clean_single_torrent( ot_torrent *torrent );
+int  clean_single_torrent( ot_torrent *torrent );
 
 #endif

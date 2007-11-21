@@ -22,7 +22,7 @@ void *binary_search( const void * const key, const void * base, const size_t mem
                      size_t compare_size, int *exactmatch );
 void *vector_find_or_insert( ot_vector *vector, void *key, size_t member_size, size_t compare_size, int *exactmatch );
 
-int vector_remove_peer( ot_vector *vector, ot_peer *peer, int hysteresis );
-void vector_remove_torrent( ot_vector *vector, ot_torrent *match );
+int   vector_remove_peer( ot_vector *vector, ot_peer *peer, int hysteresis );
+void  vector_remove_torrent( ot_vector *vector, ot_torrent *match );
 
 #endif
