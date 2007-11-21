@@ -46,8 +46,6 @@ typedef time_t         ot_time;
 #define OT_POOLS_TIMEOUT (60*5)
 
 /* From opentracker.c */
-extern char static_inbuf[8192];
-extern char static_outbuf[8192];
 extern time_t ot_start_time;
 extern time_t g_now;
 #define NOW              (g_now/OT_POOLS_TIMEOUT)
@@ -105,10 +103,8 @@ size_t remove_peer_from_torrent( ot_hash *hash, ot_peer *peer, char *reply, int 
 size_t return_peers_for_torrent( ot_hash *hash, size_t amount, char *reply, int is_tcp );
 size_t return_tcp_scrape_for_torrent( ot_hash *hash, int amount, char *reply );
 size_t return_udp_scrape_for_torrent( ot_hash *hash, char *reply );
-void   clean_all_torrents( void );
 
 /* Helper, before it moves to its own object */
-void fix_mmapallocation( void *buf, size_t old_alloc, size_t new_alloc );
 void free_peerlist( ot_peerlist *peer_list );
 
 #endif
