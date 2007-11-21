@@ -19,7 +19,7 @@
 
 /* Fetch full scrape info for all torrents
    Full scrapes usually are huge and one does not want to
-   allocate more memory. So lets get them in 1M units
+   allocate more memory. So lets get them in 512k units
 */
 #define OT_SCRAPE_CHUNK_SIZE (512*1024)
 
