@@ -9,8 +9,11 @@
 #ifdef WANT_TRACKER_SYNC
 enum { SYNC_IN, SYNC_OUT };
 
-size_t return_changeset_for_tracker( char **reply );
-int    add_changeset_to_tracker( ot_byte *data, size_t len );
+void sync_init( );
+void sync_deinit( );
+void sync_deliver( int64 socket );
+
+int  add_changeset_to_tracker( ot_byte *data, size_t len );
 #endif
 
 #endif
