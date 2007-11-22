@@ -7,8 +7,12 @@
 #include <string.h>
 #include <pthread.h>
 #include <arpa/inet.h>
+#ifdef WANT_COMPRESSION_GZIP
+#include <zlib.h>
+#endif
 
 /* Libowfat */
+#include "byte.h"
 #include "textcode.h"
 
 /* Opentracker */
@@ -24,7 +28,7 @@
 #define OT_SCRAPE_CHUNK_SIZE (512*1024)
 
 /* "d8:completei%zde10:downloadedi%zde10:incompletei%zdee" */
-#define OT_FULLSCRAPE_MAXENTRYLEN 100
+#define OT_FULLSCRAPE_MAXENTRYLEN 256
 
 /* Forward declaration */
 static void fullscrape_make( int *iovec_entries, struct iovec **iovector, ot_tasktype mode );
@@ -66,8 +70,12 @@ void fullscrape_deliver( int64 socket, ot_tasktype tasktype ) {
 }
 
 static void fullscrape_make( int *iovec_entries, struct iovec **iovector, ot_tasktype mode ) {
-  int    bucket;
-  char  *r, *re;
+  int   bucket;
+  char *r, *re;
+#ifdef WANT_COMPRESSION_GZIP
+  char  compress_buffer[OT_FULLSCRAPE_MAXENTRYLEN];
+  z_stream strm;
+#endif
 
   /* Setup return vector... */
   *iovec_entries = 0;
@@ -79,8 +87,21 @@ static void fullscrape_make( int *iovec_entries, struct iovec **iovector, ot_tas
      This works as a low watermark */
   re = r + OT_SCRAPE_CHUNK_SIZE;
 
+#ifdef WANT_COMPRESSION_GZIP
+  if( mode & TASK_FLAG_GZIP ) {
+    byte_zero( &strm, sizeof(strm) );
+    strm.next_in = (ot_byte*)r;
+    if( deflateInit2(&strm,9,Z_DEFLATED,31,8,Z_DEFAULT_STRATEGY) != Z_OK )
+      fprintf( stderr, "not ok.\n" );
+
+    strm.next_out  = (unsigned char*)r;
+    strm.avail_out = OT_SCRAPE_CHUNK_SIZE;
+    r = compress_buffer;
+  }
+#endif
+
   /* Reply dictionary only needed for bencoded fullscrape */
-  if( mode == TASK_FULLSCRAPE ) {
+  if( ( mode & TASK_TASK_MASK ) == TASK_FULLSCRAPE ) {
     memmove( r, "d5:filesd", 9 );
     r += 9;
   }
@@ -97,7 +118,7 @@ static void fullscrape_make( int *iovec_entries, struct iovec **iovector, ot_tas
       ot_peerlist *peer_list = ( ((ot_torrent*)(torrents_list->data))[tor_offset] ).peer_list;
       ot_hash     *hash      =&( ((ot_torrent*)(torrents_list->data))[tor_offset] ).hash;
 
-      switch( mode ) {
+      switch( mode & TASK_TASK_MASK ) {
       case TASK_FULLSCRAPE:
       default:
         /* push hash as bencoded string */
@@ -122,6 +143,16 @@ static void fullscrape_make( int *iovec_entries, struct iovec **iovector, ot_tas
         break;        
       }
 
+#ifdef WANT_COMPRESSION_GZIP
+      if( mode & TASK_FLAG_GZIP ) {
+        strm.next_in  = (ot_byte*)compress_buffer;
+        strm.avail_in = r - compress_buffer;
+        if( deflate( &strm, Z_NO_FLUSH ) != Z_OK )
+          fprintf( stderr, "Not ok.\n" );
+        r = (char*)strm.next_out;
+      }
+#endif
+
       /* If we reached our low watermark in buffer... */
       if( re - r <= OT_FULLSCRAPE_MAXENTRYLEN ) {
 
@@ -134,6 +165,10 @@ static void fullscrape_make( int *iovec_entries, struct iovec **iovector, ot_tas
           /* If this fails: free buffers */
           iovec_free( iovec_entries, iovector );
 
+#ifdef WANT_COMPRESSION_GZIP
+          deflateEnd(&strm);
+#endif
+
           /* Release lock on current bucket and return */
           mutex_bucket_unlock( bucket );
           return;
@@ -141,7 +176,19 @@ static void fullscrape_make( int *iovec_entries, struct iovec **iovector, ot_tas
         
         /* Adjust new end of output buffer */
         re = r + OT_SCRAPE_CHUNK_SIZE;
+
+#ifdef WANT_COMPRESSION_GZIP
+        if( mode & TASK_FLAG_GZIP ) {
+          strm.next_out  = (ot_byte*)r;
+          strm.avail_out = OT_SCRAPE_CHUNK_SIZE;
+        }
+#endif
       }
+#ifdef WANT_COMPRESSION_GZIP
+      if( mode & TASK_FLAG_GZIP ) {
+        r = compress_buffer;
+      }
+#endif
     }
     
     /* All torrents done: release lock on currenct bucket */
@@ -149,9 +196,20 @@ static void fullscrape_make( int *iovec_entries, struct iovec **iovector, ot_tas
   }
 
   /* Close bencoded scrape dictionary if necessary */
-  if( mode == TASK_FULLSCRAPE ) {
+  if( ( mode & TASK_TASK_MASK ) == TASK_FULLSCRAPE ) {
     *r++='e'; *r++='e';
   }
+
+#ifdef WANT_COMPRESSION_GZIP
+  if( mode & TASK_FLAG_GZIP ) {
+    strm.next_in  = (ot_byte*) compress_buffer;
+    strm.avail_in = r - compress_buffer;
+    if( deflate( &strm, Z_FINISH ) != Z_STREAM_END )
+      fprintf( stderr, "Not ok.\n" );
+    r = (char*)strm.next_out;
+	  deflateEnd(&strm);
+  }
+#endif
 
   /* Release unused memory in current output buffer */
   iovec_fixlast( iovec_entries, iovector, OT_SCRAPE_CHUNK_SIZE - ( re - r ) );

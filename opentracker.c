@@ -43,6 +43,7 @@
 
 /* Globals */
 static const size_t SUCCESS_HTTP_HEADER_LENGTH = 80;
+static const size_t SUCCESS_HTTP_HEADER_LENGHT_CONTENT_ENCODING = 32;
 static const size_t SUCCESS_HTTP_SIZE_OFF = 17;
 static uint32_t g_adminip_addresses[OT_ADMINIP_MAX];
 static unsigned int g_adminip_count = 0;
@@ -73,15 +74,14 @@ static size_t ot_sockets_count = 0;
 
 #ifdef _DEBUG_HTTPERROR
 static char debug_request[8192];
-#define _DEBUG_HTTPERROR_PARAM( param ) , param
-#else
-#define _DEBUG_HTTPERROR_PARAM( param )
 #endif
 
 typedef enum {
   STRUCT_HTTP_FLAG_ARRAY_USED     = 1,
   STRUCT_HTTP_FLAG_IOB_USED       = 2,
-  STRUCT_HTTP_FLAG_WAITINGFORTASK = 4
+  STRUCT_HTTP_FLAG_WAITINGFORTASK = 4,
+  STRUCT_HTTP_FLAG_GZIP           = 8,
+  STRUCT_HTTP_FLAG_BZIP2          = 16
 } STRUCT_HTTP_FLAG;
 
 struct http_data {
@@ -100,7 +100,7 @@ static int ot_ip_compare( const void *a, const void *b ) { return memcmp( a,b,4 
 int main( int argc, char **argv );
 
 static void httperror( const int64 s, const char *title, const char *message );
-static void httpresponse( const int64 s, char *data _DEBUG_HTTPERROR_PARAM(size_t l ) );
+static void httpresponse( const int64 s, char *data, size_t l );
 
 static void sendiovecdata( const int64 s, int iovec_entries, struct iovec *iovector );
 static void senddata( const int64 s, char *buffer, const size_t size );
@@ -162,7 +162,7 @@ static void sendiovecdata( const int64 s, int iovec_entries, struct iovec *iovec
     iovec_free( &iovec_entries, &iovector );
     HTTPERROR_500;
   }
-  
+
   /* If this socket collected request in a buffer,
      free it now */
   if( h->flag & STRUCT_HTTP_FLAG_ARRAY_USED ) {
@@ -173,20 +173,24 @@ static void sendiovecdata( const int64 s, int iovec_entries, struct iovec *iovec
   /* If we came here, wait for the answer is over */
   h->flag &= ~STRUCT_HTTP_FLAG_WAITINGFORTASK;
 
-  /* Our answers never are 0 bytes. Return an error. */
-  if( !iovec_entries || !iovector[0].iov_len ) {
-    iovec_free( &iovec_entries, &iovector );
+  /* Our answers never are 0 vectors. Return an error. */
+  if( !iovec_entries ) {
     HTTPERROR_500;
   }
 
   /* Prepare space for http header */
-  header = malloc( SUCCESS_HTTP_HEADER_LENGTH );
+  header = malloc( SUCCESS_HTTP_HEADER_LENGTH + SUCCESS_HTTP_HEADER_LENGHT_CONTENT_ENCODING );
   if( !header ) {
     iovec_free( &iovec_entries, &iovector );
     HTTPERROR_500;
   }
 
-  header_size = sprintf( header, "HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %zd\r\n\r\n", size );
+  if( h->flag & STRUCT_HTTP_FLAG_GZIP )
+    header_size = sprintf( header, "HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nContent-Encoding: gzip\r\nContent-Length: %zd\r\n\r\n", size );
+  else if( h->flag & STRUCT_HTTP_FLAG_BZIP2 )
+    header_size = sprintf( header, "HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nContent-Encoding: bzip2\r\nContent-Length: %zd\r\n\r\n", size );
+  else
+    header_size = sprintf( header, "HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %zd\r\n\r\n", size );
 
   iob_reset( &h->batch );
   iob_addbuf_free( &h->batch, header, header_size );
@@ -241,9 +245,9 @@ static void senddata( const int64 s, char *buffer, size_t size ) {
   }
 }
 
-static void httpresponse( const int64 s, char *data _DEBUG_HTTPERROR_PARAM( size_t l ) ) {
+static void httpresponse( const int64 s, char *data, size_t l ) {
   struct http_data* h = io_getcookie( s );
-  char       *c;
+  char       *c, *d=data;
   ot_peer     peer;
   ot_torrent *torrent;
   ot_hash    *hash = NULL;
@@ -252,6 +256,9 @@ static void httpresponse( const int64 s, char *data _DEBUG_HTTPERROR_PARAM( size
   unsigned short port = htons(6881);
   ssize_t     len;
   size_t      reply_size = 0, reply_off;
+
+  /* Touch l and d in case it is unused */
+  l = l; d = d;
 
 #ifdef _DEBUG_HTTPERROR
   if( l >= sizeof( debug_request ) )
@@ -379,6 +386,12 @@ LOG_TO_STDERR( "sync: %d.%d.%d.%d\n", h->ip[0], h->ip[1], h->ip[2], h->ip[3] );
     }
 
     if( mode == TASK_STATS_TPB ) {
+#ifdef WANT_COMPRESSION_GZIP
+      if( strnstr( d, "gzip", l ) ) {
+        h->flag |= STRUCT_HTTP_FLAG_GZIP;
+        format |= TASK_FLAG_GZIP;
+      }
+#endif
       /* Pass this task to the worker thread */
       h->flag |= STRUCT_HTTP_FLAG_WAITINGFORTASK;
       fullscrape_deliver( s, format );
@@ -403,9 +416,17 @@ LOG_TO_STDERR( "[%08d] scrp: %d.%d.%d.%d - FULL SCRAPE\n", (unsigned int)(g_now 
 #ifdef _DEBUG_HTTPERROR
 write( 2, debug_request, l );
 #endif
+      format = 0;
+#ifdef WANT_COMPRESSION_GZIP
+      if( strnstr( d, "gzip", l ) ) {
+        h->flag |= STRUCT_HTTP_FLAG_GZIP;
+        format = TASK_FLAG_GZIP;
+      }
+#endif
+
       /* Pass this task to the worker thread */
       h->flag |= STRUCT_HTTP_FLAG_WAITINGFORTASK;
-      fullscrape_deliver( s, TASK_FULLSCRAPE );
+      fullscrape_deliver( s, TASK_FULLSCRAPE | format );
       io_dontwantread( s );
       return;
     }
@@ -655,7 +676,7 @@ static void handle_read( const int64 clientsocket ) {
   /* If we get the whole request in one packet, handle it without copying */
   if( !array_start( &h->request ) ) {
     if( memchr( static_inbuf, '\n', l ) )
-      return httpresponse( clientsocket, static_inbuf _DEBUG_HTTPERROR_PARAM( l ) );
+      return httpresponse( clientsocket, static_inbuf, l );
     h->flag |= STRUCT_HTTP_FLAG_ARRAY_USED;
     return array_catb( &h->request, static_inbuf, l );
   }
@@ -670,7 +691,7 @@ static void handle_read( const int64 clientsocket ) {
      return httperror( clientsocket, "500 request too long", "You sent too much headers");
 
   if( memchr( array_start( &h->request ), '\n', array_bytes( &h->request ) ) )
-    return httpresponse( clientsocket, array_start( &h->request ) _DEBUG_HTTPERROR_PARAM( array_bytes( &h->request ) ) );
+    return httpresponse( clientsocket, array_start( &h->request ), array_bytes( &h->request ) );
 }
 
 static void handle_write( const int64 clientsocket ) {
@@ -722,9 +743,9 @@ static void handle_timeouted( void ) {
 }
 
 static void server_mainloop( ) {
-  time_t next_timeout_check = g_now + OT_CLIENT_TIMEOUT_CHECKINTERVAL;
-  struct iovec *iovector;
-  int iovec_entries;
+  time_t      next_timeout_check = g_now + OT_CLIENT_TIMEOUT_CHECKINTERVAL;
+  struct      iovec *iovector;
+  int         iovec_entries;
 
   for( ; ; ) {
     int64 i;
