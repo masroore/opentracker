@@ -40,7 +40,13 @@ typedef enum {
   TASK_DMEM                        = 0x0500,
 
   TASK_DONE                        = 0x0f00,
-  TASK_MASK                        = 0xff00
+
+  TASK_FLAG_GZIP                   = 0x1000,
+  TASK_FLAG_BZIP2                  = 0x2000,
+
+  TASK_TASK_MASK                   = 0x0fff,
+  TASK_CLASS_MASK                  = 0x0f00,
+  TASK_FLAGS_MASK                  = 0xf000
 } ot_tasktype;
 
 typedef unsigned long ot_taskid;
