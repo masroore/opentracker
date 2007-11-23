@@ -34,22 +34,35 @@ void iovec_free( int *iovec_entries, struct iovec **iovector ) {
   *iovec_entries = 0;
 }
 
-void  iovec_fixlast( int *iovec_entries, struct iovec **iovector, size_t new_alloc ) {
+void  iovec_fixlast( int *iovec_entries, struct iovec **iovector, void *last_ptr ) {
   int page_size = getpagesize();
-  size_t old_alloc, old_pages, new_pages;
+  size_t old_alloc, new_alloc, old_pages, new_pages;
+  char * base = (char*)((*iovector)[ *iovec_entries - 1 ]).iov_base;
 
   if( !*iovec_entries ) return;
 
   old_alloc = ((*iovector)[ *iovec_entries - 1 ]).iov_len;
+  new_alloc = ((char*)last_ptr) - base;
   old_pages = 1 + old_alloc / page_size;
   new_pages = 1 + new_alloc / page_size;
 
   if( old_pages != new_pages ) {
-    munmap( ((char*)((*iovector)[ *iovec_entries - 1 ]).iov_base ) +  new_pages * page_size,
-            old_alloc - new_pages * page_size );
+    munmap( base + new_pages * page_size, old_alloc - new_pages * page_size );
   }
   ((*iovector)[*iovec_entries - 1 ]).iov_len = new_alloc;
 }
+
+void  *iovec_fix_increase_or_free( int *iovec_entries, struct iovec **iovector, void *last_ptr, size_t new_alloc ) {
+  void *new_ptr;
+
+  iovec_fixlast( iovec_entries, iovector, last_ptr );
+
+  if( !( new_ptr = iovec_increase( iovec_entries, iovector, new_alloc ) ) )
+    iovec_free( iovec_entries, iovector );
+
+  return new_ptr;
+}
+
 
 size_t iovec_length( int *iovec_entries, struct iovec **iovector ) {
   size_t length = 0;
