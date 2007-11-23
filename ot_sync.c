@@ -96,19 +96,10 @@ static void sync_make( int *iovec_entries, struct iovec **iovector ) {
       /* If we reached our low watermark in buffer... */
       if( re - r <= (ssize_t)(/* strlen( "20:" ) == */ 3 + sizeof( ot_hash ) + /* strlen_max( "%zd" ) == */ 12 + byte_count ) ) {
 
-        /* crop current output buffer to the amount really used */
-        iovec_fixlast( iovec_entries, iovector, OT_SYNC_CHUNK_SIZE - ( re - r ) );
-
-        /* And allocate a fresh output buffer at the end of our buffers list */
-        if( !( r = iovec_increase( iovec_entries, iovector, OT_SYNC_CHUNK_SIZE ) ) ) {
-
-          /* If this fails: free buffers */
-          iovec_free( iovec_entries, iovector );
-
-          /* Release lock on current bucket and return */
-          mutex_bucket_unlock( bucket );
-          return;
-        }
+        /* Allocate a fresh output buffer at the end of our buffers list
+           release bucket and return, if that fails */
+        if( !( r = iovec_fix_increase_or_free( iovec_entries, iovector, r, OT_SYNC_CHUNK_SIZE ) ) )
+          return mutex_bucket_unlock( bucket );
 
         /* Adjust new end of output buffer */
         re = r + OT_SYNC_CHUNK_SIZE;
@@ -128,7 +119,7 @@ static void sync_make( int *iovec_entries, struct iovec **iovector ) {
   *r++='e'; *r++='e';
 
   /* Release unused memory in current output buffer */
-  iovec_fixlast( iovec_entries, iovector, OT_SYNC_CHUNK_SIZE - ( re - r ) );
+  iovec_fixlast( iovec_entries, iovector, r );
 }
 
 /* This is the entry point into this worker thread
