@@ -256,6 +256,7 @@ static void httpresponse( const int64 s, char *data, size_t l ) {
   unsigned short port = htons(6881);
   ssize_t     len;
   size_t      reply_size = 0, reply_off;
+  tai6464     t;
 
   /* Touch l and d in case it is unused */
   l = l; d = d;
@@ -394,6 +395,9 @@ LOG_TO_STDERR( "sync: %d.%d.%d.%d\n", h->ip[0], h->ip[1], h->ip[2], h->ip[3] );
 #endif
       /* Pass this task to the worker thread */
       h->flag |= STRUCT_HTTP_FLAG_WAITINGFORTASK;
+
+      /* Clients waiting for us should not easily timeout */
+      taia_uint( &t, 0 ); io_timeout( s, t );
       fullscrape_deliver( s, format );
       io_dontwantread( s );
       return;
@@ -412,20 +416,25 @@ LOG_TO_STDERR( "sync: %d.%d.%d.%d\n", h->ip[0], h->ip[1], h->ip[2], h->ip[3] );
 
     /* Full scrape... you might want to limit that */
     if( !byte_diff( data, 12, "scrape HTTP/" ) ) {
-LOG_TO_STDERR( "[%08d] scrp: %d.%d.%d.%d - FULL SCRAPE\n", (unsigned int)(g_now - ot_start_time), h->ip[0], h->ip[1], h->ip[2], h->ip[3] );
-#ifdef _DEBUG_HTTPERROR
-write( 2, debug_request, l );
-#endif
       format = 0;
 #ifdef WANT_COMPRESSION_GZIP
-      if( strnstr( d, "gzip", l ) ) {
+      d[l-1] = 0;
+      if( strstr( d, "gzip" ) ) {
         h->flag |= STRUCT_HTTP_FLAG_GZIP;
         format = TASK_FLAG_GZIP;
-      }
+LOG_TO_STDERR( "[%08d] scrp: %d.%d.%d.%d - FULL SCRAPE GZIP\n", (unsigned int)(g_now - ot_start_time), h->ip[0], h->ip[1], h->ip[2], h->ip[3] );
+      } else
+#endif
+        LOG_TO_STDERR( "[%08d] scrp: %d.%d.%d.%d - FULL SCRAPE\n", (unsigned int)(g_now - ot_start_time), h->ip[0], h->ip[1], h->ip[2], h->ip[3] );
+
+#ifdef _DEBUG_HTTPERROR
+write( 2, debug_request, l );
 #endif
 
       /* Pass this task to the worker thread */
       h->flag |= STRUCT_HTTP_FLAG_WAITINGFORTASK;
+      /* Clients waiting for us should not easily timeout */
+      taia_uint( &t, 0 ); io_timeout( s, t );
       fullscrape_deliver( s, TASK_FULLSCRAPE | format );
       io_dontwantread( s );
       return;
