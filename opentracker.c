@@ -388,7 +388,8 @@ LOG_TO_STDERR( "sync: %d.%d.%d.%d\n", h->ip[0], h->ip[1], h->ip[2], h->ip[3] );
 
     if( mode == TASK_STATS_TPB ) {
 #ifdef WANT_COMPRESSION_GZIP
-      if( strnstr( d, "gzip", l ) ) {
+      d[l-1] = 0;
+      if( strstr( d, "gzip" ) ) {
         h->flag |= STRUCT_HTTP_FLAG_GZIP;
         format |= TASK_FLAG_GZIP;
       }
