@@ -25,7 +25,7 @@
    Full scrapes usually are huge and one does not want to
    allocate more memory. So lets get them in 512k units
 */
-#define OT_SCRAPE_CHUNK_SIZE (1024)
+#define OT_SCRAPE_CHUNK_SIZE (512*1024)
 
 /* "d8:completei%zde10:downloadedi%zde10:incompletei%zdee" */
 #define OT_SCRAPE_MAXENTRYLEN 256
