@@ -32,10 +32,10 @@
 
 #ifdef WANT_COMPRESSION_GZIP
 #define IF_COMPRESSION( TASK ) if( mode & TASK_FLAG_GZIP ) TASK
-#define WANT_COMPRESSION_GZIP_PARAM( param1, param2 ) , param1, param2
+#define WANT_COMPRESSION_GZIP_PARAM( param1, param2, param3 ) , param1, param2, param3
 #else
 #define IF_COMPRESSION( TASK )
-#define WANT_COMPRESSION_GZIP_PARAM( param1, param2 )
+#define WANT_COMPRESSION_GZIP_PARAM( param1, param2, param3 )
 #endif
 
 /* Forward declaration */
@@ -78,7 +78,7 @@ void fullscrape_deliver( int64 socket, ot_tasktype tasktype ) {
 }
 
 static int fullscrape_increase( int *iovec_entries, struct iovec **iovector,
-                         char **r, char **re  WANT_COMPRESSION_GZIP_PARAM( z_stream *strm, ot_tasktype mode ) ) {
+                         char **r, char **re  WANT_COMPRESSION_GZIP_PARAM( z_stream *strm, ot_tasktype mode, int zaction ) ) {
   /* Allocate a fresh output buffer at the end of our buffers list */
   if( !( *r = iovec_fix_increase_or_free( iovec_entries, iovector, *r, OT_SCRAPE_CHUNK_SIZE ) ) ) {
 
@@ -93,13 +93,16 @@ static int fullscrape_increase( int *iovec_entries, struct iovec **iovector,
   *re = *r + OT_SCRAPE_CHUNK_SIZE - OT_SCRAPE_MAXENTRYLEN;
   
   /* When compressing, we have all the bytes in output buffer */
-  IF_COMPRESSION( { \
-    *re -= OT_SCRAPE_MAXENTRYLEN; \
-    strm->next_out  = (ot_byte*)*r; \
-    strm->avail_out = OT_SCRAPE_CHUNK_SIZE; \
-    deflate( strm, Z_NO_FLUSH ); \
-    *r = (char*)strm->next_out; \
-  } )
+#ifdef WANT_COMPRESSION_GZIP
+  if( mode & TASK_FLAG_GZIP ) {
+    *re -= OT_SCRAPE_MAXENTRYLEN;
+    strm->next_out  = (ot_byte*)*r;
+    strm->avail_out = OT_SCRAPE_CHUNK_SIZE;
+    if( deflate( strm, zaction ) < Z_OK )
+      fprintf( stderr, "deflate() failed while in fullscrape_increase().\n" );
+    *r = (char*)strm->next_out;
+  }
+#endif
 
   return 0;
 }
@@ -180,14 +183,16 @@ static void fullscrape_make( int *iovec_entries, struct iovec **iovector, ot_tas
      if( mode & TASK_FLAG_GZIP ) {
         strm.next_in  = (ot_byte*)compress_buffer;
         strm.avail_in = r - compress_buffer;
-        deflate( &strm, Z_NO_FLUSH );
+        if( deflate( &strm, Z_NO_FLUSH ) < Z_OK )
+          fprintf( stderr, "deflate() failed while in fullscrape_make().\n" );
         r = (char*)strm.next_out;
       }
 #endif
 
       /* Check if there still is enough buffer left */
-      while( ( r > re ) && fullscrape_increase( iovec_entries, iovector, &r, &re WANT_COMPRESSION_GZIP_PARAM( &strm, mode ) ) )
-        return mutex_bucket_unlock( bucket );
+      while( r >= re )
+       if( fullscrape_increase( iovec_entries, iovector, &r, &re WANT_COMPRESSION_GZIP_PARAM( &strm, mode, Z_NO_FLUSH ) ) )
+         return mutex_bucket_unlock( bucket );
 
       IF_COMPRESSION( r = compress_buffer; )
     }
@@ -203,11 +208,13 @@ static void fullscrape_make( int *iovec_entries, struct iovec **iovector, ot_tas
   if( mode & TASK_FLAG_GZIP ) {
     strm.next_in  = (ot_byte*)compress_buffer;
     strm.avail_in = r - compress_buffer;
-    deflate( &strm, Z_FINISH );
+    if( deflate( &strm, Z_FINISH ) < Z_OK )
+      fprintf( stderr, "deflate() failed while in fullscrape_make()'s endgame.\n" );
     r = (char*)strm.next_out;
 
-    while( ( r > re ) && fullscrape_increase( iovec_entries, iovector, &r, &re WANT_COMPRESSION_GZIP_PARAM( &strm, mode ) ) )
-      return mutex_bucket_unlock( bucket );
+    while( r >= re )
+      if( fullscrape_increase( iovec_entries, iovector, &r, &re WANT_COMPRESSION_GZIP_PARAM( &strm, mode, Z_FINISH ) ) )
+        return mutex_bucket_unlock( bucket );
     deflateEnd(&strm);
   }
 #endif
