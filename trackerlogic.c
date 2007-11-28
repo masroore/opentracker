@@ -65,9 +65,11 @@ ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer  WANT_TRACKER_SYNC
     }
 
     byte_zero( torrent->peer_list, sizeof( ot_peerlist ) );
-    torrent->peer_list->base = NOW;
   } else
     clean_single_torrent( torrent );
+
+  /* Timestamp our first pool */
+  torrent->peer_list->base = NOW;
 
   /* Sanitize flags: Whoever claims to have completed download, must be a seeder */
   if( ( OT_FLAG( peer ) & ( PEER_FLAG_COMPLETED | PEER_FLAG_SEEDING ) ) == PEER_FLAG_COMPLETED )
