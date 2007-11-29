@@ -788,6 +788,9 @@ static void server_mainloop( ) {
       ot_last_clean_time = NOW;
       clean_all_torrents();
     }
+
+    /* Enforce setting the clock */
+    signal_handler( SIGALRM );
   }
 }
 
