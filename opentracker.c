@@ -351,6 +351,8 @@ LOG_TO_STDERR( "sync: %d.%d.%d.%d\n", h->ip[0], h->ip[1], h->ip[2], h->ip[3] );
           mode = TASK_STATS_PEERS;
         else if( !byte_diff(data,4,"conn"))
           mode = TASK_STATS_CONNS;
+        else if( !byte_diff(data,4,"scrp"))
+          mode = TASK_STATS_SCRAPE;
         else if( !byte_diff(data,4,"top5"))
           mode = TASK_STATS_TOP5;
         else if( !byte_diff(data,4,"fscr"))

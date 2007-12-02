@@ -24,6 +24,8 @@ static unsigned long long ot_overall_tcp_successfulannounces = 0;
 static unsigned long long ot_overall_udp_successfulannounces = 0;
 static unsigned long long ot_overall_tcp_successfulscrapes = 0;
 static unsigned long long ot_overall_udp_successfulscrapes = 0;
+static unsigned long long ot_overall_tcp_connects = 0;
+static unsigned long long ot_overall_udp_connects = 0;
 static unsigned long long ot_full_scrape_count = 0;
 static unsigned long long ot_full_scrape_size = 0;
 
@@ -171,11 +173,11 @@ static size_t stats_connections_mrtg( char * reply ) {
   return sprintf( reply,
     "%llu\n%llu\n%i seconds (%i hours)\nopentracker connections, %lu conns/s :: %lu success/s.",
     ot_overall_tcp_connections+ot_overall_udp_connections,
-    ot_overall_tcp_successfulannounces+ot_overall_udp_successfulannounces,
+    ot_overall_tcp_successfulannounces+ot_overall_udp_successfulannounces+ot_overall_udp_connects,
     (int)t,
     (int)(t / 3600),
     events_per_time( ot_overall_tcp_connections+ot_overall_udp_connections, t ),
-    events_per_time( ot_overall_tcp_successfulannounces+ot_overall_udp_successfulannounces, t )
+    events_per_time( ot_overall_tcp_successfulannounces+ot_overall_udp_successfulannounces+ot_overall_udp_connects, t )
   );
 }
 
@@ -184,11 +186,11 @@ static size_t stats_udpconnections_mrtg( char * reply ) {
   return sprintf( reply,
     "%llu\n%llu\n%i seconds (%i hours)\nopentracker udp4 stats, %lu conns/s :: %lu success/s.",
     ot_overall_udp_connections,
-    ot_overall_udp_successfulannounces,
+    ot_overall_udp_successfulannounces+ot_overall_udp_connects,
     (int)t,
     (int)(t / 3600),
     events_per_time( ot_overall_udp_connections, t ),
-    events_per_time( ot_overall_udp_successfulannounces, t )
+    events_per_time( ot_overall_udp_successfulannounces+ot_overall_udp_connects, t )
   );
 }
 
@@ -205,6 +207,17 @@ static size_t stats_tcpconnections_mrtg( char * reply ) {
   );
 }
 
+static size_t stats_scrape_mrtg( char * reply ) {
+  time_t t = time( NULL ) - ot_start_time;
+  return sprintf( reply,
+    "%llu\n%llu\n%i seconds (%i hours)\nopentracker scrape stats, %lu scrape/s (tcp and udp)",
+    ot_overall_tcp_successfulscrapes,
+    ot_overall_udp_successfulscrapes,
+    (int)t,
+    (int)(t / 3600),
+    events_per_time( (ot_overall_tcp_successfulscrapes+ot_overall_udp_successfulscrapes), t )
+  );
+}
 
 static size_t stats_fullscrapes_mrtg( char * reply ) {
   ot_time t = time( NULL ) - ot_start_time;
@@ -244,6 +257,8 @@ size_t return_stats_for_tracker( char *reply, int mode, int format ) {
   switch( mode ) {
     case TASK_STATS_CONNS:
       return stats_connections_mrtg( reply );
+    case TASK_STATS_SCRAPE:
+      return stats_scrape_mrtg( reply );
     case TASK_STATS_UDP:
       return stats_udpconnections_mrtg( reply );
     case TASK_STATS_TCP:
@@ -271,6 +286,8 @@ void stats_issue_event( ot_status_event event, int is_tcp, size_t event_data ) {
       break;
     case EVENT_SCRAPE:
       if( is_tcp ) ot_overall_tcp_successfulscrapes++; else ot_overall_udp_successfulscrapes++;
+    case EVENT_CONNECT:
+      if( is_tcp ) ot_overall_tcp_connects++; else ot_overall_udp_connects++;
     case EVENT_FULLSCRAPE:
       ot_full_scrape_count++;
       ot_full_scrape_size += event_data;

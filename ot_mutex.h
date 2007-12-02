@@ -24,6 +24,7 @@ typedef enum {
   TASK_STATS_UDP                   = 0x0004,
   TASK_STATS_FULLSCRAPE            = 0x0005,
   TASK_STATS_TPB                   = 0x0006,
+  TASK_STATS_SCRAPE                = 0x0007,
 
   TASK_STATS_SLASH24S              = 0x0100,
 
