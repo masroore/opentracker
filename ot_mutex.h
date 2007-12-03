@@ -4,9 +4,6 @@
 #ifndef __OT_MUTEX_H__
 #define __OT_MUTEX_H__
 
-#include "ot_iovec.h"
-#include "io.h"
-
 void mutex_init( );
 void mutex_deinit( );
 
@@ -22,9 +19,9 @@ typedef enum {
   TASK_STATS_TOP5                  = 0x0002,
   TASK_STATS_TCP                   = 0x0003,
   TASK_STATS_UDP                   = 0x0004,
-  TASK_STATS_FULLSCRAPE            = 0x0005,
-  TASK_STATS_TPB                   = 0x0006,
-  TASK_STATS_SCRAPE                = 0x0007,
+  TASK_STATS_SCRAPE                = 0x0005,
+  TASK_STATS_FULLSCRAPE            = 0x0006,
+  TASK_STATS_TPB                   = 0x0007,
 
   TASK_STATS_SLASH24S              = 0x0100,
 
