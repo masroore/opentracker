@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <arpa/inet.h>
 #include <sys/types.h>
+#include <sys/uio.h>
 #include <sys/mman.h>
 #include <stdio.h>
 #include <string.h>
@@ -299,8 +300,6 @@ void stats_issue_event( ot_status_event event, int is_tcp, size_t event_data ) {
       break;
     case EVENT_SCRAPE:
       if( is_tcp ) ot_overall_tcp_successfulscrapes++; else ot_overall_udp_successfulscrapes++;
-    case EVENT_CONNECT:
-      if( is_tcp ) ot_overall_tcp_connects++; else ot_overall_udp_connects++;
     case EVENT_FULLSCRAPE:
       ot_full_scrape_count++;
       ot_full_scrape_size += event_data;
