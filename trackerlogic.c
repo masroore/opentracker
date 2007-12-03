@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <sys/uio.h>
 #include <arpa/inet.h>
 #include <sys/types.h>
 #include <sys/mman.h>
