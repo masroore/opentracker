@@ -13,6 +13,7 @@
 
 /* Libowfat */
 #include "byte.h"
+#include "io.h"
 #include "textcode.h"
 
 /* Opentracker */
@@ -43,7 +44,7 @@ static void fullscrape_make( int *iovec_entries, struct iovec **iovector, ot_tas
 
 /* Converter function from memory to human readable hex strings
    XXX - Duplicated from ot_stats. Needs fix. */
-static char*to_hex(char*d,ot_byte*s){char*m="0123456789ABCDEF";char *t=d;char*e=d+40;while(d<e){*d++=m[*s>>4];*d++=m[*s++&15];}*d=0;return t;}
+static char*to_hex(char*d,uint8_t*s){char*m="0123456789ABCDEF";char *t=d;char*e=d+40;while(d<e){*d++=m[*s>>4];*d++=m[*s++&15];}*d=0;return t;}
 
 /* This is the entry point into this worker thread
    It grabs tasks from mutex_tasklist and delivers results back
@@ -96,7 +97,7 @@ static int fullscrape_increase( int *iovec_entries, struct iovec **iovector,
 #ifdef WANT_COMPRESSION_GZIP
   if( mode & TASK_FLAG_GZIP ) {
     *re -= OT_SCRAPE_MAXENTRYLEN;
-    strm->next_out  = (ot_byte*)*r;
+    strm->next_out  = (uint8_t*)*r;
     strm->avail_out = OT_SCRAPE_CHUNK_SIZE;
     if( deflate( strm, zaction ) < Z_OK )
       fprintf( stderr, "deflate() failed while in fullscrape_increase().\n" );
@@ -128,8 +129,8 @@ static void fullscrape_make( int *iovec_entries, struct iovec **iovector, ot_tas
   if( mode & TASK_FLAG_GZIP ) {
     re += OT_SCRAPE_MAXENTRYLEN;
     byte_zero( &strm, sizeof(strm) );
-    strm.next_in   = (ot_byte*)compress_buffer;
-    strm.next_out  = (ot_byte*)r;
+    strm.next_in   = (uint8_t*)compress_buffer;
+    strm.next_out  = (uint8_t*)r;
     strm.avail_out = OT_SCRAPE_CHUNK_SIZE;
     if( deflateInit2(&strm,9,Z_DEFLATED,31,8,Z_DEFAULT_STRATEGY) != Z_OK )
       fprintf( stderr, "not ok.\n" );
@@ -170,18 +171,18 @@ static void fullscrape_make( int *iovec_entries, struct iovec **iovector, ot_tas
         break;
       case TASK_FULLSCRAPE_TPB_BINARY:
         memmove( r, hash, 20 ); r+=20;
-        *(ot_dword*)r++ = htonl( (uint32_t)peer_list->seed_count );
-        *(ot_dword*)r++ = htonl( (uint32_t)( peer_list->peer_count-peer_list->seed_count) );
+        *(uint32_t*)r++ = htonl( (uint32_t)peer_list->seed_count );
+        *(uint32_t*)r++ = htonl( (uint32_t)( peer_list->peer_count-peer_list->seed_count) );
         break;
       case TASK_FULLSCRAPE_TPB_URLENCODED:
         r += fmt_urlencoded( r, (char *)*hash, 20 );
         r += sprintf( r, ":%zd:%zd\n", peer_list->seed_count, peer_list->peer_count-peer_list->seed_count );
-        break;        
+        break;
       }
 
 #ifdef WANT_COMPRESSION_GZIP
      if( mode & TASK_FLAG_GZIP ) {
-        strm.next_in  = (ot_byte*)compress_buffer;
+        strm.next_in  = (uint8_t*)compress_buffer;
         strm.avail_in = r - compress_buffer;
         if( deflate( &strm, Z_NO_FLUSH ) < Z_OK )
           fprintf( stderr, "deflate() failed while in fullscrape_make().\n" );
@@ -206,7 +207,7 @@ static void fullscrape_make( int *iovec_entries, struct iovec **iovector, ot_tas
 
 #ifdef WANT_COMPRESSION_GZIP
   if( mode & TASK_FLAG_GZIP ) {
-    strm.next_in  = (ot_byte*)compress_buffer;
+    strm.next_in  = (uint8_t*)compress_buffer;
     strm.avail_in = r - compress_buffer;
     if( deflate( &strm, Z_FINISH ) < Z_OK )
       fprintf( stderr, "deflate() failed while in fullscrape_make()'s endgame.\n" );
