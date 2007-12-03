@@ -4,8 +4,6 @@
 #ifndef __OT_ACCESSLIST_H__
 #define __OT_ACCESSLIST_H__
 
-#include "trackerlogic.h"
-
 #if defined ( WANT_BLACKLISTING ) && defined (WANT_CLOSED_TRACKER )
   #error WANT_BLACKLISTING and WANT_CLOSED_TRACKER are exclusive.
 #endif
@@ -18,5 +16,14 @@ int  accesslist_hashisvalid( ot_hash *hash );
 #define accesslist_init( accesslist_filename )
 #define accesslist_hashisvalid( hash ) 1
 #endif
+
+typedef enum {
+  OT_PERMISSION_MAY_FULLSCRAPE,
+  OT_PERMISSION_MAY_SYNC,
+  OT_PERMISSION_MAY_STAT
+} ot_permissions;
+
+int accesslist_blessip( char * ip, ot_permissions permissions );
+int accesslist_isblessed( char * ip, ot_permissions permissions );
 
 #endif
