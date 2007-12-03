@@ -4,6 +4,7 @@
 /* System */
 #include <sys/types.h>
 #include <sys/mman.h>
+#include <sys/uio.h>
 #include <stdio.h>
 #include <string.h>
 #include <pthread.h>
@@ -11,11 +12,14 @@
 /* Libowfat */
 #include "scan.h"
 #include "byte.h"
+#include "io.h"
 
 /* Opentracker */
 #include "trackerlogic.h"
 #include "ot_mutex.h"
 #include "ot_sync.h"
+#include "ot_stats.h"
+#include "ot_iovec.h"
 
 #ifdef WANT_TRACKER_SYNC
 
@@ -25,9 +29,9 @@
    format: d4:syncd[..]ee
    [..]:   ( 20:01234567890abcdefghij16:XXXXYYYY )+
 */
-int add_changeset_to_tracker( ot_byte *data, size_t len ) {
+int add_changeset_to_tracker( uint8_t *data, size_t len ) {
   ot_hash    *hash;
-  ot_byte    *end = data + len;
+  uint8_t    *end = data + len;
   unsigned long      peer_count;
 
   /* We do know, that the string is \n terminated, so it cant
@@ -135,6 +139,7 @@ static void * sync_worker( void * args) {
     ot_tasktype tasktype = TASK_SYNC_OUT;
     ot_taskid   taskid   = mutex_workqueue_poptask( &tasktype );
     sync_make( &iovec_entries, &iovector );
+    stats_issue_event( EVENT_SYNC_OUT, 1, iovec_length( &iovec_entries, &iovector) );
     if( mutex_workqueue_pushresult( taskid, iovec_entries, iovector ) )
       iovec_free( &iovec_entries, &iovector );
   }

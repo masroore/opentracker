@@ -5,9 +5,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <pthread.h>
+#include <sys/uio.h>
 
 /* Libowfat */
 #include "byte.h"
+#include "io.h"
 
 /* Opentracker */
 #include "trackerlogic.h"

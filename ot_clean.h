@@ -4,8 +4,6 @@
 #ifndef __OT_CLEAN_H__
 #define __OT_CLEAN_H__
 
-#include "trackerlogic.h"
-
 void clean_init( void );
 void clean_deinit( void );
 

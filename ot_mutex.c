@@ -6,9 +6,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/mman.h>
+#include <sys/uio.h>
 
 /* Libowfat */
 #include "byte.h"
+#include "io.h"
 
 /* Opentracker */
 #include "trackerlogic.h"

@@ -4,8 +4,6 @@
 #ifndef __OT_VECTOR_H__
 #define __OT_VECTOR_H__
 
-#include "trackerlogic.h"
-
 /* These defines control vectors behaviour */
 #define OT_VECTOR_MIN_MEMBERS   4
 #define OT_VECTOR_GROW_RATIO    8
