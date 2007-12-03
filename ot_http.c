@@ -4,6 +4,7 @@
 /* System */
 #include <sys/types.h>
 #include <sys/uio.h>
+#include <arpa/inet.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -267,6 +268,9 @@ static ssize_t http_handle_stats( const int64 client_socket, char *data, char *d
       h->flag |= STRUCT_HTTP_FLAG_GZIP;
       format |= TASK_FLAG_GZIP;
     }
+#else
+    /* Touch variable */
+    d=d;
 #endif
     /* Pass this task to the worker thread */
     h->flag |= STRUCT_HTTP_FLAG_WAITINGFORTASK;
@@ -278,7 +282,7 @@ static ssize_t http_handle_stats( const int64 client_socket, char *data, char *d
     return -2;
   }
 
-  // default format for now
+  /* default format for now */
   if( !( l = return_stats_for_tracker( static_outbuf + SUCCESS_HTTP_HEADER_LENGTH, mode, 0 ) ) ) HTTPERROR_500;
   return l;
 }
@@ -287,6 +291,9 @@ static ssize_t http_handle_fullscrape( const int64 client_socket, char *d, size_
   struct http_data* h = io_getcookie( client_socket );
   int format = 0;
   tai6464 t;
+
+  /* Touch variables */
+  d=d;l=l;
 
 #ifdef WANT_COMPRESSION_GZIP
   d[l-1] = 0;
