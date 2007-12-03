@@ -15,6 +15,7 @@
 /* Libowfat */
 #include "scan.h"
 #include "byte.h"
+#include "io.h"
 
 /* Opentracker */
 #include "trackerlogic.h"
@@ -163,9 +164,9 @@ size_t return_peers_for_torrent( ot_hash *hash, size_t amount, char *reply, int 
   if( is_tcp )
     r += sprintf( r, "d8:completei%zde10:incompletei%zde8:intervali%ie5:peers%zd:", peer_list->seed_count, peer_list->peer_count-peer_list->seed_count, OT_CLIENT_REQUEST_INTERVAL_RANDOM, 6*amount );
   else {
-    *(ot_dword*)(r+0) = htonl( OT_CLIENT_REQUEST_INTERVAL_RANDOM );
-    *(ot_dword*)(r+4) = htonl( peer_list->peer_count );
-    *(ot_dword*)(r+8) = htonl( peer_list->seed_count );
+    *(uint32_t*)(r+0) = htonl( OT_CLIENT_REQUEST_INTERVAL_RANDOM );
+    *(uint32_t*)(r+4) = htonl( peer_list->peer_count );
+    *(uint32_t*)(r+8) = htonl( peer_list->seed_count );
     r += 12;
   }
 
@@ -216,7 +217,7 @@ size_t return_udp_scrape_for_torrent( ot_hash *hash, char *reply ) {
   if( !exactmatch ) {
     memset( reply, 0, 12);
   } else {
-    ot_dword *r = (ot_dword*) reply;
+    uint32_t *r = (uint32_t*) reply;
 
     if( clean_single_torrent( torrent ) ) {
       vector_remove_torrent( torrents_list, torrent );
@@ -273,8 +274,8 @@ size_t remove_peer_from_torrent( ot_hash *hash, ot_peer *peer, char *reply, int 
       return sprintf( reply, "d8:completei0e10:incompletei0e8:intervali%ie5:peers0:e", OT_CLIENT_REQUEST_INTERVAL_RANDOM );
 
     /* Create fake packet to satisfy parser on the other end */
-    ((ot_dword*)reply)[2] = htonl( OT_CLIENT_REQUEST_INTERVAL_RANDOM );
-    ((ot_dword*)reply)[3] = ((ot_dword*)reply)[4] = 0;
+    ((uint32_t*)reply)[2] = htonl( OT_CLIENT_REQUEST_INTERVAL_RANDOM );
+    ((uint32_t*)reply)[3] = ((uint32_t*)reply)[4] = 0;
     return (size_t)20;
   }
 
@@ -299,9 +300,9 @@ exit_loop:
   }
 
   /* else { Handle UDP reply */
-  ((ot_dword*)reply)[2] = htonl( OT_CLIENT_REQUEST_INTERVAL_RANDOM );
-  ((ot_dword*)reply)[3] = peer_list->peer_count - peer_list->seed_count;
-  ((ot_dword*)reply)[4] = peer_list->seed_count;
+  ((uint32_t*)reply)[2] = htonl( OT_CLIENT_REQUEST_INTERVAL_RANDOM );
+  ((uint32_t*)reply)[3] = peer_list->peer_count - peer_list->seed_count;
+  ((uint32_t*)reply)[4] = peer_list->seed_count;
 
   mutex_bucket_unlock_by_hash( hash );
   return (size_t)20;
@@ -322,6 +323,7 @@ int trackerlogic_init( const char * const serverdir ) {
 #ifdef WANT_TRACKER_SYNC
   sync_init( );
 #endif
+  stats_init( );
   return 0;
 }
 
@@ -343,6 +345,7 @@ void trackerlogic_deinit( void ) {
   }
 
   /* Deinitialise background worker threads */
+  stats_deinit( );
 #ifdef WANT_TRACKER_SYNC
   sync_deinit( );
 #endif

@@ -10,13 +10,21 @@ typedef enum {
   EVENT_CONNECT,      /* UDP only */
   EVENT_ANNOUNCE,
   EVENT_SCRAPE,
+  EVENT_FULLSCRAPE_REQUEST,
+  EVENT_FULLSCRAPE_REQUEST_GZIP,
   EVENT_FULLSCRAPE,   /* TCP only */
+  EVENT_SYNC_IN_REQUEST,
+  EVENT_SYNC_IN,
+  EVENT_SYNC_OUT_REQUEST,
+  EVENT_SYNC_OUT,
   EVENT_FAILED_400,
   EVENT_FAILED_404,
   EVENT_FAILED_505
 } ot_status_event;
 
+void   stats_issue_event( ot_status_event event, int is_tcp, size_t event_data );
 size_t return_stats_for_tracker( char *reply, int mode, int format );
-void stats_issue_event( ot_status_event event, int is_tcp, size_t event_data );
+void   stats_init( );
+void   stats_deinit( );
 
 #endif

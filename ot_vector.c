@@ -16,7 +16,7 @@
 void *binary_search( const void * const key, const void * base, const size_t member_count, const size_t member_size,
                      size_t compare_size, int *exactmatch ) {
   size_t mc = member_count;
-  ot_byte *lookat = ((ot_byte*)base) + member_size * (member_count >> 1);
+  uint8_t *lookat = ((uint8_t*)base) + member_size * (member_count >> 1);
   *exactmatch = 1;
 
   while( mc ) {
@@ -27,7 +27,7 @@ void *binary_search( const void * const key, const void * base, const size_t mem
       --mc;
     }
     mc >>= 1;
-    lookat = ((ot_byte*)base) + member_size * (mc >> 1);
+    lookat = ((uint8_t*)base) + member_size * (mc >> 1);
   }
   *exactmatch = 0;
   return (void*)lookat;
@@ -41,22 +41,22 @@ void *binary_search( const void * const key, const void * base, const size_t mem
    took place. If resizing the vector failed, NULL is returned, else the pointer to the object in vector.
 */
 void *vector_find_or_insert( ot_vector *vector, void *key, size_t member_size, size_t compare_size, int *exactmatch ) {
-  ot_byte *match = binary_search( key, vector->data, vector->size, member_size, compare_size, exactmatch );
+  uint8_t *match = binary_search( key, vector->data, vector->size, member_size, compare_size, exactmatch );
 
   if( *exactmatch ) return match;
 
   if( vector->size + 1 >= vector->space ) {
     size_t   new_space = vector->space ? OT_VECTOR_GROW_RATIO * vector->space : OT_VECTOR_MIN_MEMBERS;
-    ot_byte *new_data = realloc( vector->data, new_space * member_size );
+    uint8_t *new_data = realloc( vector->data, new_space * member_size );
     if( !new_data ) return NULL;
 
     /* Adjust pointer if it moved by realloc */
-    match = new_data + (match - (ot_byte*)vector->data);
+    match = new_data + (match - (uint8_t*)vector->data);
 
     vector->data = new_data;
     vector->space = new_space;
   }
-  memmove( match + member_size, match, ((ot_byte*)vector->data) + member_size * vector->size - match );
+  memmove( match + member_size, match, ((uint8_t*)vector->data) + member_size * vector->size - match );
   vector->size++;
   return match;
 }

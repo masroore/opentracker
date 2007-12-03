@@ -23,10 +23,10 @@ void handle_udp4( int64 serversocket ) {
   ot_torrent *torrent;
   ot_hash    *hash = NULL;
   char        remoteip[4];
-  ot_dword   *inpacket = (ot_dword*)static_inbuf;
-  ot_dword   *outpacket = (ot_dword*)static_outbuf;
-  ot_dword    numwant, left, event;
-  ot_word     port, remoteport;
+  uint32_t   *inpacket = (uint32_t*)static_inbuf;
+  uint32_t   *outpacket = (uint32_t*)static_outbuf;
+  uint32_t    numwant, left, event;
+  uint16_t    port, remoteport;
   size_t      r, r_out;
 
   r = socket_recv4( serversocket, static_inbuf, sizeof( static_inbuf ), remoteip, &remoteport);
@@ -59,7 +59,7 @@ void handle_udp4( int64 serversocket ) {
       left  = inpacket[64/4] | inpacket[68/4];
 
       event = ntohl( inpacket[80/4] );
-      port  = *(ot_word*)( static_inbuf + 96 );
+      port  = *(uint16_t*)( static_inbuf + 96 );
       hash  = (ot_hash*)( static_inbuf + 16 );
 
       OT_SETIP( &peer, remoteip );

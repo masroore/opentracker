@@ -9,14 +9,7 @@
 #include <time.h>
 #include <stdint.h>
 
-/* Should be called BYTE, WORD, DWORD - but some OSs already have that and there's no #iftypedef */
-/* They mark memory used as data instead of integer or human readable string -
-   they should be cast before used as integer/text */
-typedef uint8_t  ot_byte;
-typedef uint16_t ot_word;
-typedef uint32_t ot_dword;
-
-typedef ot_byte        ot_hash[20];
+typedef uint8_t        ot_hash[20];
 typedef time_t         ot_time;
 
 /* Some tracker behaviour tunable */
@@ -46,20 +39,19 @@ typedef time_t         ot_time;
 #define OT_POOLS_TIMEOUT (60*5)
 
 /* From opentracker.c */
-extern time_t ot_start_time;
 extern time_t g_now;
 #define NOW              (g_now/OT_POOLS_TIMEOUT)
 
 typedef struct {
-  ot_byte data[8];
+  uint8_t data[8];
 } ot_peer;
-static const ot_byte PEER_FLAG_SEEDING   = 0x80;
-static const ot_byte PEER_FLAG_COMPLETED = 0x40;
-static const ot_byte PEER_FLAG_STOPPED   = 0x20;
+static const uint8_t PEER_FLAG_SEEDING   = 0x80;
+static const uint8_t PEER_FLAG_COMPLETED = 0x40;
+static const uint8_t PEER_FLAG_STOPPED   = 0x20;
 
 #define OT_SETIP( peer, ip ) memmove((peer),(ip),4);
-#define OT_SETPORT( peer, port ) memmove(((ot_byte*)peer)+4,(port),2);
-#define OT_FLAG(peer) (((ot_byte*)(peer))[6])
+#define OT_SETPORT( peer, port ) memmove(((uint8_t*)peer)+4,(port),2);
+#define OT_FLAG(peer) (((uint8_t*)(peer))[6])
 
 #define OT_PEER_COMPARE_SIZE ((size_t)6)
 #define OT_HASH_COMPARE_SIZE (sizeof(ot_hash))
