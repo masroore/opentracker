@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		6520B7530D036AAF00A43B1F /* libowfat.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 6520B7520D036AAF00A43B1F /* libowfat.a */; };
 		653A320C0CE7F475007F0D03 /* ot_accesslist.c in Sources */ = {isa = PBXBuildFile; fileRef = 653A320B0CE7F475007F0D03 /* ot_accesslist.c */; };
 		653A56B50CE28EC5000CF140 /* ot_iovec.c in Sources */ = {isa = PBXBuildFile; fileRef = 653A56B40CE28EC5000CF140 /* ot_iovec.c */; };
 		654A80890CD832FD009035DE /* opentracker.c in Sources */ = {isa = PBXBuildFile; fileRef = 654A80840CD832FC009035DE /* opentracker.c */; };
@@ -19,6 +20,7 @@
 		65542E750CE08B9100469330 /* ot_clean.c in Sources */ = {isa = PBXBuildFile; fileRef = 65542E740CE08B9100469330 /* ot_clean.c */; };
 		65542EE80CE0CA6B00469330 /* ot_udp.c in Sources */ = {isa = PBXBuildFile; fileRef = 65542EE70CE0CA6B00469330 /* ot_udp.c */; };
 		65542F920CE17CA900469330 /* ot_fullscrape.c in Sources */ = {isa = PBXBuildFile; fileRef = 65542F910CE17CA900469330 /* ot_fullscrape.c */; };
+		65B8DF3C0D0310D20017149E /* ot_http.c in Sources */ = {isa = PBXBuildFile; fileRef = 65B8DF3B0D0310D20017149E /* ot_http.c */; };
 		8DD76FB00486AB0100D96B5E /* opentracker.1 in CopyFiles */ = {isa = PBXBuildFile; fileRef = C6A0FF2C0290799A04C91782 /* opentracker.1 */; };
 /* End PBXBuildFile section */
 
@@ -36,10 +38,11 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		6520B7520D036AAF00A43B1F /* libowfat.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libowfat.a; path = ../libowfat/libowfat.a; sourceTree = SOURCE_ROOT; };
 		653A320A0CE7F475007F0D03 /* ot_accesslist.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ot_accesslist.h; sourceTree = "<group>"; };
 		653A320B0CE7F475007F0D03 /* ot_accesslist.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = ot_accesslist.c; sourceTree = "<group>"; };
 		653A56AC0CE201FF000CF140 /* opentracker */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = opentracker; sourceTree = BUILT_PRODUCTS_DIR; };
-		653A56AF0CE201FF000CF140 /* liblibowfat.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = liblibowfat.a; sourceTree = BUILT_PRODUCTS_DIR; };
+		653A56AF0CE201FF000CF140 /* liblibowfat.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; name = liblibowfat.a; path = /Users/erdgeist/Coding/opentracker/build/Debug/liblibowfat.a; sourceTree = "<absolute>"; };
 		653A56B30CE28EC5000CF140 /* ot_iovec.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ot_iovec.h; sourceTree = "<group>"; };
 		653A56B40CE28EC5000CF140 /* ot_iovec.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = ot_iovec.c; sourceTree = "<group>"; };
 		654A80840CD832FC009035DE /* opentracker.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = opentracker.c; sourceTree = "<group>"; };
@@ -61,6 +64,8 @@
 		65542EE70CE0CA6B00469330 /* ot_udp.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = ot_udp.c; sourceTree = "<group>"; };
 		65542F900CE17CA900469330 /* ot_fullscrape.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ot_fullscrape.h; sourceTree = "<group>"; };
 		65542F910CE17CA900469330 /* ot_fullscrape.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = ot_fullscrape.c; sourceTree = "<group>"; };
+		65B8DF3A0D0310D20017149E /* ot_http.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ot_http.h; sourceTree = "<group>"; };
+		65B8DF3B0D0310D20017149E /* ot_http.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = ot_http.c; sourceTree = "<group>"; };
 		C6A0FF2C0290799A04C91782 /* opentracker.1 */ = {isa = PBXFileReference; lastKnownFileType = text.man; path = opentracker.1; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -76,6 +81,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				6520B7530D036AAF00A43B1F /* libowfat.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -100,6 +106,7 @@
 				653A320B0CE7F475007F0D03 /* ot_accesslist.c */,
 				65542E740CE08B9100469330 /* ot_clean.c */,
 				65542F910CE17CA900469330 /* ot_fullscrape.c */,
+				65B8DF3B0D0310D20017149E /* ot_http.c */,
 				653A56B40CE28EC5000CF140 /* ot_iovec.c */,
 				65542D8F0CE07CED00469330 /* ot_mutex.c */,
 				65542D910CE07CED00469330 /* ot_stats.c */,
@@ -116,7 +123,7 @@
 			isa = PBXGroup;
 			children = (
 				653A56AC0CE201FF000CF140 /* opentracker */,
-				653A56AF0CE201FF000CF140 /* liblibowfat.a */,
+				6520B7520D036AAF00A43B1F /* libowfat.a */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -127,6 +134,7 @@
 				653A320A0CE7F475007F0D03 /* ot_accesslist.h */,
 				65542E730CE08B9100469330 /* ot_clean.h */,
 				65542F900CE17CA900469330 /* ot_fullscrape.h */,
+				65B8DF3A0D0310D20017149E /* ot_http.h */,
 				653A56B30CE28EC5000CF140 /* ot_iovec.h */,
 				65542D900CE07CED00469330 /* ot_mutex.h */,
 				65542D920CE07CED00469330 /* ot_stats.h */,
@@ -238,6 +246,7 @@
 				65542F920CE17CA900469330 /* ot_fullscrape.c in Sources */,
 				653A56B50CE28EC5000CF140 /* ot_iovec.c in Sources */,
 				653A320C0CE7F475007F0D03 /* ot_accesslist.c in Sources */,
+				65B8DF3C0D0310D20017149E /* ot_http.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -281,6 +290,8 @@
 			buildSettings = {
 				GCC_WARN_ABOUT_RETURN_TYPE = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
+				HEADER_SEARCH_PATHS = ../libowfat/;
+				LIBRARY_SEARCH_PATHS = ../libowfat/;
 				PREBINDING = NO;
 				SDKROOT = "$(DEVELOPER_SDK_DIR)/MacOSX10.5.sdk";
 			};
