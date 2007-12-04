@@ -298,10 +298,11 @@ int main( int argc, char **argv ) {
   signal( SIGINT,  signal_handler );
   signal( SIGALRM, signal_handler );
 
+  g_now = time( NULL );
+
   if( trackerlogic_init( serverdir ) == -1 )
     panic( "Logic not started" );
 
-  g_now = time( NULL );
   alarm(5);
 
   server_mainloop( );
