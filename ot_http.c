@@ -79,19 +79,24 @@ static void http_senddata( const int64 client_socket, char *buffer, size_t size 
   }
 }
 
-#define HTTPERROR_400         return http_issue_error( client_socket, "400 Invalid Request",       "This server only understands GET." )
-#define HTTPERROR_400_PARAM   return http_issue_error( client_socket, "400 Invalid Request",       "Invalid parameter" )
-#define HTTPERROR_400_COMPACT return http_issue_error( client_socket, "400 Invalid Request",       "This server only delivers compact results." )
-#define HTTPERROR_403_IP      return http_issue_error( client_socket, "403 Access Denied",         "Your ip address is not allowed to administrate this server." )
-#define HTTPERROR_404         return http_issue_error( client_socket, "404 Not Found",             "No such file or directory." )
-#define HTTPERROR_500         return http_issue_error( client_socket, "500 Internal Server Error", "A server error has occured. Please retry later." )
-ssize_t http_issue_error( const int64 client_socket, const char *title, const char *message ) {
+#define HTTPERROR_400         return http_issue_error( client_socket, CODE_HTTPERROR_400 )
+#define HTTPERROR_400_PARAM   return http_issue_error( client_socket, CODE_HTTPERROR_400_PARAM )
+#define HTTPERROR_400_COMPACT return http_issue_error( client_socket, CODE_HTTPERROR_400_COMPACT )
+#define HTTPERROR_403_IP      return http_issue_error( client_socket, CODE_HTTPERROR_403_IP )
+#define HTTPERROR_404         return http_issue_error( client_socket, CODE_HTTPERROR_404 )
+#define HTTPERROR_500         return http_issue_error( client_socket, CODE_HTTPERROR_500 )
+ssize_t http_issue_error( const int64 client_socket, int code ) {
+  char *error_code[] = { "400 Invalid Request", "400 Invalid Request", "400 Invalid Request",
+                         "403 Access Denied", "404 Not Found", "500 Internal Server Error" };
+  char *title  = error_code[code];
+
   size_t reply_size = sprintf( static_outbuf,
     "HTTP/1.0 %s\r\nContent-Type: text/html\r\nConnection: close\r\nContent-Length: %zd\r\n\r\n<title>%s</title>\n",
-    title, strlen(message)+strlen(title)+16-4,title+4);
+    title, 2*strlen(title)+16-4,title+4);
 #ifdef _DEBUG_HTTPERROR
   fprintf( stderr, "DEBUG: invalid request was: %s\n", debug_request );
 #endif
+  stats_issue_event( EVENT_FAILED, 1, code );
   http_senddata( client_socket, static_outbuf, reply_size);
   return -2;
 }
@@ -237,6 +242,8 @@ static ssize_t http_handle_stats( const int64 client_socket, char *data, char *d
         mode = TASK_STATS_SLASH24S;
       else if( !byte_diff(data,4,"tpbs"))
         mode = TASK_STATS_TPB;
+      else if( !byte_diff(data,4,"herr"))
+        mode = TASK_STATS_HTTPERRORS;
       else
         HTTPERROR_400_PARAM;
       break;
@@ -518,7 +525,7 @@ ssize_t http_handle_request( const int64 client_socket, char *data, size_t recv_
     break;
 #endif
   case 5: /* stats ? */
-    if( byte_diff(data,5,"stats")) HTTPERROR_404;
+    if( byte_diff( data, 5, "stats") ) HTTPERROR_404;
     reply_size = http_handle_stats( client_socket, c, recv_header, recv_length );
     break;
   default:

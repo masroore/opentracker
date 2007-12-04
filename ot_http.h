@@ -23,6 +23,6 @@ struct http_data {
 
 ssize_t http_handle_request( const int64 s, char *data, size_t l );
 ssize_t http_sendiovecdata( const int64 s, int iovec_entries, struct iovec *iovector );
-ssize_t http_issue_error( const int64 s, const char *title, const char *message );
+ssize_t http_issue_error( const int64 s, int code );
 
 #endif

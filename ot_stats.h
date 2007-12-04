@@ -17,10 +17,19 @@ typedef enum {
   EVENT_SYNC_IN,
   EVENT_SYNC_OUT_REQUEST,
   EVENT_SYNC_OUT,
-  EVENT_FAILED_400,
-  EVENT_FAILED_404,
-  EVENT_FAILED_505
+  EVENT_FAILED
 } ot_status_event;
+
+enum {
+  CODE_HTTPERROR_400,
+  CODE_HTTPERROR_400_PARAM,
+  CODE_HTTPERROR_400_COMPACT,
+  CODE_HTTPERROR_403_IP,
+  CODE_HTTPERROR_404,
+  CODE_HTTPERROR_500,
+  
+  CODE_HTTPERROR_COUNT
+};
 
 void   stats_issue_event( ot_status_event event, int is_tcp, size_t event_data );
 size_t return_stats_for_tracker( char *reply, int mode, int format );

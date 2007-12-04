@@ -37,6 +37,7 @@ static unsigned long long ot_overall_udp_connects = 0;
 static unsigned long long ot_full_scrape_count = 0;
 static unsigned long long ot_full_scrape_request_count = 0;
 static unsigned long long ot_full_scrape_size = 0;
+static unsigned long long ot_failed_request_counts[CODE_HTTPERROR_COUNT];
 
 static time_t ot_start_time;
 
@@ -263,6 +264,12 @@ static size_t stats_peers_mrtg( char * reply ) {
   );
 }
 
+static size_t stats_httperrors_txt ( char * reply ) {
+  return sprintf( reply, "400 ... %llu\n400 PAR %llu\n400 COM %llu\n403 IP  %llu\n404 INV %llu\n500 SRV %llu\n",
+  ot_failed_request_counts[0], ot_failed_request_counts[1], ot_failed_request_counts[2], 
+  ot_failed_request_counts[3], ot_failed_request_counts[4], ot_failed_request_counts[5]);
+}
+
 size_t return_stats_for_tracker( char *reply, int mode, int format ) {
   format = format;
   switch( mode ) {
@@ -282,6 +289,8 @@ size_t return_stats_for_tracker( char *reply, int mode, int format ) {
       return stats_top5_txt( reply );
     case TASK_STATS_FULLSCRAPE:
       return stats_fullscrapes_mrtg( reply );
+    case TASK_STATS_HTTPERRORS:
+      return stats_httperrors_txt( reply );
     default:
       return 0;
   }
@@ -317,7 +326,10 @@ void stats_issue_event( ot_status_event event, int is_tcp, size_t event_data ) {
       LOG_TO_STDERR( "[%08d] scrp: %d.%d.%d.%d - FULL SCRAPE GZIP\n", (unsigned int)(g_now - ot_start_time), ip[0], ip[1], ip[2], ip[3] );
       ot_full_scrape_request_count++;
       }
-      break;  
+      break;
+    case EVENT_FAILED:
+      ot_failed_request_counts[event_data]++;
+      break;
     case EVENT_SYNC_IN_REQUEST:
     case EVENT_SYNC_IN:
     case EVENT_SYNC_OUT_REQUEST:
