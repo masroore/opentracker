@@ -92,7 +92,7 @@ static int fullscrape_increase( int *iovec_entries, struct iovec **iovector,
 
   /* Adjust new end of output buffer */
   *re = *r + OT_SCRAPE_CHUNK_SIZE - OT_SCRAPE_MAXENTRYLEN;
-  
+
   /* When compressing, we have all the bytes in output buffer */
 #ifdef WANT_COMPRESSION_GZIP
   if( mode & TASK_FLAG_GZIP ) {
@@ -100,7 +100,7 @@ static int fullscrape_increase( int *iovec_entries, struct iovec **iovector,
     strm->next_out  = (uint8_t*)*r;
     strm->avail_out = OT_SCRAPE_CHUNK_SIZE;
     if( deflate( strm, zaction ) < Z_OK )
-      fprintf( stderr, "deflate() failed while in fullscrape_increase().\n" );
+      fprintf( stderr, "deflate() failed while in fullscrape_increase(%d).\n", zaction );
     *r = (char*)strm->next_out;
   }
 #endif
