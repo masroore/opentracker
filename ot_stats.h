@@ -21,6 +21,7 @@ typedef enum {
 } ot_status_event;
 
 enum {
+  CODE_HTTPERROR_302,
   CODE_HTTPERROR_400,
   CODE_HTTPERROR_400_PARAM,
   CODE_HTTPERROR_400_COMPACT,

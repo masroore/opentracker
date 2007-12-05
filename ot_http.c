@@ -32,6 +32,7 @@
 
 #define OT_MAXMULTISCRAPE_COUNT 64
 static ot_hash multiscrape_buf[OT_MAXMULTISCRAPE_COUNT];
+extern char *g_redirecturl;
 
 enum {
   SUCCESS_HTTP_HEADER_LENGTH = 80,
@@ -79,6 +80,7 @@ static void http_senddata( const int64 client_socket, char *buffer, size_t size 
   }
 }
 
+#define HTTPERROR_302         return http_issue_error( client_socket, CODE_HTTPERROR_302 )
 #define HTTPERROR_400         return http_issue_error( client_socket, CODE_HTTPERROR_400 )
 #define HTTPERROR_400_PARAM   return http_issue_error( client_socket, CODE_HTTPERROR_400_PARAM )
 #define HTTPERROR_400_COMPACT return http_issue_error( client_socket, CODE_HTTPERROR_400_COMPACT )
@@ -86,13 +88,16 @@ static void http_senddata( const int64 client_socket, char *buffer, size_t size 
 #define HTTPERROR_404         return http_issue_error( client_socket, CODE_HTTPERROR_404 )
 #define HTTPERROR_500         return http_issue_error( client_socket, CODE_HTTPERROR_500 )
 ssize_t http_issue_error( const int64 client_socket, int code ) {
-  char *error_code[] = { "400 Invalid Request", "400 Invalid Request", "400 Invalid Request",
+  char *error_code[] = { "302 Found", "400 Invalid Request", "400 Invalid Request", "400 Invalid Request",
                          "403 Access Denied", "404 Not Found", "500 Internal Server Error" };
   char *title  = error_code[code];
+  size_t reply_size;
 
-  size_t reply_size = sprintf( static_outbuf,
-    "HTTP/1.0 %s\r\nContent-Type: text/html\r\nConnection: close\r\nContent-Length: %zd\r\n\r\n<title>%s</title>\n",
-    title, 2*strlen(title)+16-4,title+4);
+  if( code == CODE_HTTPERROR_302 )
+    reply_size = sprintf( static_outbuf, "HTTP/1.0 302 Found\r\nContent-Length: 0\r\nLocation: %s\r\n\r\n", g_redirecturl );
+  else
+    reply_size = sprintf( static_outbuf, "HTTP/1.0 %s\r\nContent-Type: text/html\r\nConnection: close\r\nContent-Length: %zd\r\n\r\n<title>%s</title>\n", title, strlen(title)+16-4,title+4);
+
 #ifdef _DEBUG_HTTPERROR
   fprintf( stderr, "DEBUG: invalid request was: %s\n", debug_request );
 #endif
@@ -506,6 +511,7 @@ ssize_t http_handle_request( const int64 client_socket, char *data, size_t recv_
   len = scan_urlencoded_query( &c, data = c, SCAN_PATH );
 
   /* If parsing returned an error, leave with not found*/
+  if( g_redirecturl && ( len == -2 ) ) HTTPERROR_302;
   if( len <= 0 ) HTTPERROR_404;
 
   /* This is the hardcore match for announce*/

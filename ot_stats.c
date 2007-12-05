@@ -265,9 +265,10 @@ static size_t stats_peers_mrtg( char * reply ) {
 }
 
 static size_t stats_httperrors_txt ( char * reply ) {
-  return sprintf( reply, "400 ... %llu\n400 PAR %llu\n400 COM %llu\n403 IP  %llu\n404 INV %llu\n500 SRV %llu\n",
+  return sprintf( reply, "302 RED %llu\n400 ... %llu\n400 PAR %llu\n400 COM %llu\n403 IP  %llu\n404 INV %llu\n500 SRV %llu\n",
   ot_failed_request_counts[0], ot_failed_request_counts[1], ot_failed_request_counts[2], 
-  ot_failed_request_counts[3], ot_failed_request_counts[4], ot_failed_request_counts[5]);
+  ot_failed_request_counts[3], ot_failed_request_counts[4], ot_failed_request_counts[5],
+  ot_failed_request_counts[6] );
 }
 
 size_t return_stats_for_tracker( char *reply, int mode, int format ) {

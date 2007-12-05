@@ -35,6 +35,7 @@
 
 /* Globals */
 time_t g_now;
+char * g_redirecturl = NULL;
 
 /* To always have space for error messages ;) */
 static char static_inbuf[8192];
@@ -60,7 +61,7 @@ static void signal_handler( int s ) {
 }
 
 static void usage( char *name ) {
-  fprintf( stderr, "Usage: %s [-i ip] [-p port] [-P port] [-d dir] [-A ip]"
+  fprintf( stderr, "Usage: %s [-i ip] [-p port] [-P port] [-r redirect] [-d dir] [-A ip]"
 #ifdef WANT_BLACKLISTING
   " [-b blacklistfile]"
 #elif defined ( WANT_CLOSED_TRACKER )
@@ -76,6 +77,7 @@ static void help( char *name ) {
   HELPLINE("-i ip","specify ip to bind to (default: *, you may specify more than one)");
   HELPLINE("-p port","specify tcp port to bind to (default: 6969, you may specify more than one)");
   HELPLINE("-P port","specify udp port to bind to (default: 6969, you may specify more than one)");
+  HELPLINE("-r redirecturl","specify url where / should be redirected to (default none)");
   HELPLINE("-d dir","specify directory to try to chroot to (default: \".\")");
   HELPLINE("-A ip","bless an ip address as admin address (e.g. to allow syncs from this address)");
 #ifdef WANT_BLACKLISTING
@@ -124,10 +126,10 @@ static ssize_t handle_read( const int64 clientsocket ) {
   array_catb( &h->request, static_inbuf, l );
 
   if( array_failed( &h->request ) )
-    return http_issue_error( clientsocket, "500 Server Error", "Request too long.");
+    return http_issue_error( clientsocket, CODE_HTTPERROR_500 );
 
   if( ( array_bytes( &h->request ) > 8192 ) && !accesslist_isblessed( (char*)&h->ip, OT_PERMISSION_MAY_SYNC ) )
-     return http_issue_error( clientsocket, "500 request too long", "You sent too much headers");
+     return http_issue_error( clientsocket, CODE_HTTPERROR_500 );
 
   if( memchr( array_start( &h->request ), '\n', array_bytes( &h->request ) ) )
     return http_handle_request( clientsocket, array_start( &h->request ), array_bytes( &h->request ) );
@@ -248,7 +250,7 @@ int main( int argc, char **argv ) {
 #endif
 
   while( scanon ) {
-    switch( getopt( argc, argv, ":i:p:A:P:d:"
+    switch( getopt( argc, argv, ":i:p:A:P:d:r:"
 #ifdef WANT_BLACKLISTING
 "b:"
 #elif defined( WANT_CLOSED_TRACKER )
@@ -265,6 +267,7 @@ int main( int argc, char **argv ) {
       case 'p': ot_try_bind( serverip, (uint16)atol( optarg ), 1 ); bound++; break;
       case 'P': ot_try_bind( serverip, (uint16)atol( optarg ), 0 ); bound++; break;
       case 'd': serverdir = optarg; break;
+      case 'r': g_redirecturl = optarg; break;
       case 'A':
         scan_ip4( optarg, tmpip );
         accesslist_blessip( tmpip, 0xffff ); /* Allow everything for now */
