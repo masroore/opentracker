@@ -236,7 +236,9 @@ static ssize_t http_handle_stats( const int64 client_socket, char *data, char *d
       else if( !byte_diff(data,4,"top5"))
         mode = TASK_STATS_TOP5;
       else if( !byte_diff(data,4,"scrp"))
- 	      mode = TASK_STATS_SCRAPE;
+        mode = TASK_STATS_SCRAPE;
+      else if( !byte_diff(data,4,"torr"))
+        mode = TASK_STATS_TORRENTS;
       else if( !byte_diff(data,4,"fscr"))
         mode = TASK_STATS_FULLSCRAPE;
       else if( !byte_diff(data,4,"tcp4"))

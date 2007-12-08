@@ -264,6 +264,25 @@ static size_t stats_peers_mrtg( char * reply ) {
   );
 }
 
+static size_t stats_torrents_mrtg( char * reply )
+{
+  size_t torrent_count = 0;
+  int bucket;
+
+  for( bucket=0; bucket<OT_BUCKET_COUNT; ++bucket )
+  {
+    ot_vector *torrents_list = mutex_bucket_lock( bucket );
+    torrent_count += torrents_list->size;
+    mutex_bucket_unlock( bucket );
+  }
+
+  return sprintf( reply, "%zd\n%zd\nopentracker serving %zd torrents\nopentracker",
+    torrent_count,
+    (size_t)0,
+    torrent_count
+  );
+}
+
 static size_t stats_httperrors_txt ( char * reply ) {
   return sprintf( reply, "302 RED %llu\n400 ... %llu\n400 PAR %llu\n400 COM %llu\n403 IP  %llu\n404 INV %llu\n500 SRV %llu\n",
   ot_failed_request_counts[0], ot_failed_request_counts[1], ot_failed_request_counts[2], 
@@ -284,6 +303,8 @@ size_t return_stats_for_tracker( char *reply, int mode, int format ) {
       return stats_tcpconnections_mrtg( reply );
     case TASK_STATS_PEERS:
       return stats_peers_mrtg( reply );
+    case TASK_STATS_TORRENTS:
+      return stats_torrents_mrtg( reply );
     case TASK_STATS_SLASH24S:
       return stats_slash24s_txt( reply, 25, 16 );
     case TASK_STATS_TOP5:
