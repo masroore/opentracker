@@ -251,6 +251,10 @@ static ssize_t http_handle_stats( const int64 client_socket, char *data, char *d
         mode = TASK_STATS_TPB;
       else if( !byte_diff(data,4,"herr"))
         mode = TASK_STATS_HTTPERRORS;
+      else if( !byte_diff(data,9,"startstop"))
+        mode = TASK_STATS_STARTSTOP;
+      else if( !byte_diff(data,10,"toraddrem"))
+        mode = TASK_STATS_TORADDREM;
       else
         HTTPERROR_400_PARAM;
       break;

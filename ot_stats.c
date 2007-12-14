@@ -264,6 +264,48 @@ static size_t stats_peers_mrtg( char * reply ) {
   );
 }
 
+static size_t stats_startstop_mrtg( char * reply )
+{
+  size_t    torrent_count = 0;
+  int bucket;
+
+  for( bucket=0; bucket<OT_BUCKET_COUNT; ++bucket )
+  {
+    ot_vector *torrents_list = mutex_bucket_lock( bucket );
+    torrent_count += torrents_list->size;
+    mutex_bucket_unlock( bucket );
+  }
+
+  return sprintf( reply, "%zd\n%zd\nopentracker handling %zd torrents\nopentracker",
+    (size_t)0,
+    (size_t)0,
+    torrent_count
+  );
+}
+
+static size_t stats_toraddrem_mrtg( char * reply )
+{
+  size_t    peer_count = 0, j;
+  int bucket;
+
+  for( bucket=0; bucket<OT_BUCKET_COUNT; ++bucket )
+  {
+    ot_vector *torrents_list = mutex_bucket_lock( bucket );
+    for( j=0; j<torrents_list->size; ++j )
+    {
+      ot_peerlist *peer_list = ( ((ot_torrent*)(torrents_list->data))[j] ).peer_list;
+      peer_count += peer_list->peer_count;
+    }
+    mutex_bucket_unlock( bucket );
+  }
+
+  return sprintf( reply, "%zd\n%zd\nopentracker handling %zd peers\nopentracker",
+    (size_t)0,
+    (size_t)0,
+    peer_count
+  );
+}
+
 static size_t stats_torrents_mrtg( char * reply )
 {
   size_t torrent_count = 0;
@@ -305,6 +347,10 @@ size_t return_stats_for_tracker( char *reply, int mode, int format ) {
       return stats_peers_mrtg( reply );
     case TASK_STATS_TORRENTS:
       return stats_torrents_mrtg( reply );
+    case TASK_STATS_TORADDREM:
+      return stats_toraddrem_mrtg( reply );
+    case TASK_STATS_STARTSTOP:
+      return stats_startstop_mrtg( reply );
     case TASK_STATS_SLASH24S:
       return stats_slash24s_txt( reply, 25, 16 );
     case TASK_STATS_TOP5:

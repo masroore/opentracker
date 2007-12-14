@@ -24,6 +24,8 @@ typedef enum {
   TASK_STATS_TPB                   = 0x0007,
   TASK_STATS_HTTPERRORS            = 0x0008,
   TASK_STATS_TORRENTS              = 0x0009,
+  TASK_STATS_STARTSTOP             = 0x000a,
+  TASK_STATS_TORADDREM             = 0x000b,
 
   TASK_STATS_SLASH24S              = 0x0100,
 
