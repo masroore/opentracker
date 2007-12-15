@@ -75,7 +75,7 @@ void handle_udp4( int64 serversocket ) {
         return;
 
       if( !udp_test_connectionid( inpacket, remoteip ))
-        fprintf( stderr, "UDP Connection id missmatch\n" );
+        fprintf( stderr, "UDP Connection id missmatch, %16llX\n", *(uint64_t*)inpacket );
 
       numwant = 200;
       /* We do only want to know, if it is zero */
@@ -117,7 +117,7 @@ void handle_udp4( int64 serversocket ) {
 
     case 2: /* This is a scrape action */
       if( !udp_test_connectionid( inpacket, remoteip ))
-        fprintf( stderr, "UDP Connection id missmatch\n" );
+        fprintf( stderr, "UDP Connection id missmatch, %16llX\n", *(uint64_t*)inpacket );
 
       outpacket[0] = htonl( 2 );    /* scrape action */
       outpacket[1] = inpacket[12/4];
