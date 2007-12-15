@@ -57,15 +57,16 @@ void handle_udp4( int64 serversocket ) {
   if( r < 16 )
     return;
 
-  /* look for udp bittorrent magic id */
-  if( (ntohl(inpacket[0]) != 0x00000417) || (ntohl(inpacket[1]) != 0x27101980) )
-    return;
-
   switch( ntohl( inpacket[2] ) ) {
     case 0: /* This is a connect action */
+      /* look for udp bittorrent magic id */
+      if( (ntohl(inpacket[0]) != 0x00000417) || (ntohl(inpacket[1]) != 0x27101980) )
+        return;
+
       outpacket[0] = 0;
       outpacket[1] = inpacket[3];
       udp_make_connectionid( outpacket + 2, remoteip );
+
       socket_send4( serversocket, static_outbuf, 16, remoteip, remoteport );
       stats_issue_event( EVENT_CONNECT, 0, 16 );
       break;
