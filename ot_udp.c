@@ -4,6 +4,7 @@
 /* System */
 #include <string.h>
 #include <arpa/inet.h>
+#include <stdio.h>
 
 /* Libowfat */
 #include "socket.h"
@@ -16,6 +17,24 @@
 
 static char static_inbuf[8192];
 static char static_outbuf[8192];
+
+static const uint8_t g_static_connid[8] = { 0x23, 0x42, 0x05, 0x17, 0xde, 0x41, 0x50, 0xff };
+
+static void udp_make_connectionid( uint32_t * connid, const char * remoteip ) {
+  /* Touch unused variable */
+  remoteip = remoteip;
+
+  /* Use a static secret for now */
+  memcpy( connid, g_static_connid, 8 );
+}
+
+static int udp_test_connectionid( const uint32_t * const connid, const char * remoteip ) {
+  /* Touch unused variable */
+  remoteip = remoteip;
+
+  /* Test against our static secret */
+  return !memcmp( connid, g_static_connid, 8 );
+}
 
 /* UDP implementation according to http://xbtt.sourceforge.net/udp_tracker_protocol.html */
 void handle_udp4( int64 serversocket ) {
@@ -44,8 +63,9 @@ void handle_udp4( int64 serversocket ) {
 
   switch( ntohl( inpacket[2] ) ) {
     case 0: /* This is a connect action */
-      outpacket[0] = 0;           outpacket[1] = inpacket[3];
-      outpacket[2] = inpacket[0]; outpacket[3] = inpacket[1];
+      outpacket[0] = 0;
+      outpacket[1] = inpacket[3];
+      udp_make_connectionid( outpacket + 2, remoteip );
       socket_send4( serversocket, static_outbuf, 16, remoteip, remoteport );
       stats_issue_event( EVENT_CONNECT, 0, 16 );
       break;
@@ -53,6 +73,9 @@ void handle_udp4( int64 serversocket ) {
       /* Minimum udp announce packet size */
       if( r < 98 )
         return;
+
+      if( !udp_test_connectionid( inpacket, remoteip ))
+        fprintf( stderr, "UDP Connection id missmatch\n" );
 
       numwant = 200;
       /* We do only want to know, if it is zero */
@@ -93,6 +116,9 @@ void handle_udp4( int64 serversocket ) {
       break;
 
     case 2: /* This is a scrape action */
+      if( !udp_test_connectionid( inpacket, remoteip ))
+        fprintf( stderr, "UDP Connection id missmatch\n" );
+
       outpacket[0] = htonl( 2 );    /* scrape action */
       outpacket[1] = inpacket[12/4];
 
