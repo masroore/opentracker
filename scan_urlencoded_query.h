@@ -11,7 +11,8 @@ typedef enum {
   SCAN_SEARCHPATH_TERMINATOR = 8
 } SCAN_SEARCHPATH_FLAG;
 
-/* string     pointer to source, pointer to next scan position on return
+/* string     in: pointer to source
+              out: pointer to next scan position
    deststring pointer to destination
    flags      determines, what to parse
    returns    number of valid converted characters in deststring
@@ -19,7 +20,8 @@ typedef enum {
 */
 ssize_t scan_urlencoded_query(char **string, char *deststring, SCAN_SEARCHPATH_FLAG flags);
 
-/* string     pointer to source, pointer to next scan position on return
+/* string     in: pointer to value of a param=value pair to skip
+              out: pointer to next scan position on return
 */
 void scan_urlencoded_skipvalue( char **string );
 

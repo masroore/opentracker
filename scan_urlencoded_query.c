@@ -14,6 +14,16 @@
          relax         = "+" | "," | "/" | ";" | "<" | ">" | ":"
 */
 
+/* This matrix holds for each ascii character the information,
+   whether it is a non-terminating character for on of the three
+   scan states we are in, that is 'path', 'param' and 'value' from
+  /path?param=value&param=value, it is encoded in bit 0, 1 and 2
+  respectively
+
+  The top bit of lower nibble indicates, whether this character is
+  a hard terminator, ie. \0, \n or \s, where the whole scanning
+  process should terminate
+  */
 static const unsigned char is_unreserved[256] = {
   8,0,0,0,0,0,0,0,0,0,8,0,0,8,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
   0,7,8,8,8,7,0,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,4,7,6,
@@ -25,6 +35,7 @@ static const unsigned char is_unreserved[256] = {
   0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
 };
 
+/* Do a fast nibble to hex representation conversion */
 static unsigned char fromhex(unsigned char x) {
   x-='0'; if( x<=9) return x;
   x&=~0x20; x-='A'-'0';
@@ -32,12 +43,19 @@ static unsigned char fromhex(unsigned char x) {
   return 0xff;
 }
 
+/* Skip the value of a param=value pair */
 void scan_urlencoded_skipvalue( char **string ) {
   const unsigned char* s=*(const unsigned char**) string;
   unsigned char f;
 
+  /* Since we are asked to skip the 'value', we assume to stop at
+     terminators for a 'value' string position */
   while( ( f = is_unreserved[ *s++ ] ) & SCAN_SEARCHPATH_VALUE );
+
+  /* If we stopped at a hard terminator like \0 or \n, make the
+     next scan_urlencoded_query encounter it again */
   if( f & SCAN_SEARCHPATH_TERMINATOR ) --s;
+
   *string = (char*)s;
 }
 
@@ -46,21 +64,35 @@ ssize_t scan_urlencoded_query(char **string, char *deststring, SCAN_SEARCHPATH_F
   unsigned char *d = (unsigned char*)deststring;
   unsigned char b, c, f;
 
+  /* This is the main decoding loop.
+    'flag' determines, which characters are non-terminating in current context
+    (ie. stop at '=' and '&' if scanning for a 'param'; stop at '?' if scanning for the path )
+  */
   while( ( f = is_unreserved[ c = *s++ ] ) & flags ) {
+
+    /* When encountering an url escaped character, try to decode */
     if( c=='%') {
       if( ( b = fromhex(*s++) ) == 0xff ) return -1;
       if( ( c = fromhex(*s++) ) == 0xff ) return -1;
       c|=(b<<4);
     }
+
+    /* Write (possibly decoded) character to output */
     *d++ = c;
   }
 
   switch( c ) {
   case 0: case '\r': case '\n': case ' ':
+    /* If we started scanning on a hard terminator, indicate we've finished */
     if( d == (unsigned char*)deststring ) return -2;
+
+    /* Else make the next call to scan_urlencoded_param encounter it again */
     --s;
     break;
   case '?':
+    /* XXX to help us parse path?param=value?param=value?... sent by µTorrent 1600
+       do not return an error but silently terminate
+    if( flags != SCAN_PATH ) return -1; */
     break;
   case '=':
     if( flags != SCAN_SEARCHPATH_PARAM ) return -1;
