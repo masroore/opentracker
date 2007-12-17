@@ -122,8 +122,10 @@ static size_t stats_slash24s_txt( char * reply, size_t amount, uint32_t thresh )
           uint32_t *count = counts[ s24 >> NUM_LOWBITS ];
           if( !count ) {
             count = malloc( sizeof(uint32_t) * NUM_S24S );
-            if( !count )
+            if( !count ) {
+              mutex_bucket_unlock( bucket );
               goto bailout_cleanup;
+            }
             byte_zero( count, sizeof( uint32_t ) * NUM_S24S );
             counts[ s24 >> NUM_LOWBITS ] = count;
           }
