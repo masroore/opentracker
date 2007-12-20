@@ -1,5 +1,7 @@
 /* This software was written by Dirk Engling <erdgeist@erdgeist.org>
-   It is considered beerware. Prost. Skol. Cheers or whatever. */
+   It is considered beerware. Prost. Skol. Cheers or whatever.
+   
+   $id$ */
 
 /* System */
 #include <sys/types.h>
@@ -71,3 +73,5 @@ size_t iovec_length( int *iovec_entries, struct iovec **iovector ) {
     length += ((*iovector)[i]).iov_len;
   return length;
 }
+
+const char *g_version_iovec_c = "$Source$: $Revision$\n";

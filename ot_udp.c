@@ -1,5 +1,7 @@
 /* This software was written by Dirk Engling <erdgeist@erdgeist.org>
-   It is considered beerware. Prost. Skol. Cheers or whatever. */
+   It is considered beerware. Prost. Skol. Cheers or whatever.
+   
+   $id$ */
 
 /* System */
 #include <string.h>
@@ -22,19 +24,21 @@ static const uint8_t g_static_connid[8] = { 0x23, 0x42, 0x05, 0x17, 0xde, 0x41, 
 
 static void udp_make_connectionid( uint32_t * connid, const char * remoteip ) {
   /* Touch unused variable */
-  remoteip = remoteip;
+  (void)remoteip;
 
   /* Use a static secret for now */
   memcpy( connid, g_static_connid, 8 );
 }
 
+#if 0
 static int udp_test_connectionid( const uint32_t * const connid, const char * remoteip ) {
   /* Touch unused variable */
-  remoteip = remoteip;
+  (void)remoteip;
 
   /* Test against our static secret */
   return !memcmp( connid, g_static_connid, 8 );
 }
+#endif
 
 /* UDP implementation according to http://xbtt.sourceforge.net/udp_tracker_protocol.html */
 void handle_udp4( int64 serversocket ) {
@@ -133,3 +137,5 @@ void handle_udp4( int64 serversocket ) {
       break;
   }
 }
+
+const char *g_version_udp_c = "$Source$: $Revision$\n";

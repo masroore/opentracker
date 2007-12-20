@@ -1,5 +1,7 @@
 /* This software was written by Dirk Engling <erdgeist@erdgeist.org>
-   It is considered beerware. Prost. Skol. Cheers or whatever. */
+   It is considered beerware. Prost. Skol. Cheers or whatever.
+   
+   $id$ */
 
 /* System */
 #include <pthread.h>
@@ -316,3 +318,5 @@ void mutex_deinit( ) {
   pthread_cond_destroy(&tasklist_being_filled);
   byte_zero( all_torrents, sizeof( all_torrents ) );
 }
+
+const char *g_version_mutex_c = "$Source$: $Revision$\n";

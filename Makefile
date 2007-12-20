@@ -1,4 +1,24 @@
+# $Id$
+
 CC?=gcc
+
+# Linux flavour
+# PREFIX?=/opt/diet
+# LIBOWFAT_HEADERS=$(PREFIX)/include
+# LIBOWFAT_LIBRARY=$(PREIFX)/lib
+
+# BSD flavour
+PREFIX?=/usr/local
+LIBOWFAT_HEADERS=$(PREFIX)/include/libowfat
+LIBOWFAT_LIBRARY=$(PREIFX)/lib
+
+# Debug flavour
+# PREFIX?=..
+# LIBOWFAT_HEADERS=$(PREFIX)/libowfat
+# LIBOWFAT_LIBRARY=$(PREFIX)/libowfat
+
+BINDIR?=$(PREFIX)/bin
+
 #FEATURES =-DWANT_TRACKER_SYNC
 #FEATURES+=-DWANT_BLACKLISTING
 #FEATURES+=-DWANT_CLOSED_TRACKER
@@ -9,8 +29,9 @@ CC?=gcc
 
 OPTS_debug=-g -ggdb #-pg # -fprofile-arcs -ftest-coverage
 OPTS_production=-Os
-CFLAGS+=-I../libowfat -Wall -pipe -Wextra #-pedantic -ansi
-LDFLAGS+=-L../libowfat/ -lowfat -pthread -lz
+
+CFLAGS+=-I$(LIBOWFAT_HEADERS) -Wall -pipe -Wextra #-pedantic -ansi
+LDFLAGS+=-L$(LIBOWFAT_LIBRARY) -lowfat -pthread -lz
 
 BINARY =opentracker
 HEADERS=trackerlogic.h scan_urlencoded_query.h ot_mutex.h ot_stats.h ot_sync.h ot_vector.h ot_clean.h ot_udp.h ot_iovec.h ot_fullscrape.h ot_accesslist.h ot_http.h
@@ -40,3 +61,6 @@ $(BINARY).debug: $(OBJECTS_debug) $(HEADERS)
 
 clean:
 	rm -rf opentracker opentracker.debug *.o *~
+
+install:
+	install -m 755 opentracker $(BINDIR)

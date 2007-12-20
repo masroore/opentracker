@@ -1,5 +1,7 @@
 /* This software was written by Dirk Engling <erdgeist@erdgeist.org>
-   It is considered beerware. Prost. Skol. Cheers or whatever. */
+   It is considered beerware. Prost. Skol. Cheers or whatever.
+   
+   $id$ */
 
 /* System */
 #include <stdlib.h>
@@ -354,3 +356,5 @@ void trackerlogic_deinit( void ) {
   clean_deinit( );
   mutex_deinit( );
 }
+
+const char *g_version_trackerlogic_c = "$Source$: $Revision$\n";

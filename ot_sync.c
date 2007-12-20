@@ -1,5 +1,7 @@
 /* This software was written by Dirk Engling <erdgeist@erdgeist.org>
-   It is considered beerware. Prost. Skol. Cheers or whatever. */
+   It is considered beerware. Prost. Skol. Cheers or whatever.
+   
+   $id$ */
 
 /* System */
 #include <sys/types.h>
@@ -160,3 +162,5 @@ void sync_deliver( int64 socket ) {
 }
 
 #endif
+
+const char *g_version_sync_c = "$Source$: $Revision$\n";

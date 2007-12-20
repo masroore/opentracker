@@ -1,5 +1,7 @@
 /* This software was written by Dirk Engling <erdgeist@erdgeist.org>
-   It is considered beerware. Prost. Skol. Cheers or whatever. */
+   It is considered beerware. Prost. Skol. Cheers or whatever.
+   
+   $id$ */
 
 /* System */
 #include <sys/uio.h>
@@ -223,3 +225,5 @@ static void fullscrape_make( int *iovec_entries, struct iovec **iovector, ot_tas
   /* Release unused memory in current output buffer */
   iovec_fixlast( iovec_entries, iovector, r );
 }
+
+const char *g_version_fullscrape_c = "$Source$: $Revision$\n";

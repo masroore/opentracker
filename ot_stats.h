@@ -1,5 +1,7 @@
 /* This software was written by Dirk Engling <erdgeist@erdgeist.org>
-   It is considered beerware. Prost. Skol. Cheers or whatever. */
+   It is considered beerware. Prost. Skol. Cheers or whatever.
+   
+   $id$ */
 
 #ifndef __OT_STATS_H__
 #define __OT_STATS_H__
@@ -34,6 +36,7 @@ enum {
 
 void   stats_issue_event( ot_status_event event, int is_tcp, size_t event_data );
 size_t return_stats_for_tracker( char *reply, int mode, int format );
+size_t stats_return_tracker_version( char *reply );
 void   stats_init( );
 void   stats_deinit( );
 

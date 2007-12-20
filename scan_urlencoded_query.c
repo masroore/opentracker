@@ -1,5 +1,7 @@
 /* This software was written by Dirk Engling <erdgeist@erdgeist.org>
-   It is considered beerware. Prost. Skol. Cheers or whatever. */
+   It is considered beerware. Prost. Skol. Cheers or whatever.
+   
+   $id$ */
 
 #include "scan.h"
 #include "scan_urlencoded_query.h"
@@ -134,3 +136,5 @@ ssize_t scan_fixed_ip( char *data, size_t len, unsigned char ip[4] ) {
   }
   return len;
 }
+
+const char *g_version_scan_urlencoded_query_c = "$Source$: $Revision$\n";

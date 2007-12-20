@@ -1,5 +1,7 @@
 /* This software was written by Dirk Engling <erdgeist@erdgeist.org>
-   It is considered beerware. Prost. Skol. Cheers or whatever. */
+   It is considered beerware. Prost. Skol. Cheers or whatever.
+   
+   $id$ */
 
 /* System */
 #include <stdlib.h>
@@ -116,3 +118,5 @@ int accesslist_isblessed( char *ip, ot_permissions permissions ) {
       return 1;
   return 0;
 }
+
+const char *g_version_accesslist_c = "$Source$: $Revision$\n";

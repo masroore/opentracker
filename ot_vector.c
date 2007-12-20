@@ -1,5 +1,7 @@
 /* This software was written by Dirk Engling <erdgeist@erdgeist.org>
-   It is considered beerware. Prost. Skol. Cheers or whatever. */
+   It is considered beerware. Prost. Skol. Cheers or whatever.
+   
+   $id$ */
 
 /* System */
 #include <stdlib.h>
@@ -108,3 +110,5 @@ void vector_remove_torrent( ot_vector *vector, ot_torrent *match ) {
     vector->data = realloc( vector->data, vector->space * sizeof( ot_torrent ) );
   }
 }
+
+const char *g_version_vector_c = "$Source$: $Revision$\n";

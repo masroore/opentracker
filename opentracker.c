@@ -1,7 +1,8 @@
 /* This software was written by Dirk Engling <erdgeist@erdgeist.org>
    It is considered beerware. Prost. Skol. Cheers or whatever.
    Some of the stuff below is stolen from Fefes example libowfat httpd.
-*/
+
+   $Id$ */
 
 /* System */
 #include <string.h>
@@ -250,7 +251,7 @@ int main( int argc, char **argv ) {
 #endif
 
   while( scanon ) {
-    switch( getopt( argc, argv, ":i:p:A:P:d:r:"
+    switch( getopt( argc, argv, ":i:p:A:P:d:r:v"
 #ifdef WANT_BLACKLISTING
 "b:"
 #elif defined( WANT_CLOSED_TRACKER )
@@ -273,6 +274,7 @@ int main( int argc, char **argv ) {
         accesslist_blessip( tmpip, 0xffff ); /* Allow everything for now */
         break;
       case 'h': help( argv[0] ); exit( 0 );
+      case 'v': write( 2, static_inbuf, stats_return_tracker_version( static_inbuf )); exit( 0 );
       default:
       case '?': usage( argv[0] ); exit( 1 );
     }
@@ -312,3 +314,5 @@ int main( int argc, char **argv ) {
 
   return 0;
 }
+
+const char *g_version_opentracker_c = "$Source$: $Revision$\n";

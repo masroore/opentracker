@@ -1,5 +1,7 @@
 /* This software was written by Dirk Engling <erdgeist@erdgeist.org>
-   It is considered beerware. Prost. Skol. Cheers or whatever. */
+   It is considered beerware. Prost. Skol. Cheers or whatever.
+   
+   $id$ */
 
 /* System */
 #include <sys/types.h>
@@ -568,3 +570,5 @@ ssize_t http_handle_request( const int64 client_socket, char *data, size_t recv_
   http_senddata( client_socket, static_outbuf + reply_off, reply_size );
   return reply_size;
 }
+
+const char *g_version_http_c = "$Source$: $Revision$\n";

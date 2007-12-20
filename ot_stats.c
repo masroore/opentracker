@@ -1,5 +1,7 @@
 /* This software was written by Dirk Engling <erdgeist@erdgeist.org>
-   It is considered beerware. Prost. Skol. Cheers or whatever. */
+   It is considered beerware. Prost. Skol. Cheers or whatever.
+   
+   $id$ */
 
 /* System */
 #include <stdlib.h>
@@ -334,6 +336,18 @@ static size_t stats_httperrors_txt ( char * reply ) {
   ot_failed_request_counts[6] );
 }
 
+extern const char
+*g_version_opentracker_c, *g_version_accesslist_c, *g_version_clean_c, *g_version_fullscrape_c, *g_version_http_c,
+*g_version_iovec_c, *g_version_mutex_c, *g_version_stats_c, *g_version_sync_c, *g_version_udp_c, *g_version_vector_c,
+*g_version_scan_urlencoded_query_c, *g_version_trackerlogic_c;
+
+size_t stats_return_tracker_version( char *reply ) {
+  return sprintf( reply, "%s%s%s%s%s%s%s%s%s%s%s%s%s",
+  g_version_opentracker_c, g_version_accesslist_c, g_version_clean_c, g_version_fullscrape_c, g_version_http_c,
+  g_version_iovec_c, g_version_mutex_c, g_version_stats_c, g_version_sync_c, g_version_udp_c, g_version_vector_c,
+  g_version_scan_urlencoded_query_c, g_version_trackerlogic_c );
+}
+
 size_t return_stats_for_tracker( char *reply, int mode, int format ) {
   format = format;
   switch( mode ) {
@@ -418,3 +432,4 @@ void stats_deinit( ) {
 
 }
 
+const char *g_version_stats_c = "$Source$: $Revision$\n";

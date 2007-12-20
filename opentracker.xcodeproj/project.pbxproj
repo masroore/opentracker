@@ -39,10 +39,10 @@
 
 /* Begin PBXFileReference section */
 		6520B7520D036AAF00A43B1F /* libowfat.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libowfat.a; path = ../libowfat/libowfat.a; sourceTree = SOURCE_ROOT; };
+		6520B8110D0E011000A43B1F /* liblibowfat.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = liblibowfat.a; sourceTree = BUILT_PRODUCTS_DIR; };
 		653A320A0CE7F475007F0D03 /* ot_accesslist.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ot_accesslist.h; sourceTree = "<group>"; };
 		653A320B0CE7F475007F0D03 /* ot_accesslist.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = ot_accesslist.c; sourceTree = "<group>"; };
 		653A56AC0CE201FF000CF140 /* opentracker */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = opentracker; sourceTree = BUILT_PRODUCTS_DIR; };
-		653A56AF0CE201FF000CF140 /* liblibowfat.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; name = liblibowfat.a; path = /Users/erdgeist/Coding/opentracker/build/Debug/liblibowfat.a; sourceTree = "<absolute>"; };
 		653A56B30CE28EC5000CF140 /* ot_iovec.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ot_iovec.h; sourceTree = "<group>"; };
 		653A56B40CE28EC5000CF140 /* ot_iovec.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = ot_iovec.c; sourceTree = "<group>"; };
 		654A80840CD832FC009035DE /* opentracker.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = opentracker.c; sourceTree = "<group>"; };
@@ -124,6 +124,7 @@
 			children = (
 				653A56AC0CE201FF000CF140 /* opentracker */,
 				6520B7520D036AAF00A43B1F /* libowfat.a */,
+				6520B8110D0E011000A43B1F /* liblibowfat.a */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -182,7 +183,7 @@
 			);
 			name = libowfat;
 			productName = libowfat;
-			productReference = 653A56AF0CE201FF000CF140 /* liblibowfat.a */;
+			productReference = 6520B8110D0E011000A43B1F /* liblibowfat.a */;
 			productType = "com.apple.product-type.library.static";
 		};
 		8DD76FA90486AB0100D96B5E /* opentracker */ = {
