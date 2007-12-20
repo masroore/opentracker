@@ -8,14 +8,14 @@ CC?=gcc
 # LIBOWFAT_LIBRARY=$(PREIFX)/lib
 
 # BSD flavour
-PREFIX?=/usr/local
-LIBOWFAT_HEADERS=$(PREFIX)/include/libowfat
-LIBOWFAT_LIBRARY=$(PREIFX)/lib
+# PREFIX?=/usr/local
+# LIBOWFAT_HEADERS=$(PREFIX)/include/libowfat
+# LIBOWFAT_LIBRARY=$(PREIFX)/lib
 
 # Debug flavour
-# PREFIX?=..
-# LIBOWFAT_HEADERS=$(PREFIX)/libowfat
-# LIBOWFAT_LIBRARY=$(PREFIX)/libowfat
+PREFIX?=..
+LIBOWFAT_HEADERS=$(PREFIX)/libowfat
+LIBOWFAT_LIBRARY=$(PREFIX)/libowfat
 
 BINDIR?=$(PREFIX)/bin
 
