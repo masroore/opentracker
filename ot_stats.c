@@ -43,6 +43,110 @@ static unsigned long long ot_failed_request_counts[CODE_HTTPERROR_COUNT];
 
 static time_t ot_start_time;
 
+#ifdef WANT_LOG_NETWORKS
+#define STATS_NETWORK_NODE_BITWIDTH  8
+#define STATS_NETWORK_NODE_MAXDEPTH  3
+
+#define STATS_NETWORK_NODE_BITMASK ((1<<STATS_NETWORK_NODE_BITWIDTH)-1)
+#define STATS_NETWORK_NODE_COUNT    (1<<STATS_NETWORK_NODE_BITWIDTH)
+
+typedef union stats_network_node stats_network_node;
+union stats_network_node {
+  int                 counters[STATS_NETWORK_NODE_COUNT];
+  stats_network_node *children[STATS_NETWORK_NODE_COUNT];
+};
+
+static stats_network_node *stats_network_counters_root = NULL;
+
+static int stat_increase_network_count( stats_network_node **node, int depth, uint32_t ip ) {
+  int foo = ( ip >> ( 32 - STATS_NETWORK_NODE_BITWIDTH * ( ++depth ) ) ) & STATS_NETWORK_NODE_BITMASK;
+
+  if( !*node ) {
+    *node = malloc( sizeof( stats_network_node ) );
+    if( !*node )
+      return -1;
+    memset( *node, 0, sizeof( stats_network_node ) );
+  }
+
+  if( depth < STATS_NETWORK_NODE_MAXDEPTH )
+    return stat_increase_network_count( &(*node)->children[ foo ], depth, ip );
+
+  (*node)->counters[ foo ]++;
+  return 0;
+}
+
+static int stats_shift_down_network_count( stats_network_node **node, int depth, int shift ) {
+  int i, rest = 0;
+  if( !*node ) return 0;
+
+  if( ++depth == STATS_NETWORK_NODE_MAXDEPTH ) 
+    for( i=0; i<STATS_NETWORK_NODE_COUNT; ++i ) {
+      rest += ((*node)->counters[i]>>=shift);
+    return rest;
+  }
+
+  for( i=0; i<STATS_NETWORK_NODE_COUNT; ++i ) {
+    stats_network_node **childnode = &(*node)->children[i];
+    int rest_val;
+
+    if( !*childnode ) continue;
+
+    rest += rest_val = stats_shift_down_network_count( childnode, depth, shift );
+
+    if( rest_val ) continue;
+
+    free( (*node)->children[i] );
+    (*node)->children[i] = NULL;
+  }
+
+  return rest;
+}
+
+static void stats_get_highscore_networks( stats_network_node *node, int depth, uint32_t node_value, int *scores, uint32_t *networks, int network_count ) {
+  int i;
+
+  if( !node ) return;
+
+  if( !depth++ ) {
+    memset( scores, 0, sizeof( *scores ) * network_count );
+    memset( networks, 0, sizeof( *networks ) * network_count );
+  }
+
+  if( depth < STATS_NETWORK_NODE_MAXDEPTH ) {
+    for( i=0; i<STATS_NETWORK_NODE_COUNT; ++i )
+      if( node->children[i] )
+        stats_get_highscore_networks( node->children[i], depth, node_value | ( i << ( 32 - depth * STATS_NETWORK_NODE_BITWIDTH ) ), scores, networks, network_count );
+  } else
+    for( i=0; i<STATS_NETWORK_NODE_COUNT; ++i ) {
+      int j=1;
+      if( node->counters[i] <= scores[0] ) continue;
+
+      while( (j<network_count) && (node->counters[i]>scores[j] ) ) ++j;
+      --j;
+
+      memmove( scores, scores + 1, j * sizeof( *scores ) );
+      memmove( networks, networks + 1, j * sizeof( *networks ) );
+      scores[ j ] = node->counters[ i ];
+      networks[ j ] = node_value | ( i << ( 32 - depth * STATS_NETWORK_NODE_BITWIDTH ) );
+  }
+}
+
+static size_t stats_return_busy_networks( char * reply ) {
+  uint32_t networks[16];
+  int      scores[16];
+  int      i;
+  char   * r = reply;
+
+  stats_get_highscore_networks( stats_network_counters_root, 0, 0, scores, networks, 16 );
+
+  for( i=15; i>=0; ++i)
+    r += sprintf( r, "%08i: %d.%d.%d.0/24\n", scores[i], (networks[i]>>24)&0xff, (networks[i]>>16)&0xff, (networks[i]>>8)&0xff );
+
+  return r - reply;
+}
+
+#endif
+
 /* Converter function from memory to human readable hex strings */
 static char*to_hex(char*d,uint8_t*s){char*m="0123456789ABCDEF";char *t=d;char*e=d+40;while(d<e){*d++=m[*s>>4];*d++=m[*s++&15];}*d=0;return t;}
 
@@ -377,15 +481,20 @@ size_t return_stats_for_tracker( char *reply, int mode, int format ) {
       return stats_httperrors_txt( reply );
     case TASK_STATS_VERSION:
       return stats_return_tracker_version( reply );
+    case TASK_STATS_BUSY_NETWORKS:
+      return stats_return_busy_networks( reply );
     default:
       return 0;
   }
 }
 
-void stats_issue_event( ot_status_event event, int is_tcp, size_t event_data ) {
+void stats_issue_event( ot_status_event event, int is_tcp, uint32_t event_data ) {
   switch( event ) {
     case EVENT_ACCEPT:
       if( is_tcp ) ot_overall_tcp_connections++; else ot_overall_udp_connections++;
+#ifdef WANT_LOG_NETWORKS
+      stat_increase_network_count( &stats_network_counters_root, 0, event_data );
+#endif
       break;
     case EVENT_ANNOUNCE:
       if( is_tcp ) ot_overall_tcp_successfulannounces++; else ot_overall_udp_successfulannounces++;

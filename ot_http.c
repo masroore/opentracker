@@ -259,6 +259,8 @@ static ssize_t http_handle_stats( const int64 client_socket, char *data, char *d
         mode = TASK_STATS_TORADDREM;
       else if( !byte_diff(data,4,"vers"))
         mode = TASK_STATS_VERSION;
+      else if( !byte_diff(data,4,"busy"))
+        mode = TASK_STATS_BUSY_NETWORKS;
       else
         HTTPERROR_400_PARAM;
       break;

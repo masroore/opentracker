@@ -167,7 +167,7 @@ static void handle_accept( const int64 serversocket ) {
     memset( h, 0, sizeof( struct http_data ) );
     memmove( h->ip, ip, sizeof( ip ) );
 
-    stats_issue_event( EVENT_ACCEPT, 1, 0);
+    stats_issue_event( EVENT_ACCEPT, 1, ntohl(*(uint32_t*)ip));
 
     /* That breaks taia encapsulation. But there is no way to take system
        time this often in FreeBSD and libowfat does not allow to set unix time */

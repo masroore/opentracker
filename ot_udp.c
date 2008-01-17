@@ -54,7 +54,7 @@ void handle_udp4( int64 serversocket ) {
 
   r = socket_recv4( serversocket, static_inbuf, sizeof( static_inbuf ), remoteip, &remoteport);
 
-  stats_issue_event( EVENT_ACCEPT, 0, 0 );
+  stats_issue_event( EVENT_ACCEPT, 0, ntohl(*(uint32_t*)remoteip) );
   stats_issue_event( EVENT_READ, 0, r );
 
   /* Minimum udp tracker packet size, also catches error */
