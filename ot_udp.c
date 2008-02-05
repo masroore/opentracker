@@ -84,9 +84,11 @@ void handle_udp4( int64 serversocket ) {
 /*      if( !udp_test_connectionid( inpacket, remoteip ))
         fprintf( stderr, "UDP Connection id missmatch.\n" ); */
 
-      numwant = 200;
       /* We do only want to know, if it is zero */
       left  = inpacket[64/4] | inpacket[68/4];
+
+      numwant = ntohl( inpacket[92/4] );
+      if (numwant > 200) numwant = 200;
 
       event = ntohl( inpacket[80/4] );
       port  = *(uint16_t*)( static_inbuf + 96 );

@@ -304,8 +304,8 @@ exit_loop:
 
   /* else { Handle UDP reply */
   ((uint32_t*)reply)[2] = htonl( OT_CLIENT_REQUEST_INTERVAL_RANDOM );
-  ((uint32_t*)reply)[3] = peer_list->peer_count - peer_list->seed_count;
-  ((uint32_t*)reply)[4] = peer_list->seed_count;
+  ((uint32_t*)reply)[3] = htonl( peer_list->peer_count - peer_list->seed_count );
+  ((uint32_t*)reply)[4] = htonl( peer_list->seed_count);
 
   mutex_bucket_unlock_by_hash( hash );
   return (size_t)20;
