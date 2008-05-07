@@ -5,12 +5,12 @@ CC?=gcc
 # Linux flavour
 # PREFIX?=/opt/diet
 # LIBOWFAT_HEADERS=$(PREFIX)/include
-# LIBOWFAT_LIBRARY=$(PREIFX)/lib
+# LIBOWFAT_LIBRARY=$(PREFIX)/lib
 
 # BSD flavour
 # PREFIX?=/usr/local
 # LIBOWFAT_HEADERS=$(PREFIX)/include/libowfat
-# LIBOWFAT_LIBRARY=$(PREIFX)/lib
+# LIBOWFAT_LIBRARY=$(PREFIX)/lib
 
 # Debug flavour
 PREFIX?=..
