@@ -165,7 +165,7 @@ size_t return_peers_for_torrent( ot_hash *hash, size_t amount, char *reply, int 
     amount = peer_list->peer_count;
 
   if( is_tcp )
-    r += sprintf( r, "d8:completei%zde10:incompletei%zde8:intervali%ie5:peers%zd:", peer_list->seed_count, peer_list->peer_count-peer_list->seed_count, OT_CLIENT_REQUEST_INTERVAL_RANDOM, 6*amount );
+    r += sprintf( r, "d8:completei%zde10:downloadedi%zde10:incompletei%zde8:intervali%ie5:peers%zd:", peer_list->seed_count, peer_list->down_count, peer_list->peer_count-peer_list->seed_count, OT_CLIENT_REQUEST_INTERVAL_RANDOM, 6*amount );
   else {
     *(uint32_t*)(r+0) = htonl( OT_CLIENT_REQUEST_INTERVAL_RANDOM );
     *(uint32_t*)(r+4) = htonl( peer_list->peer_count );
