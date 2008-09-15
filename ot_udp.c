@@ -30,7 +30,6 @@ static void udp_make_connectionid( uint32_t * connid, const char * remoteip ) {
   memcpy( connid, g_static_connid, 8 );
 }
 
-#if 0
 static int udp_test_connectionid( const uint32_t * const connid, const char * remoteip ) {
   /* Touch unused variable */
   (void)remoteip;
@@ -38,7 +37,6 @@ static int udp_test_connectionid( const uint32_t * const connid, const char * re
   /* Test against our static secret */
   return !memcmp( connid, g_static_connid, 8 );
 }
-#endif
 
 /* UDP implementation according to http://xbtt.sourceforge.net/udp_tracker_protocol.html */
 void handle_udp4( int64 serversocket ) {
@@ -81,8 +79,8 @@ void handle_udp4( int64 serversocket ) {
       if( r < 98 )
         return;
 
-/*      if( !udp_test_connectionid( inpacket, remoteip ))
-        fprintf( stderr, "UDP Connection id missmatch.\n" ); */
+        if( !udp_test_connectionid( inpacket, remoteip ))
+        fprintf( stderr, "UDP connect Connection id missmatch.\n" );
 
       /* We do only want to know, if it is zero */
       left  = inpacket[64/4] | inpacket[68/4];
@@ -125,8 +123,8 @@ void handle_udp4( int64 serversocket ) {
       break;
 
     case 2: /* This is a scrape action */
-/*      if( !udp_test_connectionid( inpacket, remoteip ))
-        fprintf( stderr, "UDP Connection id missmatch.\n" ); */
+        if( !udp_test_connectionid( inpacket, remoteip ))
+        fprintf( stderr, "UDP scrape Connection id missmatch.\n" );
 
       outpacket[0] = htonl( 2 );    /* scrape action */
       outpacket[1] = inpacket[12/4];
