@@ -14,6 +14,7 @@
 #include <signal.h>
 #include <stdio.h>
 #include <pwd.h>
+#include <arpa/inet.h>
 
 /* Libowfat */
 #include "socket.h"
