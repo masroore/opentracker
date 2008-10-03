@@ -1,26 +1,20 @@
 # opentracker config file
 #
 
-# I)   Control directory where opentracker will chdir to. So all black/white
-#      list files may be put in that directory. (shell option -d)
-#
-# root_dir /usr/local/etc/opentracker
-#
-
-# II)  ip addresses for tcp connections, either bind to INADDR_ANY port 6969
+# I)   ip addresses for tcp connections, either bind to INADDR_ANY port 6969
 #      (when no shell option is present)
 #
-# connect_tcp 0.0.0.0
+# listen.tcp 0.0.0.0
 #
 #      or specify them one by one (shell option -i 192.168.0.1 -p 6969)
 #
-# connect_tcp 192.168.0.1:6969
-# connect_tcp 192.168.0.2:6969
-# connect_tcp 192.168.0.3:6969
+# listen.tcp 192.168.0.1:6969
+# listen.tcp 192.168.0.2:6969
+# listen.tcp 192.168.0.3:6969
 
-# III) the same goes for udp connections (shell option -i 192.168.0.1 -P 6969)
+# II)  the same goes for udp connections (shell option -i 192.168.0.1 -P 6969)
 #
-# connect_udp 192.168.0.1:6969
+# listen.udp 192.168.0.1:6969
 #
 #      Note, that using 0.0.0.0 for udp sockets may yield surprising results.
 #      An answer packet sent on that socket will not necessarily have the
@@ -28,43 +22,49 @@
 #      on that interface
 #
 
-# IV)  If opentracker runs in a non-open mode, point it to files containing
+# III) If opentracker runs in a non-open mode, point it to files containing
 #      all torrent hashes that it will serve (shell option -w)
 #
-# whitelist_filename /path/to/whitelist
+# access.whitelist /path/to/whitelist
 #
 #      or, if opentracker was compiled to allow blacklisting (shell option -b)
 #
-# blacklist_filename ./blacklist
+# access.blacklist ./blacklist
 #
 #      It is pointless and hence not possible to compile black AND white
 #      listing, so choose one of those options. File format is straight
 #      forward: "<hex info hash>\n<hex info hash>\n..."
 #
 
-# V)   opentracker can be told to answer to a "GET / HTTP"-request with a
-#      redirect to another location (shell option -r)
-#
-# redirect_url https://project.tracker.local/
-
-# VI)  Sync between trackers running in a cluster is restricted to packets
+# IV)  Sync between trackers running in a cluster is restricted to packets
 #      coming from trusted ip addresses. While source ip verification is far
 #      from perfect, the authors of opentracker trust in the correct
 #      application of tunnels, filters and LAN setups (shell option -A)
 #
-# livesync_cluster_ip 192.168.0.4
-# livesync_cluster_ip 192.168.0.5
-# livesync_cluster_ip 192.168.0.6
+# livesync.cluster.node_ip 192.168.0.4
+# livesync.cluster.node_ip 192.168.0.5
+# livesync.cluster.node_ip 192.168.0.6
 #
-# batchsync_cluster_ip 10.1.1.1
+# batchsync.cluster.admin_ip 10.1.1.1
 #
 
-# VII) ip address to listen for outgoing and incoming live sync packets
+# V)   ip address to listen for outgoing and incoming live sync packets
 #      (shell option -i 192.168.0.1 -s 9696)
 #
-# livesync_udp 192.168.0.1:9696
+# livesync.cluster.listen 192.168.0.1:9696
 #
 #      Note that two udp sockets will be opened. One on ip address 0.0.0.0
 #      port 9696, that will join the multicast group 224.23.42.1 for incoming
 #      udp packets and one on ip address 192.168.0.1 port 9696 for outgoing
 #      udp packets.
+
+# VI)  Control directory where opentracker will chdir to. So all black/white
+#      list files may be put in that directory. (shell option -d)
+#
+# tracker.rootdir /usr/local/etc/opentracker
+#
+
+# VII) opentracker can be told to answer to a "GET / HTTP"-request with a
+#      redirect to another location (shell option -r)
+#
+# tracker.redirect_url https://your.tracker.local/
