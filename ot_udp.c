@@ -52,8 +52,8 @@ void handle_udp4( int64 serversocket ) {
 
   r = socket_recv4( serversocket, static_inbuf, sizeof( static_inbuf ), remoteip, &remoteport);
 
-  stats_issue_event( EVENT_ACCEPT, 0, ntohl(*(uint32_t*)remoteip) );
-  stats_issue_event( EVENT_READ, 0, r );
+  stats_issue_event( EVENT_ACCEPT, FLAG_UDP, ntohl(*(uint32_t*)remoteip) );
+  stats_issue_event( EVENT_READ, FLAG_UDP, r );
 
   /* Minimum udp tracker packet size, also catches error */
   if( r < 16 )
@@ -72,7 +72,7 @@ void handle_udp4( int64 serversocket ) {
       udp_make_connectionid( outpacket + 2, remoteip );
 
       socket_send4( serversocket, static_outbuf, 16, remoteip, remoteport );
-      stats_issue_event( EVENT_CONNECT, 0, 16 );
+      stats_issue_event( EVENT_CONNECT, FLAG_UDP, 16 );
       break;
     case 1: /* This is an announce action */
       /* Minimum udp announce packet size */
@@ -109,9 +109,9 @@ void handle_udp4( int64 serversocket ) {
       outpacket[1] = inpacket[12/4];
 
       if( OT_FLAG( &peer ) & PEER_FLAG_STOPPED ) /* Peer is gone. */
-        r = remove_peer_from_torrent( hash, &peer, static_outbuf, 0 );
+        r = remove_peer_from_torrent( hash, &peer, static_outbuf, FLAG_UDP );
       else {
-        torrent = add_peer_to_torrent( hash, &peer  WANT_TRACKER_SYNC_PARAM( 0 ) );
+        torrent = add_peer_to_torrent( hash, &peer  WANT_SYNC_PARAM( 0 ) );
         if( !torrent )
           return; /* XXX maybe send error */
 
@@ -119,7 +119,7 @@ void handle_udp4( int64 serversocket ) {
       }
 
       socket_send4( serversocket, static_outbuf, r, remoteip, remoteport );
-      stats_issue_event( EVENT_ANNOUNCE, 0, r );
+      stats_issue_event( EVENT_ANNOUNCE, FLAG_UDP, r );
       break;
 
     case 2: /* This is a scrape action */
@@ -133,7 +133,7 @@ void handle_udp4( int64 serversocket ) {
         return_udp_scrape_for_torrent( (ot_hash*)( static_inbuf + 16 + 20 * r_out ), static_outbuf + 8 + 12 * r_out );
 
       socket_send4( serversocket, static_outbuf, 8 + 12 * r_out, remoteip, remoteport );
-      stats_issue_event( EVENT_SCRAPE, 0, r );
+      stats_issue_event( EVENT_SCRAPE, FLAG_UDP, r );
       break;
   }
 }

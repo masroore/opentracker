@@ -443,13 +443,13 @@ static size_t stats_httperrors_txt ( char * reply ) {
 extern const char
 *g_version_opentracker_c, *g_version_accesslist_c, *g_version_clean_c, *g_version_fullscrape_c, *g_version_http_c,
 *g_version_iovec_c, *g_version_mutex_c, *g_version_stats_c, *g_version_sync_c, *g_version_udp_c, *g_version_vector_c,
-*g_version_scan_urlencoded_query_c, *g_version_trackerlogic_c;
+*g_version_scan_urlencoded_query_c, *g_version_trackerlogic_c, *g_version_livesync_c;
 
 size_t stats_return_tracker_version( char *reply ) {
-  return sprintf( reply, "%s%s%s%s%s%s%s%s%s%s%s%s%s",
+  return sprintf( reply, "%s%s%s%s%s%s%s%s%s%s%s%s%s%s",
   g_version_opentracker_c, g_version_accesslist_c, g_version_clean_c, g_version_fullscrape_c, g_version_http_c,
   g_version_iovec_c, g_version_mutex_c, g_version_stats_c, g_version_sync_c, g_version_udp_c, g_version_vector_c,
-  g_version_scan_urlencoded_query_c, g_version_trackerlogic_c );
+  g_version_scan_urlencoded_query_c, g_version_trackerlogic_c, g_version_livesync_c );
 }
 
 size_t return_stats_for_tracker( char *reply, int mode, int format ) {
@@ -490,36 +490,36 @@ size_t return_stats_for_tracker( char *reply, int mode, int format ) {
   }
 }
 
-void stats_issue_event( ot_status_event event, int is_tcp, uint32_t event_data ) {
+void stats_issue_event( ot_status_event event, PROTO_FLAG proto, uint32_t event_data ) {
   switch( event ) {
     case EVENT_ACCEPT:
-      if( is_tcp ) ot_overall_tcp_connections++; else ot_overall_udp_connections++;
+      if( proto == FLAG_TCP ) ot_overall_tcp_connections++; else ot_overall_udp_connections++;
 #ifdef WANT_LOG_NETWORKS
       stat_increase_network_count( &stats_network_counters_root, 0, event_data );
 #endif
       break;
     case EVENT_ANNOUNCE:
-      if( is_tcp ) ot_overall_tcp_successfulannounces++; else ot_overall_udp_successfulannounces++;
+      if( proto == FLAG_TCP ) ot_overall_tcp_successfulannounces++; else ot_overall_udp_successfulannounces++;
       break;
    case EVENT_CONNECT:
-      if( is_tcp ) ot_overall_tcp_connects++; else ot_overall_udp_connects++;
+      if( proto == FLAG_TCP ) ot_overall_tcp_connects++; else ot_overall_udp_connects++;
       break;
     case EVENT_SCRAPE:
-      if( is_tcp ) ot_overall_tcp_successfulscrapes++; else ot_overall_udp_successfulscrapes++;
+      if( proto == FLAG_TCP ) ot_overall_tcp_successfulscrapes++; else ot_overall_udp_successfulscrapes++;
     case EVENT_FULLSCRAPE:
       ot_full_scrape_count++;
       ot_full_scrape_size += event_data;
       break;
     case EVENT_FULLSCRAPE_REQUEST:
       {
-      unsigned char ip[4]; *(int*)ip = is_tcp; /* ugly hack to transfer ip to stats */
+      unsigned char ip[4]; *(int*)ip = (int)proto; /* ugly hack to transfer ip to stats */
       LOG_TO_STDERR( "[%08d] scrp: %d.%d.%d.%d - FULL SCRAPE\n", (unsigned int)(g_now - ot_start_time), ip[0], ip[1], ip[2], ip[3] );
       ot_full_scrape_request_count++;
       }
       break;
     case EVENT_FULLSCRAPE_REQUEST_GZIP:
       {
-      unsigned char ip[4]; *(int*)ip = is_tcp; /* ugly hack to transfer ip to stats */
+      unsigned char ip[4]; *(int*)ip = (int)proto; /* ugly hack to transfer ip to stats */
       LOG_TO_STDERR( "[%08d] scrp: %d.%d.%d.%d - FULL SCRAPE GZIP\n", (unsigned int)(g_now - ot_start_time), ip[0], ip[1], ip[2], ip[3] );
       ot_full_scrape_request_count++;
       }

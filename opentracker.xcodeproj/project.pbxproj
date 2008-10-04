@@ -21,6 +21,7 @@
 		65542EE80CE0CA6B00469330 /* ot_udp.c in Sources */ = {isa = PBXBuildFile; fileRef = 65542EE70CE0CA6B00469330 /* ot_udp.c */; };
 		65542F920CE17CA900469330 /* ot_fullscrape.c in Sources */ = {isa = PBXBuildFile; fileRef = 65542F910CE17CA900469330 /* ot_fullscrape.c */; };
 		65B8DF3C0D0310D20017149E /* ot_http.c in Sources */ = {isa = PBXBuildFile; fileRef = 65B8DF3B0D0310D20017149E /* ot_http.c */; };
+		65FA33990E7EF09200F7D5A5 /* ot_livesync.c in Sources */ = {isa = PBXBuildFile; fileRef = 65FA33980E7EF09200F7D5A5 /* ot_livesync.c */; };
 		8DD76FB00486AB0100D96B5E /* opentracker.1 in CopyFiles */ = {isa = PBXBuildFile; fileRef = C6A0FF2C0290799A04C91782 /* opentracker.1 */; };
 /* End PBXBuildFile section */
 
@@ -66,6 +67,8 @@
 		65542F910CE17CA900469330 /* ot_fullscrape.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = ot_fullscrape.c; sourceTree = "<group>"; };
 		65B8DF3A0D0310D20017149E /* ot_http.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ot_http.h; sourceTree = "<group>"; };
 		65B8DF3B0D0310D20017149E /* ot_http.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = ot_http.c; sourceTree = "<group>"; };
+		65FA33970E7EF09200F7D5A5 /* ot_livesync.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ot_livesync.h; sourceTree = "<group>"; };
+		65FA33980E7EF09200F7D5A5 /* ot_livesync.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = ot_livesync.c; sourceTree = "<group>"; };
 		C6A0FF2C0290799A04C91782 /* opentracker.1 */ = {isa = PBXFileReference; lastKnownFileType = text.man; path = opentracker.1; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -107,6 +110,7 @@
 				65542E740CE08B9100469330 /* ot_clean.c */,
 				65542F910CE17CA900469330 /* ot_fullscrape.c */,
 				65B8DF3B0D0310D20017149E /* ot_http.c */,
+				65FA33980E7EF09200F7D5A5 /* ot_livesync.c */,
 				653A56B40CE28EC5000CF140 /* ot_iovec.c */,
 				65542D8F0CE07CED00469330 /* ot_mutex.c */,
 				65542D910CE07CED00469330 /* ot_stats.c */,
@@ -132,6 +136,7 @@
 		65542D810CE0786F00469330 /* Headers */ = {
 			isa = PBXGroup;
 			children = (
+				65FA33970E7EF09200F7D5A5 /* ot_livesync.h */,
 				653A320A0CE7F475007F0D03 /* ot_accesslist.h */,
 				65542E730CE08B9100469330 /* ot_clean.h */,
 				65542F900CE17CA900469330 /* ot_fullscrape.h */,
@@ -248,6 +253,7 @@
 				653A56B50CE28EC5000CF140 /* ot_iovec.c in Sources */,
 				653A320C0CE7F475007F0D03 /* ot_accesslist.c in Sources */,
 				65B8DF3C0D0310D20017149E /* ot_http.c in Sources */,
+				65FA33990E7EF09200F7D5A5 /* ot_livesync.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -6,14 +6,17 @@
 #ifndef __OT_ACCESSLIST_H__
 #define __OT_ACCESSLIST_H__
 
-#if defined ( WANT_BLACKLISTING ) && defined (WANT_CLOSED_TRACKER )
-  #error WANT_BLACKLISTING and WANT_CLOSED_TRACKER are exclusive.
+#if defined ( WANT_ACCESSLIST_BLACK ) && defined (WANT_ACCESSLIST_WHITE )
+  #error WANT_ACCESSLIST_BLACK and WANT_ACCESSLIST_WHITE are exclusive.
 #endif
 
-#if defined ( WANT_BLACKLISTING ) || defined (WANT_CLOSED_TRACKER )
-#define WANT_ACCESS_CONTROL
-void accesslist_init( char *accesslist_filename );
+#if defined ( WANT_ACCESSLIST_BLACK ) || defined (WANT_ACCESSLIST_WHITE )
+#define WANT_ACCESSLIST
+void accesslist_init( );
 int  accesslist_hashisvalid( ot_hash *hash );
+
+extern char *g_accesslist_filename;
+
 #else
 #define accesslist_init( accesslist_filename )
 #define accesslist_hashisvalid( hash ) 1
@@ -22,7 +25,8 @@ int  accesslist_hashisvalid( ot_hash *hash );
 typedef enum {
   OT_PERMISSION_MAY_FULLSCRAPE,
   OT_PERMISSION_MAY_SYNC,
-  OT_PERMISSION_MAY_STAT
+  OT_PERMISSION_MAY_STAT,
+  OT_PERMISSION_MAY_LIVESYNC
 } ot_permissions;
 
 int accesslist_blessip( char * ip, ot_permissions permissions );

@@ -28,10 +28,6 @@
 #include "ot_accesslist.h"
 #include "ot_sync.h"
 
-#ifndef WANT_TRACKER_SYNC
-#define add_peer_to_torrent(A,B,C) add_peer_to_torrent(A,B)
-#endif
-
 #define OT_MAXMULTISCRAPE_COUNT 64
 static ot_hash multiscrape_buf[OT_MAXMULTISCRAPE_COUNT];
 extern char *g_redirecturl;
@@ -103,7 +99,7 @@ ssize_t http_issue_error( const int64 client_socket, int code ) {
 #ifdef _DEBUG_HTTPERROR
   fprintf( stderr, "DEBUG: invalid request was: %s\n", debug_request );
 #endif
-  stats_issue_event( EVENT_FAILED, 1, code );
+  stats_issue_event( EVENT_FAILED, FLAG_TCP, code );
   http_senddata( client_socket, static_outbuf, reply_size);
   return -2;
 }
@@ -169,7 +165,7 @@ ssize_t http_sendiovecdata( const int64 client_socket, int iovec_entries, struct
   return 0;
 }
 
-#ifdef WANT_TRACKER_SYNC
+#ifdef WANT_SYNC_BATCH
 static ssize_t http_handle_sync( const int64 client_socket, char *data ) {
   struct http_data* h = io_getcookie( client_socket );
   size_t len;
@@ -193,7 +189,7 @@ static ssize_t http_handle_sync( const int64 client_socket, char *data ) {
       if( ( len = scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE ) ) < 10 ) HTTPERROR_400_PARAM;
       if( add_changeset_to_tracker( (uint8_t*)data, len ) ) HTTPERROR_400_PARAM;
       if( mode == SYNC_OUT ) {
-        stats_issue_event( EVENT_SYNC_IN, 1, 0 );
+        stats_issue_event( EVENT_SYNC_IN, FLAG_TCP, 0 );
         mode = SYNC_IN;
       }
       break;
@@ -203,7 +199,7 @@ static ssize_t http_handle_sync( const int64 client_socket, char *data ) {
   if( mode == SYNC_OUT ) {
     /* Pass this task to the worker thread */
     h->flag |= STRUCT_HTTP_FLAG_WAITINGFORTASK;
-    stats_issue_event( EVENT_SYNC_OUT_REQUEST, 1, 0 );
+    stats_issue_event( EVENT_SYNC_OUT_REQUEST, FLAG_TCP, 0 );
     sync_deliver( client_socket );
     io_dontwantread( client_socket );
     return -2;
@@ -216,7 +212,6 @@ static ssize_t http_handle_sync( const int64 client_socket, char *data ) {
 #endif
 
 static ssize_t http_handle_stats( const int64 client_socket, char *data, char *d, size_t l ) {
-  struct http_data* h = io_getcookie( client_socket );
   char *c = data;
   int mode = TASK_STATS_PEERS, scanon = 1, format = 0;
 
@@ -284,7 +279,11 @@ static ssize_t http_handle_stats( const int64 client_socket, char *data, char *d
     }
   }
 
+  /* Touch variable */
+  d=d;
+#ifdef WANT_FULLSCRAPE
   if( mode == TASK_STATS_TPB ) {
+    struct http_data* h = io_getcookie( client_socket );
     tai6464 t;
 #ifdef WANT_COMPRESSION_GZIP
     d[l-1] = 0;
@@ -292,9 +291,6 @@ static ssize_t http_handle_stats( const int64 client_socket, char *data, char *d
       h->flag |= STRUCT_HTTP_FLAG_GZIP;
       format |= TASK_FLAG_GZIP;
     }
-#else
-    /* Touch variable */
-    d=d;
 #endif
     /* Pass this task to the worker thread */
     h->flag |= STRUCT_HTTP_FLAG_WAITINGFORTASK;
@@ -305,12 +301,14 @@ static ssize_t http_handle_stats( const int64 client_socket, char *data, char *d
     io_dontwantread( client_socket );
     return -2;
   }
+#endif
 
   /* default format for now */
   if( !( l = return_stats_for_tracker( static_outbuf + SUCCESS_HTTP_HEADER_LENGTH, mode, 0 ) ) ) HTTPERROR_500;
   return l;
 }
 
+#ifdef WANT_FULLSCRAPE
 static ssize_t http_handle_fullscrape( const int64 client_socket, char *d, size_t l ) {
   struct http_data* h = io_getcookie( client_socket );
   int format = 0;
@@ -341,6 +339,7 @@ write( 2, debug_request, l );
   io_dontwantread( client_socket );
   return -2;
 }
+#endif
 
 static ssize_t http_handle_scrape( const int64 client_socket, char *data ) {
   int scanon = 1, numwant = 0;
@@ -387,7 +386,7 @@ UTORRENT1600_WORKAROUND:
 
   /* Enough for http header + whole scrape string */
   if( !( l = return_tcp_scrape_for_torrent( multiscrape_buf, numwant, SUCCESS_HTTP_HEADER_LENGTH + static_outbuf ) ) ) HTTPERROR_500;
-  stats_issue_event( EVENT_SCRAPE, 1, l );
+  stats_issue_event( EVENT_SCRAPE, FLAG_TCP, l );
   return l;
 }
 
@@ -486,12 +485,12 @@ static ssize_t http_handle_announce( const int64 client_socket, char *data ) {
     return sprintf( static_outbuf + SUCCESS_HTTP_HEADER_LENGTH, "d14:failure reason81:Your client forgot to send your torrent's info_hash. Please upgrade your client.e" );
 
   if( OT_FLAG( &peer ) & PEER_FLAG_STOPPED )
-    len = remove_peer_from_torrent( hash, &peer, SUCCESS_HTTP_HEADER_LENGTH + static_outbuf, 1 );
+    len = remove_peer_from_torrent( hash, &peer, SUCCESS_HTTP_HEADER_LENGTH + static_outbuf, FLAG_TCP );
   else {
-    torrent = add_peer_to_torrent( hash, &peer, 0 );
+    torrent = add_peer_to_torrent( hash, &peer  WANT_SYNC_PARAM( 0 ) );
     if( !torrent || !( len = return_peers_for_torrent( hash, numwant, SUCCESS_HTTP_HEADER_LENGTH + static_outbuf, 1 ) ) ) HTTPERROR_500;
   }
-  stats_issue_event( EVENT_ANNOUNCE, 1, len);
+  stats_issue_event( EVENT_ANNOUNCE, FLAG_TCP, len);
   return len;
 }
 
@@ -529,14 +528,16 @@ ssize_t http_handle_request( const int64 client_socket, char *data, size_t recv_
   /* This is the hardcore match for announce*/
   if( ( *data == 'a' ) || ( *data == '?' ) )
     reply_size = http_handle_announce( client_socket, c );
+#ifdef WANT_FULLSCRAPE
   else if( !byte_diff( data, 12, "scrape HTTP/" ) )
     reply_size = http_handle_fullscrape( client_socket, recv_header, recv_length );
+#endif
   /* This is the hardcore match for scrape */
   else if( !byte_diff( data, 2, "sc" ) )
     reply_size = http_handle_scrape( client_socket, c );
   /* All the rest is matched the standard way */
   else switch( len ) {
-#ifdef WANT_TRACKER_SYNC
+#ifdef WANT_SYNC_BATCH
   case 4: /* sync ? */
     if( byte_diff( data, 4, "sync") ) HTTPERROR_404;
     reply_size = http_handle_sync( client_socket, c );

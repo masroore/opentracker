@@ -23,7 +23,7 @@
 #include "ot_stats.h"
 #include "ot_iovec.h"
 
-#ifdef WANT_TRACKER_SYNC
+#ifdef WANT_SYNC_BATCH
 
 #define OT_SYNC_CHUNK_SIZE (512*1024)
 
@@ -141,7 +141,7 @@ static void * sync_worker( void * args) {
     ot_tasktype tasktype = TASK_SYNC_OUT;
     ot_taskid   taskid   = mutex_workqueue_poptask( &tasktype );
     sync_make( &iovec_entries, &iovector );
-    stats_issue_event( EVENT_SYNC_OUT, 1, iovec_length( &iovec_entries, &iovector) );
+    stats_issue_event( EVENT_SYNC_OUT, FLAG_TCP, iovec_length( &iovec_entries, &iovector) );
     if( mutex_workqueue_pushresult( taskid, iovec_entries, iovector ) )
       iovec_free( &iovec_entries, &iovector );
   }

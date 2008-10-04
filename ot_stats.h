@@ -34,7 +34,7 @@ enum {
   CODE_HTTPERROR_COUNT
 };
 
-void   stats_issue_event( ot_status_event event, int is_tcp, uint32_t event_data );
+void   stats_issue_event( ot_status_event event, PROTO_FLAG proto, uint32_t event_data );
 size_t return_stats_for_tracker( char *reply, int mode, int format );
 size_t stats_return_tracker_version( char *reply );
 void   stats_init( );

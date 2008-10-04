@@ -18,8 +18,8 @@
 #include "ot_accesslist.h"
 
 /* GLOBAL VARIABLES */
-#ifdef WANT_ACCESS_CONTROL
-static char *accesslist_filename = NULL;
+#ifdef WANT_ACCESSLIST
+char *g_accesslist_filename = NULL;
 static ot_vector accesslist;
 
 static void accesslist_reset( void ) {
@@ -46,13 +46,13 @@ static void accesslist_readfile( int foo ) {
   char    inbuf[512];
   foo = foo;
 
-  accesslist_filehandle = fopen( accesslist_filename, "r" );
+  accesslist_filehandle = fopen( g_accesslist_filename, "r" );
 
   /* Free accesslist vector in trackerlogic.c*/
   accesslist_reset();
 
   if( accesslist_filehandle == NULL ) {
-    fprintf( stderr, "Warning: Can't open accesslist file: %s (but will try to create it later, if necessary and possible).", accesslist_filename );
+    fprintf( stderr, "Warning: Can't open accesslist file: %s (but will try to create it later, if necessary and possible).", g_accesslist_filename );
     return;
   }
 
@@ -79,21 +79,20 @@ int accesslist_hashisvalid( ot_hash *hash ) {
   int exactmatch;
   binary_search( hash, accesslist.data, accesslist.size, OT_HASH_COMPARE_SIZE, OT_HASH_COMPARE_SIZE, &exactmatch );
 
-#ifdef WANT_BLACKLISTING
+#ifdef WANT_ACCESSLIST_BLACK
   exactmatch = !exactmatch;
 #endif
 
   return exactmatch;
 }
 
-void accesslist_init( char *accesslist_filename_in ) {
+void accesslist_init( ) {
   byte_zero( &accesslist, sizeof( accesslist ) );
 
   /* Passing "0" since read_blacklist_file also is SIGHUP handler */
-  if( accesslist_filename_in ) {
-    accesslist_filename = accesslist_filename_in;
+  if( g_accesslist_filename ) {
     accesslist_readfile( 0 );
-    signal( SIGHUP,  accesslist_readfile );
+    signal( SIGHUP, accesslist_readfile );
   }
 }
 
@@ -108,6 +107,7 @@ int accesslist_blessip( char *ip, ot_permissions permissions ) {
     return -1;
   memmove( g_adminip_addresses + g_adminip_count, ip, 4 );
   g_adminip_permissions[ g_adminip_count++ ] = permissions;
+//  fprintf( stderr, "Blessing ip address %d.%d.%d.%d with %02x\n", (uint8_t)ip[0], (uint8_t)ip[1], (uint8_t)ip[2], (uint8_t)ip[3], permissions );
   return 0;
 }
 

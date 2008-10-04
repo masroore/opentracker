@@ -3,6 +3,8 @@
    
    $id$ */
 
+#ifdef WANT_FULLSCRAPE
+
 /* System */
 #include <sys/param.h>
 #include <sys/uio.h>
@@ -226,5 +228,6 @@ static void fullscrape_make( int *iovec_entries, struct iovec **iovector, ot_tas
   /* Release unused memory in current output buffer */
   iovec_fixlast( iovec_entries, iovector, r );
 }
+#endif
 
 const char *g_version_fullscrape_c = "$Source$: $Revision$\n";

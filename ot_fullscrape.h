@@ -6,8 +6,17 @@
 #ifndef __OT_FULLSCRAPE_H__
 #define __OT_FULLSCRAPE_H__
 
+#ifdef WANT_FULLSCRAPE
+
 void fullscrape_init( );
 void fullscrape_deinit( );
 void fullscrape_deliver( int64 socket, ot_tasktype tasktype );
+
+#else
+
+#define fullscrape_init()
+#define fullscrape_deinit()
+
+#endif
 
 #endif

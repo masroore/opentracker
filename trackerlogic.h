@@ -43,6 +43,11 @@ typedef time_t         ot_time;
 /* From opentracker.c */
 extern time_t g_now;
 #define NOW              (g_now/OT_POOLS_TIMEOUT)
+extern uint32_t g_tracker_id;
+typedef enum { FLAG_TCP, FLAG_UDP, FLAG_MCA } PROTO_FLAG;
+
+/* Try to bind to ip:port pair. May call exit() on failure */
+int64_t ot_try_bind( char ip[4], uint16_t port, PROTO_FLAG proto );
 
 typedef struct {
   uint8_t data[8];
@@ -50,6 +55,7 @@ typedef struct {
 static const uint8_t PEER_FLAG_SEEDING   = 0x80;
 static const uint8_t PEER_FLAG_COMPLETED = 0x40;
 static const uint8_t PEER_FLAG_STOPPED   = 0x20;
+static const uint8_t PEER_FLAG_LEECHING  = 0x00;
 
 #define OT_SETIP( peer, ip ) memmove((peer),(ip),4);
 #define OT_SETPORT( peer, port ) memmove(((uint8_t*)peer)+4,(port),2);
@@ -74,7 +80,7 @@ struct ot_peerlist {
   size_t         down_count;
   size_t         seed_counts[ OT_POOLS_COUNT ];
   ot_vector      peers[ OT_POOLS_COUNT ];
-#ifdef WANT_TRACKER_SYNC
+#ifdef WANT_SYNC_BATCH
   ot_vector      changeset;
 #endif
 };
@@ -83,18 +89,23 @@ struct ot_peerlist {
    Exported functions
 */
 
-#ifdef WANT_TRACKER_SYNC
-#define WANT_TRACKER_SYNC_PARAM( param ) , param
+#if defined( WANT_SYNC_BATCH ) || defined( WANT_SYNC_LIVE )
+#define WANT_SYNC
+#endif
+
+#ifdef WANT_SYNC
+#define WANT_SYNC_PARAM( param ) , param
 #else
-#define WANT_TRACKER_SYNC_PARAM( param )
+#define WANT_SYNC_PARAM( param )
 #endif
 
 int  trackerlogic_init( const char * const serverdir );
 void trackerlogic_deinit( void );
+void exerr( char * message );
 
-ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer  WANT_TRACKER_SYNC_PARAM( int from_changeset ) );
-size_t remove_peer_from_torrent( ot_hash *hash, ot_peer *peer, char *reply, int is_tcp );
-size_t return_peers_for_torrent( ot_hash *hash, size_t amount, char *reply, int is_tcp );
+ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer  WANT_SYNC_PARAM( int from_changeset ) );
+size_t remove_peer_from_torrent( ot_hash *hash, ot_peer *peer, char *reply, PROTO_FLAG proto );
+size_t return_peers_for_torrent( ot_hash *hash, size_t amount, char *reply, PROTO_FLAG proto );
 size_t return_tcp_scrape_for_torrent( ot_hash *hash, int amount, char *reply );
 size_t return_udp_scrape_for_torrent( ot_hash *hash, char *reply );
 

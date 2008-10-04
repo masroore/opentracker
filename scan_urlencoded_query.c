@@ -64,13 +64,13 @@ void scan_urlencoded_skipvalue( char **string ) {
 ssize_t scan_urlencoded_query(char **string, char *deststring, SCAN_SEARCHPATH_FLAG flags) {
   const unsigned char* s=*(const unsigned char**) string;
   unsigned char *d = (unsigned char*)deststring;
-  unsigned char b, c, f;
+  unsigned char b, c;
 
   /* This is the main decoding loop.
     'flag' determines, which characters are non-terminating in current context
     (ie. stop at '=' and '&' if scanning for a 'param'; stop at '?' if scanning for the path )
   */
-  while( ( f = is_unreserved[ c = *s++ ] ) & flags ) {
+  while( is_unreserved[ c = *s++ ] & flags ) {
 
     /* When encountering an url escaped character, try to decode */
     if( c=='%') {

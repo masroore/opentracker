@@ -14,6 +14,7 @@
 #include <unistd.h>
 #include <time.h>
 #include <math.h>
+#include <errno.h>
 
 /* Libowfat */
 #include "scan.h"
@@ -28,19 +29,20 @@
 #include "ot_accesslist.h"
 #include "ot_fullscrape.h"
 #include "ot_sync.h"
+#include "ot_livesync.h"
 
 void free_peerlist( ot_peerlist *peer_list ) {
   size_t i;
   for( i=0; i<OT_POOLS_COUNT; ++i )
     if( peer_list->peers[i].data )
       free( peer_list->peers[i].data );
-#ifdef WANT_TRACKER_SYNC
+#ifdef WANT_SYNC_BATCH
   free( peer_list->changeset.data );
 #endif
   free( peer_list );
 }
 
-ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer  WANT_TRACKER_SYNC_PARAM( int from_changeset ) ) {
+ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer  WANT_SYNC_PARAM( int from_changeset ) ) {
   int         exactmatch;
   ot_torrent *torrent;
   ot_peer    *peer_dest;
@@ -58,6 +60,11 @@ ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer  WANT_TRACKER_SYNC
     return NULL;
   }
 
+#ifdef WANT_SYNC_LIVE
+  if( !from_changeset )
+    livesync_tell( hash, peer, PEER_FLAG_LEECHING );
+#endif
+  
   if( !exactmatch ) {
     /* Create a new torrent entry, then */
     memmove( &torrent->hash, hash, sizeof( ot_hash ) );
@@ -79,7 +86,7 @@ ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer  WANT_TRACKER_SYNC
   if( ( OT_FLAG( peer ) & ( PEER_FLAG_COMPLETED | PEER_FLAG_SEEDING ) ) == PEER_FLAG_COMPLETED )
     OT_FLAG( peer ) ^= PEER_FLAG_COMPLETED;
 
-#ifdef WANT_TRACKER_SYNC
+#ifdef WANT_SYNC
   if( from_changeset ) {
     /* Check, whether peer already is in current pool, do nothing if so */
     peer_pool = &torrent->peer_list->peers[0];
@@ -148,7 +155,7 @@ ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer  WANT_TRACKER_SYNC
    * RANDOM may return huge values
    * does not yet check not to return self
 */
-size_t return_peers_for_torrent( ot_hash *hash, size_t amount, char *reply, int is_tcp ) {
+size_t return_peers_for_torrent( ot_hash *hash, size_t amount, char *reply, PROTO_FLAG proto ) {
   char        *r = reply;
   int          exactmatch;
   ot_vector   *torrents_list = mutex_bucket_lock_by_hash( hash );
@@ -164,7 +171,7 @@ size_t return_peers_for_torrent( ot_hash *hash, size_t amount, char *reply, int 
   if( peer_list->peer_count < amount )
     amount = peer_list->peer_count;
 
-  if( is_tcp )
+  if( proto == FLAG_TCP )
     r += sprintf( r, "d8:completei%zde10:downloadedi%zde10:incompletei%zde8:intervali%ie5:peers%zd:", peer_list->seed_count, peer_list->down_count, peer_list->peer_count-peer_list->seed_count, OT_CLIENT_REQUEST_INTERVAL_RANDOM, 6*amount );
   else {
     *(uint32_t*)(r+0) = htonl( OT_CLIENT_REQUEST_INTERVAL_RANDOM );
@@ -204,7 +211,7 @@ size_t return_peers_for_torrent( ot_hash *hash, size_t amount, char *reply, int 
       r += 6;
     }
   }
-  if( is_tcp )
+  if( proto == FLAG_TCP )
     *r++ = 'e';
 
   mutex_bucket_unlock_by_hash( hash );
@@ -263,23 +270,33 @@ size_t return_tcp_scrape_for_torrent( ot_hash *hash_list, int amount, char *repl
   return r - reply;
 }
 
-size_t remove_peer_from_torrent( ot_hash *hash, ot_peer *peer, char *reply, int is_tcp ) {
+size_t remove_peer_from_torrent( ot_hash *hash, ot_peer *peer, char *reply, PROTO_FLAG proto ) {
   int          exactmatch;
   size_t       index;
   ot_vector   *torrents_list = mutex_bucket_lock_by_hash( hash );
   ot_torrent  *torrent = binary_search( hash, torrents_list->data, torrents_list->size, sizeof( ot_torrent ), OT_HASH_COMPARE_SIZE, &exactmatch );
   ot_peerlist *peer_list;
 
+#ifdef WANT_SYNC_LIVE  
+  if( proto != FLAG_MCA )
+    livesync_tell( hash, peer, PEER_FLAG_STOPPED );
+#endif
+
   if( !exactmatch ) {
     mutex_bucket_unlock_by_hash( hash );
 
-    if( is_tcp )
+    if( proto == FLAG_TCP )
       return sprintf( reply, "d8:completei0e10:incompletei0e8:intervali%ie5:peers0:e", OT_CLIENT_REQUEST_INTERVAL_RANDOM );
 
     /* Create fake packet to satisfy parser on the other end */
-    ((uint32_t*)reply)[2] = htonl( OT_CLIENT_REQUEST_INTERVAL_RANDOM );
-    ((uint32_t*)reply)[3] = ((uint32_t*)reply)[4] = 0;
-    return (size_t)20;
+    if( proto == FLAG_UDP ) {
+      ((uint32_t*)reply)[2] = htonl( OT_CLIENT_REQUEST_INTERVAL_RANDOM );
+      ((uint32_t*)reply)[3] = ((uint32_t*)reply)[4] = 0;
+      return (size_t)20;
+    }
+    
+    if( proto == FLAG_MCA )
+      return 0;
   }
 
   peer_list = torrent->peer_list;
@@ -296,37 +313,46 @@ size_t remove_peer_from_torrent( ot_hash *hash, ot_peer *peer, char *reply, int 
 
 exit_loop:
 
-  if( is_tcp ) {
+  if( proto == FLAG_TCP ) {
     size_t reply_size = sprintf( reply, "d8:completei%zde10:incompletei%zde8:intervali%ie5:peers0:e", peer_list->seed_count, peer_list->peer_count - peer_list->seed_count, OT_CLIENT_REQUEST_INTERVAL_RANDOM );
     mutex_bucket_unlock_by_hash( hash );
     return reply_size;
   }
 
-  /* else { Handle UDP reply */
-  ((uint32_t*)reply)[2] = htonl( OT_CLIENT_REQUEST_INTERVAL_RANDOM );
-  ((uint32_t*)reply)[3] = htonl( peer_list->peer_count - peer_list->seed_count );
-  ((uint32_t*)reply)[4] = htonl( peer_list->seed_count);
+  /* Handle UDP reply */
+  if( proto == FLAG_TCP ) {
+    ((uint32_t*)reply)[2] = htonl( OT_CLIENT_REQUEST_INTERVAL_RANDOM );
+    ((uint32_t*)reply)[3] = htonl( peer_list->peer_count - peer_list->seed_count );
+    ((uint32_t*)reply)[4] = htonl( peer_list->seed_count);
+  }
 
   mutex_bucket_unlock_by_hash( hash );
   return (size_t)20;
 }
 
+void exerr( char * message ) {
+  fprintf( stderr, "%s\n", message );
+  exit( 111 );
+}
+
 int trackerlogic_init( const char * const serverdir ) {
   if( serverdir && chdir( serverdir ) ) {
-    fprintf( stderr, "Could not chdir() to %s\n", serverdir );
+    fprintf( stderr, "Could not chdir() to %s, because %s\n", serverdir, strerror(errno) );
     return -1;
   }
 
   srandom( time(NULL) );
-
+  g_tracker_id = random();
+  
   /* Initialise background worker threads */
   mutex_init( );
   clean_init( );
   fullscrape_init( );
-#ifdef WANT_TRACKER_SYNC
+  accesslist_init( );
+  livesync_init( );
   sync_init( );
-#endif
   stats_init( );
+
   return 0;
 }
 
@@ -349,9 +375,9 @@ void trackerlogic_deinit( void ) {
 
   /* Deinitialise background worker threads */
   stats_deinit( );
-#ifdef WANT_TRACKER_SYNC
   sync_deinit( );
-#endif
+  livesync_init( );
+  accesslist_init( );
   fullscrape_deinit( );
   clean_deinit( );
   mutex_deinit( );

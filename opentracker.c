@@ -8,12 +8,14 @@
 #include <string.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <arpa/inet.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <errno.h>
 #include <signal.h>
 #include <stdio.h>
 #include <pwd.h>
+#include <ctype.h>
 #include <arpa/inet.h>
 
 /* Libowfat */
@@ -21,6 +23,7 @@
 #include "io.h"
 #include "iob.h"
 #include "array.h"
+#include "byte.h"
 #include "fmt.h"
 #include "scan.h"
 #include "ip4.h"
@@ -34,16 +37,17 @@
 #include "ot_clean.h"
 #include "ot_accesslist.h"
 #include "ot_stats.h"
+#include "ot_livesync.h"
 
 /* Globals */
-time_t g_now;
-char * g_redirecturl = NULL;
+time_t   g_now;
+char *   g_redirecturl = NULL;
+uint32_t g_tracker_id;
+
+static char * g_serverdir = NULL;
 
 /* To always have space for error messages ;) */
 static char static_inbuf[8192];
-
-static char *FLAG_TCP = "T";
-static char *FLAG_UDP = "U";
 
 static void panic( const char *routine ) {
   fprintf( stderr, "%s: %s\n", routine, strerror(errno) );
@@ -63,10 +67,10 @@ static void signal_handler( int s ) {
 }
 
 static void usage( char *name ) {
-  fprintf( stderr, "Usage: %s [-i ip] [-p port] [-P port] [-r redirect] [-d dir] [-A ip]"
-#ifdef WANT_BLACKLISTING
+  fprintf( stderr, "Usage: %s [-i ip] [-p port] [-P port] [-r redirect] [-d dir] [-A ip] [-f config] [-s livesyncport]"
+#ifdef WANT_ACCESSLIST_BLACK
   " [-b blacklistfile]"
-#elif defined ( WANT_CLOSED_TRACKER )
+#elif defined ( WANT_ACCESSLIST_WHITE )
   " [-w whitelistfile]"
 #endif
   "\n", name );
@@ -82,9 +86,9 @@ static void help( char *name ) {
   HELPLINE("-r redirecturl","specify url where / should be redirected to (default none)");
   HELPLINE("-d dir","specify directory to try to chroot to (default: \".\")");
   HELPLINE("-A ip","bless an ip address as admin address (e.g. to allow syncs from this address)");
-#ifdef WANT_BLACKLISTING
+#ifdef WANT_ACCESSLIST_BLACK
   HELPLINE("-b file","specify blacklist file.");
-#elif defined( WANT_CLOSED_TRACKER )
+#elif defined( WANT_ACCESSLIST_WHITE )
   HELPLINE("-w file","specify whitelist file.");
 #endif
 
@@ -168,7 +172,7 @@ static void handle_accept( const int64 serversocket ) {
     memset( h, 0, sizeof( struct http_data ) );
     memmove( h->ip, ip, sizeof( ip ) );
 
-    stats_issue_event( EVENT_ACCEPT, 1, ntohl(*(uint32_t*)ip));
+    stats_issue_event( EVENT_ACCEPT, FLAG_TCP, ntohl(*(uint32_t*)ip));
 
     /* That breaks taia encapsulation. But there is no way to take system
        time this often in FreeBSD and libowfat does not allow to set unix time */
@@ -194,10 +198,12 @@ static void server_mainloop( ) {
 
     while( ( i = io_canread( ) ) != -1 ) {
       const void *cookie = io_getcookie( i );
-      if( cookie == FLAG_TCP )
+      if( (int)cookie == FLAG_TCP )
         handle_accept( i );
-      else if( cookie == FLAG_UDP )
+      else if( (int)cookie == FLAG_UDP )
         handle_udp4( i );
+      else if( (int)cookie == FLAG_MCA )
+        handle_livesync(i);
       else
         handle_read( i );
     }
@@ -214,6 +220,8 @@ static void server_mainloop( ) {
       next_timeout_check = g_now + OT_CLIENT_TIMEOUT_CHECKINTERVAL;
     }
 
+    livesync_ticker();
+    
     /* See if we need to move our pools */
     if( NOW != ot_last_clean_time ) {
       ot_last_clean_time = NOW;
@@ -225,55 +233,148 @@ static void server_mainloop( ) {
   }
 }
 
-static void ot_try_bind( char ip[4], uint16 port, int is_tcp ) {
-  int64 s = is_tcp ? socket_tcp4( ) : socket_udp4();
-
+int64_t ot_try_bind( char ip[4], uint16_t port, PROTO_FLAG proto ) {
+  int64 s = proto == FLAG_TCP ? socket_tcp4( ) : socket_udp4();
+  
   if( socket_bind4_reuse( s, ip, port ) == -1 )
     panic( "socket_bind4_reuse" );
 
-  if( is_tcp && ( socket_listen( s, SOMAXCONN) == -1 ) )
+  if( ( proto == FLAG_TCP ) && ( socket_listen( s, SOMAXCONN) == -1 ) )
     panic( "socket_listen" );
 
   if( !io_fd( s ) )
     panic( "io_fd" );
 
-  io_setcookie( s, is_tcp ? FLAG_TCP : FLAG_UDP );
+  io_setcookie( s, (void*)proto );
 
   io_wantread( s );
+  
+  return s;
+}
+
+char * set_config_option( char **option, char *value ) {
+  while( isspace(*value) ) ++value;
+  if( *option ) free( *option );
+  return *option = strdup( value );
+}
+
+/* WARNING! Does not behave like scan_ip4 regarding return values */
+static int scan_ip4_port( const char *src, char *ip, uint16 *port ) {
+  int off;
+  while( isspace(*src) ) ++src;
+  if( !(off = scan_ip4( src, ip ) ) )
+    return -1;
+  src += off;
+  if( *src == 0 ) return 0;
+  if( *src != ':' )
+    return -1;
+  *port = atol(src+1);
+  return 0;
+}
+
+int parse_configfile( char * config_filename ) {
+  FILE *  accesslist_filehandle;
+  char    inbuf[512], tmpip[4];
+  int     bound = 0;
+
+  accesslist_filehandle = fopen( config_filename, "r" );
+    
+  if( accesslist_filehandle == NULL ) {
+    fprintf( stderr, "Warning: Can't open config file: %s.", config_filename );
+    return 0;
+  }
+  
+  while( fgets( inbuf, sizeof(inbuf), accesslist_filehandle ) ) {
+    char *newl;
+    char *p = inbuf;
+
+    /* Skip white spaces */
+    while(isspace(*p)) ++p;
+    
+    /* Ignore comments and empty lines */
+    if((*p=='#')||(*p=='\n')||(*p==0)) continue;
+
+    /* chomp */
+    if(( newl = strchr(p, '\n' ))) *newl = 0;
+
+    /* Scan for commands */
+    if(!byte_diff(p,15,"tracker.rootdir" ) && isspace(p[15])) {
+      set_config_option( &g_serverdir, p+16 );
+    } else if(!byte_diff(p,10,"listen.tcp" ) && isspace(p[10])) {
+      uint16_t tmpport = 6969;
+      if( scan_ip4_port( p+11, tmpip, &tmpport )) goto parse_error;
+      ot_try_bind( tmpip, tmpport, FLAG_TCP );
+      ++bound;
+    } else if(!byte_diff(p, 10, "listen.udp" ) && isspace(p[10])) {
+      uint16_t tmpport = 6969;
+      if( scan_ip4_port( p+11, tmpip, &tmpport )) goto parse_error;
+      ot_try_bind( tmpip, tmpport, FLAG_UDP );
+      ++bound;
+#ifdef WANT_ACCESSLIST_BLACK
+    } else if(!byte_diff(p, 16, "access.whitelist" ) && isspace(p[16])) {
+      set_config_option( &g_accesslist_filename, p+17 );
+#elif defined( WANT_ACCESSLIST_WHITE )
+    } else if(!byte_diff(p, 16, "access.blacklist" ) && isspace(p[16])) {
+      set_config_option( &g_accesslist_filename, p+17 );
+#endif
+    } else if(!byte_diff(p, 20, "tracker.redirect_url" ) && isspace(p[20])) {
+      set_config_option( &g_redirecturl, p+21 );
+#ifdef WANT_SYNC_BATCH
+    } else if(!byte_diff(p, 26, "batchsync.cluster.admin_ip" ) && isspace(p[26])) {
+      if(!scan_ip4( p+27, tmpip )) goto parse_error;
+      accesslist_blessip( tmpip, OT_PERMISSION_MAY_SYNC );
+#endif
+#ifdef WANT_SYNC_LIVE
+    } else if(!byte_diff(p, 24, "livesync.cluster.node_ip" ) && isspace(p[24])) {
+      if( !scan_ip4( p+25, tmpip )) goto parse_error;
+      accesslist_blessip( tmpip, OT_PERMISSION_MAY_LIVESYNC );
+    } else if(!byte_diff(p, 23, "livesync.cluster.listen" ) && isspace(p[23])) {
+      uint16_t tmpport = LIVESYNC_PORT;
+      if( scan_ip4_port( p+24, tmpip, &tmpport )) goto parse_error;
+      livesync_bind_mcast( tmpip, tmpport );
+#endif
+    } else
+      fprintf( stderr, "Unhandled line in config file: %s\n", inbuf );
+    continue;
+  parse_error:
+      fprintf( stderr, "Parse error in config file: %s\n", inbuf);    
+  }
+  fclose( accesslist_filehandle );
+  return bound;
 }
 
 int main( int argc, char **argv ) {
   struct passwd *pws = NULL;
   char serverip[4] = {0,0,0,0}, tmpip[4];
-  char *serverdir = ".";
   int bound = 0, scanon = 1;
-#ifdef WANT_ACCESS_CONTROL
-  char *accesslist_filename = NULL;
-#endif
-
-  while( scanon ) {
-    switch( getopt( argc, argv, ":i:p:A:P:d:r:v"
-#ifdef WANT_BLACKLISTING
+  
+while( scanon ) {
+    switch( getopt( argc, argv, ":i:p:A:P:d:r:s:f:v"
+#ifdef WANT_ACCESSLIST_BLACK
 "b:"
-#elif defined( WANT_CLOSED_TRACKER )
+#elif defined( WANT_ACCESSLIST_WHITE )
 "w:"
 #endif
     "h" ) ) {
       case -1 : scanon = 0; break;
       case 'i': scan_ip4( optarg, serverip ); break;
-#ifdef WANT_BLACKLISTING
-      case 'b': accesslist_filename = optarg; break;
-#elif defined( WANT_CLOSED_TRACKER )
-      case 'w': accesslist_filename = optarg; break;
+#ifdef WANT_ACCESSLIST_BLACK
+      case 'b': set_config_option( &g_accesslist_filename, optarg); break;
+#elif defined( WANT_ACCESSLIST_WHITE )
+      case 'w': set_config_option( &g_accesslist_filename, optarg); break;
 #endif
-      case 'p': ot_try_bind( serverip, (uint16)atol( optarg ), 1 ); bound++; break;
-      case 'P': ot_try_bind( serverip, (uint16)atol( optarg ), 0 ); bound++; break;
-      case 'd': serverdir = optarg; break;
-      case 'r': g_redirecturl = optarg; break;
+      case 'p': ot_try_bind( serverip, (uint16)atol( optarg ), FLAG_TCP ); bound++; break;
+      case 'P': ot_try_bind( serverip, (uint16)atol( optarg ), FLAG_UDP ); bound++; break;
+#ifdef WANT_SYNC_LIVE
+      case 's': livesync_bind_mcast( serverip, (uint16)atol( optarg )); break;
+#endif
+      case 'd': set_config_option( &g_serverdir, optarg ); break;
+      case 'r': set_config_option( &g_redirecturl, optarg ); break;
       case 'A':
         scan_ip4( optarg, tmpip );
         accesslist_blessip( tmpip, 0xffff ); /* Allow everything for now */
         break;
+      case 'f': bound += parse_configfile( optarg ); break;
       case 'h': help( argv[0] ); exit( 0 );
       case 'v': write( 2, static_inbuf, stats_return_tracker_version( static_inbuf )); exit( 0 );
       default:
@@ -283,8 +384,8 @@ int main( int argc, char **argv ) {
 
   /* Bind to our default tcp/udp ports */
   if( !bound) {
-    ot_try_bind( serverip, 6969, 1 );
-    ot_try_bind( serverip, 6969, 0 );
+    ot_try_bind( serverip, 6969, FLAG_TCP );
+    ot_try_bind( serverip, 6969, FLAG_UDP );
   }
 
   /* Drop permissions */
@@ -298,15 +399,13 @@ int main( int argc, char **argv ) {
   }
   endpwent();
 
-  accesslist_init( accesslist_filename );
-
   signal( SIGPIPE, SIG_IGN );
   signal( SIGINT,  signal_handler );
   signal( SIGALRM, signal_handler );
 
   g_now = time( NULL );
 
-  if( trackerlogic_init( serverdir ) == -1 )
+  if( trackerlogic_init( g_serverdir ? g_serverdir : "." ) == -1 )
     panic( "Logic not started" );
 
   alarm(5);
