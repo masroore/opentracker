@@ -235,7 +235,12 @@ static void server_mainloop( ) {
 
 int64_t ot_try_bind( char ip[4], uint16_t port, PROTO_FLAG proto ) {
   int64 s = proto == FLAG_TCP ? socket_tcp4( ) : socket_udp4();
-  
+
+#ifdef _DEBUG
+  char *protos[] = {"TCP","UDP","UDP mcast"};
+  fprintf( stderr, "Binding socket type %s to address %d.%d.%d.%d:%d...", protos[proto],(int)ip[0],(int)ip[1],(int)ip[2],(int)ip[3],port);
+#endif
+
   if( socket_bind4_reuse( s, ip, port ) == -1 )
     panic( "socket_bind4_reuse" );
 
@@ -248,28 +253,36 @@ int64_t ot_try_bind( char ip[4], uint16_t port, PROTO_FLAG proto ) {
   io_setcookie( s, (void*)proto );
 
   io_wantread( s );
+
+#ifdef _DEBUG 
+  fputs( " success.\n", stderr);
+#endif
   
   return s;
 }
 
 char * set_config_option( char **option, char *value ) {
+#ifdef _DEBUG
+  fprintf( stderr, "Setting config option: %s\n", value );
+#endif
   while( isspace(*value) ) ++value;
   if( *option ) free( *option );
   return *option = strdup( value );
 }
 
-/* WARNING! Does not behave like scan_ip4 regarding return values */
 static int scan_ip4_port( const char *src, char *ip, uint16 *port ) {
+  const char *s = src;
   int off;
-  while( isspace(*src) ) ++src;
-  if( !(off = scan_ip4( src, ip ) ) )
-    return -1;
-  src += off;
-  if( *src == 0 ) return 0;
-  if( *src != ':' )
-    return -1;
-  *port = atol(src+1);
-  return 0;
+  while( isspace(*s) ) ++s;
+  if( !(off = scan_ip4( s, ip ) ) )
+    return 0;
+  s += off;
+  if( *s == 0 || isspace(*s)) return s-src;
+  if( *(s++) != ':' )
+    return 0;
+  if( !(off = scan_ushort (s, port ) ) )
+     return 0;
+  return off+s-src;
 }
 
 int parse_configfile( char * config_filename ) {
@@ -302,12 +315,12 @@ int parse_configfile( char * config_filename ) {
       set_config_option( &g_serverdir, p+16 );
     } else if(!byte_diff(p,10,"listen.tcp" ) && isspace(p[10])) {
       uint16_t tmpport = 6969;
-      if( scan_ip4_port( p+11, tmpip, &tmpport )) goto parse_error;
+      if( !scan_ip4_port( p+11, tmpip, &tmpport )) goto parse_error;
       ot_try_bind( tmpip, tmpport, FLAG_TCP );
       ++bound;
     } else if(!byte_diff(p, 10, "listen.udp" ) && isspace(p[10])) {
       uint16_t tmpport = 6969;
-      if( scan_ip4_port( p+11, tmpip, &tmpport )) goto parse_error;
+      if( !scan_ip4_port( p+11, tmpip, &tmpport )) goto parse_error;
       ot_try_bind( tmpip, tmpport, FLAG_UDP );
       ++bound;
 #ifdef WANT_ACCESSLIST_BLACK
@@ -330,7 +343,7 @@ int parse_configfile( char * config_filename ) {
       accesslist_blessip( tmpip, OT_PERMISSION_MAY_LIVESYNC );
     } else if(!byte_diff(p, 23, "livesync.cluster.listen" ) && isspace(p[23])) {
       uint16_t tmpport = LIVESYNC_PORT;
-      if( scan_ip4_port( p+24, tmpip, &tmpport )) goto parse_error;
+      if( !scan_ip4_port( p+24, tmpip, &tmpport )) goto parse_error;
       livesync_bind_mcast( tmpip, tmpport );
 #endif
     } else
@@ -347,6 +360,7 @@ int main( int argc, char **argv ) {
   struct passwd *pws = NULL;
   char serverip[4] = {0,0,0,0}, tmpip[4];
   int bound = 0, scanon = 1;
+  uint16_t tmpport;
   
 while( scanon ) {
     switch( getopt( argc, argv, ":i:p:A:P:d:r:s:f:v"
@@ -357,21 +371,29 @@ while( scanon ) {
 #endif
     "h" ) ) {
       case -1 : scanon = 0; break;
-      case 'i': scan_ip4( optarg, serverip ); break;
+      case 'i':
+        if( !scan_ip4( optarg, serverip )) { usage( argv[0] ); exit( 1 ); }
+        break;
 #ifdef WANT_ACCESSLIST_BLACK
       case 'b': set_config_option( &g_accesslist_filename, optarg); break;
 #elif defined( WANT_ACCESSLIST_WHITE )
       case 'w': set_config_option( &g_accesslist_filename, optarg); break;
 #endif
-      case 'p': ot_try_bind( serverip, (uint16)atol( optarg ), FLAG_TCP ); bound++; break;
-      case 'P': ot_try_bind( serverip, (uint16)atol( optarg ), FLAG_UDP ); bound++; break;
+      case 'p':
+        if( !scan_ushort( optarg, &tmpport)) { usage( argv[0] ); exit( 1 ); }
+        ot_try_bind( serverip, tmpport, FLAG_TCP ); bound++; break;
+      case 'P':
+        if( !scan_ushort( optarg, &tmpport)) { usage( argv[0] ); exit( 1 ); }
+        ot_try_bind( serverip, tmpport, FLAG_UDP ); bound++; break;
 #ifdef WANT_SYNC_LIVE
-      case 's': livesync_bind_mcast( serverip, (uint16)atol( optarg )); break;
+      case 's':
+        if( !scan_ushort( optarg, &tmpport)) { usage( argv[0] ); exit( 1 ); }
+        livesync_bind_mcast( serverip, tmpport); break;
 #endif
       case 'd': set_config_option( &g_serverdir, optarg ); break;
       case 'r': set_config_option( &g_redirecturl, optarg ); break;
       case 'A':
-        scan_ip4( optarg, tmpip );
+        if( !scan_ip4( optarg, tmpip )) { usage( argv[0] ); exit( 1 ); }
         accesslist_blessip( tmpip, 0xffff ); /* Allow everything for now */
         break;
       case 'f': bound += parse_configfile( optarg ); break;
