@@ -95,7 +95,6 @@ void accesslist_init( ) {
     signal( SIGHUP, accesslist_readfile );
   }
 }
-
 #endif
 
 static uint32_t       g_adminip_addresses[OT_ADMINIP_MAX];
@@ -107,7 +106,14 @@ int accesslist_blessip( char *ip, ot_permissions permissions ) {
     return -1;
   memmove( g_adminip_addresses + g_adminip_count, ip, 4 );
   g_adminip_permissions[ g_adminip_count++ ] = permissions;
-//  fprintf( stderr, "Blessing ip address %d.%d.%d.%d with %02x\n", (uint8_t)ip[0], (uint8_t)ip[1], (uint8_t)ip[2], (uint8_t)ip[3], permissions );
+#ifdef _DEBUG
+  fprintf( stderr, "Blessing ip address %d.%d.%d.%d with:", (uint8_t)ip[0], (uint8_t)ip[1], (uint8_t)ip[2], (uint8_t)ip[3]);
+  if( permissions & OT_PERMISSION_MAY_STAT       ) fputs( " may_fetch_stats", stderr );
+  if( permissions & OT_PERMISSION_MAY_SYNC       ) fputs( " may_sync_batch", stderr );
+  if( permissions & OT_PERMISSION_MAY_LIVESYNC   ) fputs( " may_sync_live", stderr );
+  if( permissions & OT_PERMISSION_MAY_FULLSCRAPE ) fputs( " may_fetch_fullscrapes", stderr );
+  if( !permissions ) fputs(" nothing.\n", stderr); else fputs(".\n", stderr );
+#endif
   return 0;
 }
 

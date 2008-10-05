@@ -23,13 +23,13 @@ extern char *g_accesslist_filename;
 #endif
 
 typedef enum {
-  OT_PERMISSION_MAY_FULLSCRAPE,
-  OT_PERMISSION_MAY_SYNC,
-  OT_PERMISSION_MAY_STAT,
-  OT_PERMISSION_MAY_LIVESYNC
+  OT_PERMISSION_MAY_FULLSCRAPE = 0x1,
+  OT_PERMISSION_MAY_SYNC       = 0x2,
+  OT_PERMISSION_MAY_STAT       = 0x4,
+  OT_PERMISSION_MAY_LIVESYNC   = 0x8
 } ot_permissions;
 
-int accesslist_blessip( char * ip, ot_permissions permissions );
-int accesslist_isblessed( char * ip, ot_permissions permissions );
+int  accesslist_blessip( char * ip, ot_permissions permissions );
+int  accesslist_isblessed( char * ip, ot_permissions permissions );
 
 #endif
