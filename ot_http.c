@@ -521,7 +521,7 @@ ssize_t http_handle_request( const int64 client_socket, char *data, size_t recv_
      scrapes by looking for "a*" or "sc" */
   len = scan_urlencoded_query( &c, data = c, SCAN_PATH );
 
-  /* If parsing returned an error, leave with not found*/
+  /* If parsing returned an error, leave with not found */
   if( g_redirecturl && ( len == -2 ) ) HTTPERROR_302;
   if( len <= 0 ) HTTPERROR_404;
 
