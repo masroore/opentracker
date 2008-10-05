@@ -33,7 +33,7 @@ BINDIR?=$(PREFIX)/bin
 
 FEATURES+=-DWANT_FULLSCRAPE
 
-OPTS_debug=-g -ggdb #-pg # -fprofile-arcs -ftest-coverage
+OPTS_debug=-D_DEBUG -g -ggdb #-pg # -fprofile-arcs -ftest-coverage
 OPTS_production=-Os
 
 CFLAGS+=-I$(LIBOWFAT_HEADERS) -Wall -pipe -Wextra #-pedantic -ansi
