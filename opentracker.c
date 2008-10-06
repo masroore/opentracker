@@ -312,6 +312,11 @@ int parse_configfile( char * config_filename ) {
     /* Scan for commands */
     if(!byte_diff(p,15,"tracker.rootdir" ) && isspace(p[15])) {
       set_config_option( &g_serverdir, p+16 );
+    } else if(!byte_diff(p,14,"listen.tcp_udp" ) && isspace(p[14])) {
+      uint16_t tmpport = 6969;
+      if( !scan_ip4_port( p+15, tmpip, &tmpport )) goto parse_error;
+      ot_try_bind( tmpip, tmpport, FLAG_TCP ); ++bound;
+      ot_try_bind( tmpip, tmpport, FLAG_UDP ); ++bound;
     } else if(!byte_diff(p,10,"listen.tcp" ) && isspace(p[10])) {
       uint16_t tmpport = 6969;
       if( !scan_ip4_port( p+11, tmpip, &tmpport )) goto parse_error;
