@@ -37,7 +37,21 @@
 #      forward: "<hex info hash>\n<hex info hash>\n..."
 #
 
-# IV)  Sync between trackers running in a cluster is restricted to packets
+# IV)  ip address to listen for incoming and sending out outgoing live sync
+#      packets (shell option -i 192.168.0.1 -s 9696), port 9696 is default.
+#
+# livesync.cluster.listen 192.168.0.1:9696
+#
+#      Note that two udp sockets will be opened. One on ip address 0.0.0.0
+#      port 9696, that will join the multicast group 224.23.42.1 for incoming
+#      udp packets and one on ip address 192.168.0.1 port 9696 for outgoing
+#      udp packets.
+#
+#      As of now one and only one ip address must be given, if opentracker
+#      was built with the WANT_SYNC_LIVE feature
+#
+
+# V)   Sync between trackers running in a cluster is restricted to packets
 #      coming from trusted ip addresses. While source ip verification is far
 #      from perfect, the authors of opentracker trust in the correct
 #      application of tunnels, filters and LAN setups (shell option -A)
@@ -51,16 +65,6 @@
 #
 # batchsync.cluster.admin_ip 10.1.1.1
 #
-
-# V)   ip address to listen for outgoing and incoming live sync packets
-#      (shell option -i 192.168.0.1 -s 9696)
-#
-# livesync.cluster.listen 192.168.0.1:9696
-#
-#      Note that two udp sockets will be opened. One on ip address 0.0.0.0
-#      port 9696, that will join the multicast group 224.23.42.1 for incoming
-#      udp packets and one on ip address 192.168.0.1 port 9696 for outgoing
-#      udp packets.
 
 # VI)  Control directory where opentracker will chdir to. So all black/white
 #      list files may be put in that directory. (shell option -d)
