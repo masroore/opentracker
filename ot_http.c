@@ -488,7 +488,7 @@ static ssize_t http_handle_announce( const int64 client_socket, char *data ) {
     len = remove_peer_from_torrent( hash, &peer, SUCCESS_HTTP_HEADER_LENGTH + static_outbuf, FLAG_TCP );
   else {
     torrent = add_peer_to_torrent( hash, &peer  WANT_SYNC_PARAM( 0 ) );
-    if( !torrent || !( len = return_peers_for_torrent( hash, numwant, SUCCESS_HTTP_HEADER_LENGTH + static_outbuf, 1 ) ) ) HTTPERROR_500;
+    if( !torrent || !( len = return_peers_for_torrent( hash, numwant, SUCCESS_HTTP_HEADER_LENGTH + static_outbuf, FLAG_TCP ) ) ) HTTPERROR_500;
   }
   stats_issue_event( EVENT_ANNOUNCE, FLAG_TCP, len);
   return len;
