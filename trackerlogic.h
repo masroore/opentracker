@@ -46,9 +46,6 @@ extern time_t g_now;
 extern uint32_t g_tracker_id;
 typedef enum { FLAG_TCP, FLAG_UDP, FLAG_MCA } PROTO_FLAG;
 
-/* Try to bind to ip:port pair. May call exit() on failure */
-int64_t ot_try_bind( char ip[4], uint16_t port, PROTO_FLAG proto );
-
 typedef struct {
   uint8_t data[8];
 } ot_peer;
