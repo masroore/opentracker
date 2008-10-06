@@ -7,8 +7,9 @@
 # listen.tcp 0.0.0.0
 #
 #      or specify them one by one (shell option -i 192.168.0.1 -p 6969)
+#      (note, that :6969 is implicite)
 #
-# listen.tcp 192.168.0.1:6969
+# listen.tcp 192.168.0.1
 # listen.tcp 192.168.0.2:6969
 # listen.tcp 192.168.0.3:6969
 
@@ -44,6 +45,9 @@
 # livesync.cluster.node_ip 192.168.0.4
 # livesync.cluster.node_ip 192.168.0.5
 # livesync.cluster.node_ip 192.168.0.6
+#
+#      This is the admin ip address for old style (HTTP based) asynchronus
+#      tracker syncing.
 #
 # batchsync.cluster.admin_ip 10.1.1.1
 #
