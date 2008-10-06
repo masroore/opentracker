@@ -80,6 +80,7 @@ static void usage( char *name ) {
 static void help( char *name ) {
   usage( name );
 
+  HELPLINE("-f config","include and execute the config file");
   HELPLINE("-i ip","specify ip to bind to (default: *, you may specify more than one)");
   HELPLINE("-p port","specify tcp port to bind to (default: 6969, you may specify more than one)");
   HELPLINE("-P port","specify udp port to bind to (default: 6969, you may specify more than one)");
@@ -92,7 +93,7 @@ static void help( char *name ) {
   HELPLINE("-w file","specify whitelist file.");
 #endif
 
-  fprintf( stderr, "\nExample:   ./opentracker -i 127.0.0.1 -p 6969 -P 6969 -i 10.1.1.23 -p 2710 -p 80\n" );
+  fprintf( stderr, "\nExample:   ./opentracker -i 127.0.0.1 -p 6969 -P 6969 -f ./opentracker.conf -i 10.1.1.23 -p 2710 -p 80\n" );
 }
 #undef HELPLINE
 
