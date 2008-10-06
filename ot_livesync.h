@@ -10,14 +10,14 @@
 #include "trackerlogic.h"
 
 /*
-  Syncing is done as udp packets in the multicast domain 224.23.42.N port 9696
+  Syncing is done as udp packets in the multicast domain 224.0.42.N port 9696
 
   Each tracker should join the multicast group and send its live sync packets
   to that group, using a ttl of 1
 
   Format of a live sync packet is straight forward and depends on N:
 
-  For N == 1: (simple tracker2tracker sync)
+  For N == 23: (simple tracker2tracker sync)
     0x0000 0x04 id of tracker instance
   [ 0x0004 0x14 info_hash
     0x0018 0x04 peer's ipv4 address
@@ -25,7 +25,7 @@
     0x0020 0x02 peer flags v1 ( SEEDING = 0x80, COMPLETE = 0x40, STOPPED = 0x20 )
   ]*
  
-  For N == 2: (aggregator syncs)
+  For N == 24: (aggregator syncs)
     0x0000 0x04 id of tracker instance
   [ 0x0004 0x14 info_hash
     0x0018 0x01 number of peers
@@ -41,18 +41,6 @@
 #ifdef WANT_SYNC_LIVE
 
 #define LIVESYNC_PORT 9696
-#define LIVESYNC_MCASTDOMAIN_1 224,23,42,1
-#define LIVESYNC_MCASTDOMAIN_2 224,23,42,2
-extern char groupip_1[4];
-extern char groupip_2[4];
-
-extern int64 g_livesync_socket;
-
-#define LIVESYNC_BUFFINSIZE (256*256)
-#define LIVESYNC_BUFFSIZE  1504
-#define LIVESYNC_BUFFWATER (sizeof(ot_peer)+sizeof(ot_hash))
-
-#define LIVESYNC_MAXDELAY  15
 
 void livesync_init();
 void livesync_deinit();
