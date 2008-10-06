@@ -54,7 +54,7 @@ static char*to_hex(char*d,uint8_t*s){char*m="0123456789ABCDEF";char *t=d;char*e=
 /* This is the entry point into this worker thread
    It grabs tasks from mutex_tasklist and delivers results back
 */
-static void * fullscrape_worker( void * args) {
+static void * fullscrape_worker( void * args ) {
   int iovec_entries;
   struct iovec *iovector;
 
