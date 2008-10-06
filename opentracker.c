@@ -202,8 +202,6 @@ static void server_mainloop( ) {
         handle_accept( i );
       else if( (int)cookie == FLAG_UDP )
         handle_udp4( i );
-      else if( (int)cookie == FLAG_MCA )
-        handle_livesync(i);
       else
         handle_read( i );
     }
@@ -233,7 +231,7 @@ static void server_mainloop( ) {
   }
 }
 
-int64_t ot_try_bind( char ip[4], uint16_t port, PROTO_FLAG proto ) {
+static int64_t ot_try_bind( char ip[4], uint16_t port, PROTO_FLAG proto ) {
   int64 s = proto == FLAG_TCP ? socket_tcp4( ) : socket_udp4();
 
 #ifdef _DEBUG
