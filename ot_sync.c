@@ -10,9 +10,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <pthread.h>
-#ifdef WANT_THREAD_NAME_NP
-#include <pthread_np.h>
-#endif
 
 /* Libowfat */
 #include "scan.h"
@@ -154,9 +151,6 @@ static void * sync_worker( void * args) {
 static pthread_t thread_id;
 void sync_init( ) {
   pthread_create( &thread_id, NULL, sync_worker, NULL );
-#ifdef WANT_THREAD_NAME_NP
-  pthread_set_name_np( thread_id, "opentracker (batchsync)");
-#endif  
 }
 
 void sync_deinit( ) {
