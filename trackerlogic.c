@@ -60,11 +60,6 @@ ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer  WANT_SYNC_PARAM( 
     return NULL;
   }
 
-#ifdef WANT_SYNC_LIVE
-  if( !from_changeset )
-    livesync_tell( hash, peer, PEER_FLAG_LEECHING );
-#endif
-  
   if( !exactmatch ) {
     /* Create a new torrent entry, then */
     memmove( &torrent->hash, hash, sizeof( ot_hash ) );
@@ -108,6 +103,11 @@ ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer  WANT_SYNC_PARAM( 
     int i;
     memmove( peer_dest, peer, sizeof( ot_peer ) );
     torrent->peer_list->peer_count++;
+
+#ifdef WANT_SYNC_LIVE
+    if( !from_changeset )
+      livesync_tell( hash, peer, PEER_FLAG_LEECHING );
+#endif
 
     if( OT_FLAG( peer ) & PEER_FLAG_COMPLETED )
       torrent->peer_list->down_count++;
