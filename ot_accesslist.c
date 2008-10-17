@@ -107,7 +107,8 @@ int accesslist_blessip( char *ip, ot_permissions permissions ) {
   memmove( g_adminip_addresses + g_adminip_count, ip, 4 );
   g_adminip_permissions[ g_adminip_count++ ] = permissions;
 #ifdef _DEBUG
-  fprintf( stderr, "Blessing ip address %d.%d.%d.%d with:", (uint8_t)ip[0], (uint8_t)ip[1], (uint8_t)ip[2], (uint8_t)ip[3]);
+  uint8_t *_ip = (uint8_t*)ip;
+  fprintf( stderr, "Blessing ip address %d.%d.%d.%d with:", _ip[0], _ip[1], _ip[2], _ip[3]);
   if( permissions & OT_PERMISSION_MAY_STAT       ) fputs( " may_fetch_stats", stderr );
   if( permissions & OT_PERMISSION_MAY_SYNC       ) fputs( " may_sync_batch", stderr );
   if( permissions & OT_PERMISSION_MAY_LIVESYNC   ) fputs( " may_sync_live", stderr );

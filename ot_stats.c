@@ -512,14 +512,14 @@ void stats_issue_event( ot_status_event event, PROTO_FLAG proto, uint32_t event_
       break;
     case EVENT_FULLSCRAPE_REQUEST:
       {
-      unsigned char ip[4]; *(int*)ip = (int)proto; /* ugly hack to transfer ip to stats */
+      uint8_t ip[4]; *(uint32_t*)ip = (uint32_t)proto; /* ugly hack to transfer ip to stats */
       LOG_TO_STDERR( "[%08d] scrp: %d.%d.%d.%d - FULL SCRAPE\n", (unsigned int)(g_now - ot_start_time), ip[0], ip[1], ip[2], ip[3] );
       ot_full_scrape_request_count++;
       }
       break;
     case EVENT_FULLSCRAPE_REQUEST_GZIP:
       {
-      unsigned char ip[4]; *(int*)ip = (int)proto; /* ugly hack to transfer ip to stats */
+      uint8_t ip[4]; *(uint32_t*)ip = (uint32_t)proto; /* ugly hack to transfer ip to stats */
       LOG_TO_STDERR( "[%08d] scrp: %d.%d.%d.%d - FULL SCRAPE GZIP\n", (unsigned int)(g_now - ot_start_time), ip[0], ip[1], ip[2], ip[3] );
       ot_full_scrape_request_count++;
       }
