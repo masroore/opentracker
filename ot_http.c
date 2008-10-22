@@ -482,7 +482,7 @@ static ssize_t http_handle_announce( const int64 client_socket, char *data ) {
 
   /* Scanned whole query string */
   if( !hash )
-    return sprintf( static_outbuf + SUCCESS_HTTP_HEADER_LENGTH, "d14:failure reason81:Your client forgot to send your torrent's info_hash. Please upgrade your client.e" );
+    return sprintf( static_outbuf + SUCCESS_HTTP_HEADER_LENGTH, "d14:failure reason80:Your client forgot to send your torrent's info_hash. Please upgrade your client.e" );
 
   if( OT_FLAG( &peer ) & PEER_FLAG_STOPPED )
     len = remove_peer_from_torrent( hash, &peer, SUCCESS_HTTP_HEADER_LENGTH + static_outbuf, FLAG_TCP );
