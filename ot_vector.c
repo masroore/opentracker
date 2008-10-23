@@ -11,6 +11,40 @@
 #include "trackerlogic.h"
 #include "ot_vector.h"
 
+#ifdef _DEBUG_VECTOR
+#include <stdio.h>
+
+static uint64_t vector_debug_inc[32];
+static uint64_t vector_debug_noinc[32];
+static uint64_t vector_debug_dec[32];
+static uint64_t vector_debug_nodec[32];
+static void vector_debug( size_t old_size, ssize_t diff_size, size_t old_space, ssize_t diff_space ) {
+  int x = 0;
+  while( old_space ) { old_space>>=1; ++x; }
+  old_size = old_size;
+
+  if( diff_size == -1 )
+    if( diff_space ) vector_debug_dec[x]++; else vector_debug_nodec[x]++;
+  else
+    if( diff_space ) vector_debug_inc[x]++; else vector_debug_noinc[x]++;
+
+}
+
+size_t vector_info( char * reply ) {
+  char * r = reply;
+  int i;
+  for( i=1; i<28; ++i )
+    r += sprintf( r, "  inc % 12d -> % 12d: % 16lld\n", 1<<(i-1), 8<<(i-1), vector_debug_inc[i] );
+  for( i=1; i<28; ++i )
+    r += sprintf( r, "noinc % 12d -> % 12d: % 16lld\n", 1<<(i-1), 1<<(i-1), vector_debug_noinc[i] );
+  for( i=1; i<28; ++i )
+    r += sprintf( r, "  dec % 12d -> % 12d: % 16lld\n", 1<<(i-1), 4<<(i-1), vector_debug_dec[i] );
+  for( i=1; i<28; ++i )
+    r += sprintf( r, "nodec % 12d -> % 12d: % 16lld\n", 1<<(i-1), 1<<(i-1), vector_debug_nodec[i] );
+  return r - reply;
+}
+#endif
+
 /* This function gives us a binary search that returns a pointer, even if
    no exact match is found. In that case it sets exactmatch 0 and gives
    calling functions the chance to insert data
@@ -44,6 +78,9 @@ void *binary_search( const void * const key, const void * base, const size_t mem
 */
 void *vector_find_or_insert( ot_vector *vector, void *key, size_t member_size, size_t compare_size, int *exactmatch ) {
   uint8_t *match = binary_search( key, vector->data, vector->size, member_size, compare_size, exactmatch );
+#ifdef _DEBUG_VECTOR
+  size_t old_space = vector->space;
+#endif
 
   if( *exactmatch ) return match;
 
@@ -59,6 +96,10 @@ void *vector_find_or_insert( ot_vector *vector, void *key, size_t member_size, s
     vector->space = new_space;
   }
   memmove( match + member_size, match, ((uint8_t*)vector->data) + member_size * vector->size - match );
+
+#ifdef _DEBUG_VECTOR
+  vector_debug( vector->size, 1, old_space, vector->space - old_space );
+#endif
   vector->size++;
   return match;
 }
@@ -74,6 +115,9 @@ int vector_remove_peer( ot_vector *vector, ot_peer *peer, int hysteresis ) {
   size_t   shrink_thresh = hysteresis ? OT_VECTOR_SHRINK_THRESH : OT_VECTOR_SHRINK_RATIO;
   ot_peer *end = ((ot_peer*)vector->data) + vector->size;
   ot_peer *match;
+#ifdef _DEBUG_VECTOR
+  size_t   old_space = vector->space;
+#endif
 
   if( !vector->size ) return 0;
   match = binary_search( peer, vector->data, vector->size, sizeof( ot_peer ), OT_PEER_COMPARE_SIZE, &exactmatch );
@@ -92,11 +136,17 @@ int vector_remove_peer( ot_vector *vector, ot_peer *peer, int hysteresis ) {
     vector->data = NULL;
     vector->space = 0;
   }
+#ifdef _DEBUG_VECTOR
+  vector_debug( vector->size+1, -1, old_space, vector->space - old_space );
+#endif
   return exactmatch;
 }
 
 void vector_remove_torrent( ot_vector *vector, ot_torrent *match ) {
   ot_torrent *end = ((ot_torrent*)vector->data) + vector->size;
+#ifdef _DEBUG_VECTOR
+  size_t      old_space = vector->space;
+#endif
 
   if( !vector->size ) return;
 
@@ -109,6 +159,9 @@ void vector_remove_torrent( ot_vector *vector, ot_torrent *match ) {
     vector->space /= OT_VECTOR_SHRINK_RATIO;
     vector->data = realloc( vector->data, vector->space * sizeof( ot_torrent ) );
   }
+#ifdef _DEBUG_VECTOR
+  vector_debug( vector->size+1, -1, old_space, vector->space - old_space );
+#endif
 }
 
 const char *g_version_vector_c = "$Source$: $Revision$\n";

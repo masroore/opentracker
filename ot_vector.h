@@ -25,4 +25,8 @@ void *vector_find_or_insert( ot_vector *vector, void *key, size_t member_size, s
 int   vector_remove_peer( ot_vector *vector, ot_peer *peer, int hysteresis );
 void  vector_remove_torrent( ot_vector *vector, ot_torrent *match );
 
+#ifdef _DEBUG_VECTOR
+size_t vector_info( char * reply );
+#endif
+
 #endif
