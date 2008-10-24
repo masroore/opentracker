@@ -35,6 +35,12 @@
 #      listing, so choose one of those options at compile time. File format
 #      is straight forward: "<hex info hash>\n<hex info hash>\n..."
 #
+#      If you do not want to grant anyone access to your stats, enable the
+#      WANT_RESTRICT_STATS option in Makefile and bless the ip addresses
+#      allowed to fetch stats here.
+#
+# access.stats 192.168.0.23
+#
 
 # III) Live sync uses udp multicast packets to keep a cluster of opentrackers
 #      synchronized. This option tells opentracker which port to listen for
