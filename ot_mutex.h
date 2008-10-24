@@ -16,22 +16,25 @@ void mutex_bucket_unlock( int bucket );
 void mutex_bucket_unlock_by_hash( ot_hash *hash );
 
 typedef enum {
-  TASK_STATS_CONNS                 = 0x0000,
-  TASK_STATS_PEERS                 = 0x0001,
-  TASK_STATS_TOP5                  = 0x0002,
-  TASK_STATS_TCP                   = 0x0003,
-  TASK_STATS_UDP                   = 0x0004,
-  TASK_STATS_SCRAPE                = 0x0005,
-  TASK_STATS_FULLSCRAPE            = 0x0006,
-  TASK_STATS_TPB                   = 0x0007,
-  TASK_STATS_HTTPERRORS            = 0x0008,
-  TASK_STATS_TORRENTS              = 0x0009,
-  TASK_STATS_STARTSTOP             = 0x000a,
-  TASK_STATS_TORADDREM             = 0x000b,
-  TASK_STATS_VERSION               = 0x000c,
-  TASK_STATS_BUSY_NETWORKS         = 0x000d,
+  TASK_STATS_CONNS                 = 0x0001,
+  TASK_STATS_TCP                   = 0x0002,
+  TASK_STATS_UDP                   = 0x0003,
+  TASK_STATS_SCRAPE                = 0x0004,
+  TASK_STATS_FULLSCRAPE            = 0x0005,
+  TASK_STATS_TPB                   = 0x0006,
+  TASK_STATS_HTTPERRORS            = 0x0007,
+  TASK_STATS_STARTSTOP             = 0x0008,
+  TASK_STATS_TORADDREM             = 0x0009,
+  TASK_STATS_VERSION               = 0x000a,
+  TASK_STATS_BUSY_NETWORKS         = 0x000b,
+  TASK_STATS_VECTOR_DEBUG          = 0x000c,
 
-  TASK_STATS_SLASH24S              = 0x0100,
+  TASK_STATS                       = 0x0100, /* Mask */
+  TASK_STATS_TORRENTS              = 0x0101,
+  TASK_STATS_PEERS                 = 0x0102,
+  TASK_STATS_SLASH24S              = 0x0103,
+  TASK_STATS_TOP10                 = 0x0104,
+  TASK_STATS_MEMORY                = 0x0105,
 
   TASK_FULLSCRAPE                  = 0x0200, /* Default mode */
   TASK_FULLSCRAPE_TPB_BINARY       = 0x0201,

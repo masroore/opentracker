@@ -214,6 +214,12 @@ static ssize_t http_handle_sync( const int64 client_socket, char *data ) {
 static ssize_t http_handle_stats( const int64 client_socket, char *data, char *d, size_t l ) {
   char *c = data;
   int mode = TASK_STATS_PEERS, scanon = 1, format = 0;
+#ifdef WANT_RESTRICT_STATS
+  struct http_data *h = io_getcookie( client_socket );
+
+  if( !accesslist_isblessed( h->ip, OT_PERMISSION_MAY_STAT ) )
+    HTTPERROR_403_IP;
+#endif
 
   while( scanon ) {
     switch( scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_PARAM ) ) {
@@ -230,8 +236,8 @@ static ssize_t http_handle_stats( const int64 client_socket, char *data, char *d
         mode = TASK_STATS_PEERS;
       else if( !byte_diff(data,4,"conn"))
         mode = TASK_STATS_CONNS;
-      else if( !byte_diff(data,4,"top5"))
-        mode = TASK_STATS_TOP5;
+      else if( !byte_diff(data,4,"top10"))
+        mode = TASK_STATS_TOP10;
       else if( !byte_diff(data,4,"scrp"))
         mode = TASK_STATS_SCRAPE;
       else if( !byte_diff(data,4,"torr"))
@@ -256,6 +262,10 @@ static ssize_t http_handle_stats( const int64 client_socket, char *data, char *d
         mode = TASK_STATS_VERSION;
       else if( !byte_diff(data,4,"busy"))
         mode = TASK_STATS_BUSY_NETWORKS;
+      else if( !byte_diff(data,4,"dmem"))
+        mode = TASK_STATS_MEMORY;
+      else if( !byte_diff(data,4,"vdeb"))
+        mode = TASK_STATS_VECTOR_DEBUG;
       else
         HTTPERROR_400_PARAM;
       break;
@@ -304,7 +314,17 @@ static ssize_t http_handle_stats( const int64 client_socket, char *data, char *d
 #endif
 
   /* default format for now */
+  if( ( mode & TASK_CLASS_MASK ) == TASK_STATS ) {
+    tai6464 t;
+    /* Complex stats also include expensive memory debugging tools */
+    taia_uint( &t, 0 ); io_timeout( client_socket, t );
+    stats_deliver( client_socket, mode );
+    return -2;
+  }
+  
+  /* Simple stats can be answerred immediately */
   if( !( l = return_stats_for_tracker( static_outbuf + SUCCESS_HTTP_HEADER_LENGTH, mode, 0 ) ) ) HTTPERROR_500;
+
   return l;
 }
 
