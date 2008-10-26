@@ -328,10 +328,10 @@ int parse_configfile( char * config_filename ) {
       if( !scan_ip4_port( p+11, tmpip, &tmpport )) goto parse_error;
       ot_try_bind( tmpip, tmpport, FLAG_UDP );
       ++bound;
-#ifdef WANT_ACCESSLIST_BLACK
+#ifdef WANT_ACCESSLIST_WHITE
     } else if(!byte_diff(p, 16, "access.whitelist" ) && isspace(p[16])) {
       set_config_option( &g_accesslist_filename, p+17 );
-#elif defined( WANT_ACCESSLIST_WHITE )
+#elif defined( WANT_ACCESSLIST_BLACK )
     } else if(!byte_diff(p, 16, "access.blacklist" ) && isspace(p[16])) {
       set_config_option( &g_accesslist_filename, p+17 );
 #endif
