@@ -231,44 +231,58 @@ static ssize_t http_handle_stats( const int64 client_socket, char *data, char *d
         scan_urlencoded_skipvalue( &c );
         continue;
       }
-      if( scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE ) != 4 ) HTTPERROR_400_PARAM;
-      if( !byte_diff(data,4,"peer"))
-        mode = TASK_STATS_PEERS;
-      else if( !byte_diff(data,4,"conn"))
-        mode = TASK_STATS_CONNS;
-      else if( !byte_diff(data,4,"top10"))
-        mode = TASK_STATS_TOP10;
-      else if( !byte_diff(data,4,"scrp"))
-        mode = TASK_STATS_SCRAPE;
-      else if( !byte_diff(data,4,"torr"))
-        mode = TASK_STATS_TORRENTS;
-      else if( !byte_diff(data,4,"fscr"))
-        mode = TASK_STATS_FULLSCRAPE;
-      else if( !byte_diff(data,4,"tcp4"))
-        mode = TASK_STATS_TCP;
-      else if( !byte_diff(data,4,"udp4"))
-        mode = TASK_STATS_UDP;
-      else if( !byte_diff(data,4,"s24s"))
-        mode = TASK_STATS_SLASH24S;
-      else if( !byte_diff(data,4,"tpbs"))
-        mode = TASK_STATS_TPB;
-      else if( !byte_diff(data,4,"herr"))
-        mode = TASK_STATS_HTTPERRORS;
-      else if( !byte_diff(data,4,"startstop"))
-        mode = TASK_STATS_STARTSTOP;
-      else if( !byte_diff(data,4,"toraddrem"))
-        mode = TASK_STATS_TORADDREM;
-      else if( !byte_diff(data,4,"vers"))
-        mode = TASK_STATS_VERSION;
-      else if( !byte_diff(data,4,"busy"))
-        mode = TASK_STATS_BUSY_NETWORKS;
-      else if( !byte_diff(data,4,"dmem"))
-        mode = TASK_STATS_MEMORY;
-      else if( !byte_diff(data,4,"vdeb"))
-        mode = TASK_STATS_VECTOR_DEBUG;
-      else
-        HTTPERROR_400_PARAM;
-      break;
+      switch( scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE ) ) {
+        case 4:
+          if( !byte_diff(data,4,"peer"))
+            mode = TASK_STATS_PEERS;
+          else if( !byte_diff(data,4,"conn"))
+            mode = TASK_STATS_CONNS;
+          else if( !byte_diff(data,4,"scrp"))
+            mode = TASK_STATS_SCRAPE;
+          else if( !byte_diff(data,4,"tcp4"))
+            mode = TASK_STATS_TCP;
+          else if( !byte_diff(data,4,"udp4"))
+            mode = TASK_STATS_UDP;
+          else if( !byte_diff(data,4,"busy"))
+            mode = TASK_STATS_BUSY_NETWORKS;
+          else if( !byte_diff(data,4,"dmem"))
+            mode = TASK_STATS_MEMORY;
+          else if( !byte_diff(data,4,"vdeb"))
+            mode = TASK_STATS_VECTOR_DEBUG;
+          else if( !byte_diff(data,4,"torr"))
+            mode = TASK_STATS_TORRENTS;
+          else if( !byte_diff(data,4,"fscr"))
+            mode = TASK_STATS_FULLSCRAPE;
+          else if( !byte_diff(data,4,"s24s"))
+            mode = TASK_STATS_SLASH24S;
+          else if( !byte_diff(data,4,"tpbs"))
+            mode = TASK_STATS_TPB;
+          else if( !byte_diff(data,4,"herr"))
+            mode = TASK_STATS_HTTPERRORS;
+          else
+            HTTPERROR_400_PARAM;
+          break;
+        case 5:
+          if( !byte_diff(data,5,"top10"))
+            mode = TASK_STATS_TOP10;
+          else
+            HTTPERROR_400_PARAM;
+          break;
+        case 7:
+          if( !byte_diff(data,7,"version"))
+            mode = TASK_STATS_VERSION;
+          else
+            HTTPERROR_400_PARAM;
+          break;
+        case 9:
+          if( !byte_diff(data,9,"startstop"))
+            mode = TASK_STATS_STARTSTOP;
+          else if( !byte_diff(data,9,"toraddrem"))
+            mode = TASK_STATS_TORADDREM;
+          else
+            HTTPERROR_400_PARAM;
+          break;
+      }
     case 6:
       if( byte_diff(data,6,"format")) {
         scan_urlencoded_skipvalue( &c );
