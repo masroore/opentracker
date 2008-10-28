@@ -59,7 +59,7 @@ static void bucket_remove( int bucket ) {
     ++i;
 
   if( i == bucket_locklist_count ) {
-    fprintf( stderr, "Request to unlock bucket that was never lock. Consult source code.\n" );
+    fprintf( stderr, "Request to unlock bucket that was never locked. Consult source code.\n" );
     return;
   }
 
