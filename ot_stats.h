@@ -1,6 +1,6 @@
 /* This software was written by Dirk Engling <erdgeist@erdgeist.org>
    It is considered beerware. Prost. Skol. Cheers or whatever.
-   
+
    $id$ */
 
 #ifndef __OT_STATS_H__
@@ -30,7 +30,7 @@ enum {
   CODE_HTTPERROR_403_IP,
   CODE_HTTPERROR_404,
   CODE_HTTPERROR_500,
-  
+
   CODE_HTTPERROR_COUNT
 };
 

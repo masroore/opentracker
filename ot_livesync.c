@@ -1,6 +1,6 @@
 /* This software was written by Dirk Engling <erdgeist@erdgeist.org>
  It is considered beerware. Prost. Skol. Cheers or whatever.
- 
+
  $id$ */
 
 /* System */
@@ -54,7 +54,7 @@ void livesync_init( ) {
 
   pthread_create( &thread_id, NULL, livesync_worker, NULL );
 }
-	
+
 void livesync_deinit() {
   pthread_cancel( thread_id );
 }
@@ -106,7 +106,7 @@ void livesync_tell( ot_hash * const info_hash, const ot_peer * const peer, const
  stuck when there's not enough traffic to fill udp packets fast
  enough */
 void livesync_ticker( ) {
-	if( ( g_now - livesync_lastpacket_time > LIVESYNC_MAXDELAY) &&
+  if( ( g_now - livesync_lastpacket_time > LIVESYNC_MAXDELAY) &&
       ( livesync_outbuffer_pos > livesync_outbuffer_start + sizeof( g_tracker_id ) ) )
     livesync_issuepacket();
 }
@@ -115,7 +115,7 @@ static void * livesync_worker( void * args ) {
   uint8_t in_ip[4]; uint16_t in_port;
   ssize_t datalen;
   int off;
-  
+
   args = args;
 
   while( 1 ) {

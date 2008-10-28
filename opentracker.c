@@ -220,7 +220,7 @@ static void server_mainloop( ) {
     }
 
     livesync_ticker();
-    
+
     /* See if we need to move our pools */
     if( NOW != ot_last_clean_time ) {
       ot_last_clean_time = NOW;
@@ -254,10 +254,10 @@ static int64_t ot_try_bind( char ip[4], uint16_t port, PROTO_FLAG proto ) {
 
   io_wantread( s );
 
-#ifdef _DEBUG 
+#ifdef _DEBUG
   fputs( " success.\n", stderr);
 #endif
-  
+
   return s;
 }
 
@@ -291,19 +291,19 @@ int parse_configfile( char * config_filename ) {
   int     bound = 0;
 
   accesslist_filehandle = fopen( config_filename, "r" );
-    
+
   if( accesslist_filehandle == NULL ) {
     fprintf( stderr, "Warning: Can't open config file: %s.", config_filename );
     return 0;
   }
-  
+
   while( fgets( inbuf, sizeof(inbuf), accesslist_filehandle ) ) {
     char *newl;
     char *p = inbuf;
 
     /* Skip white spaces */
     while(isspace(*p)) ++p;
-    
+
     /* Ignore comments and empty lines */
     if((*p=='#')||(*p=='\n')||(*p==0)) continue;
 
@@ -360,7 +360,7 @@ int parse_configfile( char * config_filename ) {
       fprintf( stderr, "Unhandled line in config file: %s\n", inbuf );
     continue;
   parse_error:
-      fprintf( stderr, "Parse error in config file: %s\n", inbuf);    
+      fprintf( stderr, "Parse error in config file: %s\n", inbuf);
   }
   fclose( accesslist_filehandle );
   return bound;
@@ -371,7 +371,7 @@ int main( int argc, char **argv ) {
   char serverip[4] = {0,0,0,0}, tmpip[4];
   int bound = 0, scanon = 1;
   uint16_t tmpport;
-  
+
 while( scanon ) {
     switch( getopt( argc, argv, ":i:p:A:P:d:r:s:f:v"
 #ifdef WANT_ACCESSLIST_BLACK

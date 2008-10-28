@@ -1,6 +1,6 @@
 /* This software was written by Dirk Engling <erdgeist@erdgeist.org>
    It is considered beerware. Prost. Skol. Cheers or whatever.
-   
+
    $id$ */
 
 /* System */
@@ -93,7 +93,7 @@ void mutex_bucket_unlock( int bucket ) {
   bucket_remove( bucket );
   pthread_cond_broadcast( &bucket_being_unlocked );
   pthread_mutex_unlock( &bucket_mutex );
-}   
+}
 
 void mutex_bucket_unlock_by_hash( ot_hash *hash ) {
   unsigned char *local_hash = hash[0];
@@ -134,7 +134,7 @@ int mutex_workqueue_pushtask( int64 socket, ot_tasktype tasktype ) {
   }
 
   /* Skip to end of list */
-  tmptask = &tasklist; 
+  tmptask = &tasklist;
   while( *tmptask )
     tmptask = &(*tmptask)->next;
   *tmptask = task;
@@ -267,7 +267,7 @@ int mutex_workqueue_pushresult( ot_taskid taskid, int iovec_entries, struct iove
   MTX_DBG( "pushresult unlocks.\n" );
   pthread_mutex_unlock( &tasklist_mutex );
   MTX_DBG( "pushresult unlocked.\n" );
-  
+
   /* Indicate whether the worker has to throw away results */
   return task ? 0 : -1;
 }
@@ -291,7 +291,7 @@ int64 mutex_workqueue_popresult( int *iovec_entries, struct iovec ** iovec ) {
     *iovec_entries = (*task)->iovec_entries;
     *iovec         = (*task)->iovec;
     socket         = (*task)->socket;
-    
+
     *task = (*task)->next;
     free( ptask );
   }

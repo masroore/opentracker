@@ -1,6 +1,6 @@
 /* This software was written by Dirk Engling <erdgeist@erdgeist.org>
  It is considered beerware. Prost. Skol. Cheers or whatever.
- 
+
  $id$ */
 
 #ifndef __OT_LIVESYNC_H__
@@ -24,7 +24,7 @@
     0x001c 0x02 peer's port
     0x0020 0x02 peer flags v1 ( SEEDING = 0x80, COMPLETE = 0x40, STOPPED = 0x20 )
   ]*
- 
+
   For N == 24: (aggregator syncs)
     0x0000 0x04 id of tracker instance
   [ 0x0004 0x14 info_hash
@@ -34,7 +34,7 @@
       0x0021 0x02 peer flags v1 ( SEEDING = 0x80, COMPLETE = 0x40, STOPPED = 0x20 )
     ]+
   ]*
- 
+
 
  */
 
@@ -61,7 +61,7 @@ void handle_livesync( const int64 serversocket );
 
 #else
 
-/* If no syncing is required, save calling code from #ifdef 
+/* If no syncing is required, save calling code from #ifdef
    constructions */
 
 #define livesync_init()

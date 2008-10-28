@@ -1,6 +1,6 @@
 /* This software was written by Dirk Engling <erdgeist@erdgeist.org>
    It is considered beerware. Prost. Skol. Cheers or whatever.
-   
+
    $id$ */
 
 /* System */
@@ -335,7 +335,7 @@ static ssize_t http_handle_stats( const int64 client_socket, char *data, char *d
     stats_deliver( client_socket, mode );
     return -2;
   }
-  
+
   /* Simple stats can be answerred immediately */
   if( !( l = return_stats_for_tracker( static_outbuf + SUCCESS_HTTP_HEADER_LENGTH, mode, 0 ) ) ) HTTPERROR_500;
 

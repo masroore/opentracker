@@ -1,6 +1,6 @@
 /* This software was written by Dirk Engling <erdgeist@erdgeist.org>
    It is considered beerware. Prost. Skol. Cheers or whatever.
-   
+
    $id$ */
 
 /* System */
@@ -24,7 +24,7 @@ void *iovec_increase( int *iovec_entries, struct iovec **iovector, size_t new_al
   if( !new_ptr )
     return NULL;
   ((*iovector)[*iovec_entries]).iov_base = new_ptr;
-  ((*iovector)[*iovec_entries]).iov_len  = new_alloc;  
+  ((*iovector)[*iovec_entries]).iov_len  = new_alloc;
   ++*iovec_entries;
   return new_ptr;
 }

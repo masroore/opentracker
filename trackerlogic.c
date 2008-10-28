@@ -1,6 +1,6 @@
 /* This software was written by Dirk Engling <erdgeist@erdgeist.org>
    It is considered beerware. Prost. Skol. Cheers or whatever.
-   
+
    $id$ */
 
 /* System */
@@ -277,7 +277,7 @@ size_t remove_peer_from_torrent( ot_hash *hash, ot_peer *peer, char *reply, PROT
   ot_torrent  *torrent = binary_search( hash, torrents_list->data, torrents_list->size, sizeof( ot_torrent ), OT_HASH_COMPARE_SIZE, &exactmatch );
   ot_peerlist *peer_list;
 
-#ifdef WANT_SYNC_LIVE  
+#ifdef WANT_SYNC_LIVE
   if( proto != FLAG_MCA )
     livesync_tell( hash, peer, PEER_FLAG_STOPPED );
 #endif
@@ -294,7 +294,7 @@ size_t remove_peer_from_torrent( ot_hash *hash, ot_peer *peer, char *reply, PROT
       ((uint32_t*)reply)[3] = ((uint32_t*)reply)[4] = 0;
       return (size_t)20;
     }
-    
+
     if( proto == FLAG_MCA )
       return 0;
   }
@@ -343,7 +343,7 @@ int trackerlogic_init( const char * const serverdir ) {
 
   srandom( time(NULL) );
   g_tracker_id = random();
-  
+
   /* Initialise background worker threads */
   mutex_init( );
   clean_init( );

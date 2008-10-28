@@ -1,6 +1,6 @@
 /* This software was written by Dirk Engling <erdgeist@erdgeist.org>
    It is considered beerware. Prost. Skol. Cheers or whatever.
-   
+
    $id$ */
 
 /* System */
@@ -85,7 +85,7 @@ static int stats_shift_down_network_count( stats_network_node **node, int depth,
   int i, rest = 0;
   if( !*node ) return 0;
 
-  if( ++depth == STATS_NETWORK_NODE_MAXDEPTH ) 
+  if( ++depth == STATS_NETWORK_NODE_MAXDEPTH )
     for( i=0; i<STATS_NETWORK_NODE_COUNT; ++i ) {
       rest += ((*node)->counters[i]>>=shift);
     return rest;
@@ -487,7 +487,7 @@ static size_t stats_torrents_mrtg( char * reply )
 
 static size_t stats_httperrors_txt ( char * reply ) {
   return sprintf( reply, "302 RED %llu\n400 ... %llu\n400 PAR %llu\n400 COM %llu\n403 IP  %llu\n404 INV %llu\n500 SRV %llu\n",
-  ot_failed_request_counts[0], ot_failed_request_counts[1], ot_failed_request_counts[2], 
+  ot_failed_request_counts[0], ot_failed_request_counts[1], ot_failed_request_counts[2],
   ot_failed_request_counts[3], ot_failed_request_counts[4], ot_failed_request_counts[5],
   ot_failed_request_counts[6] );
 }
@@ -545,10 +545,10 @@ static void stats_make( int *iovec_entries, struct iovec **iovector, ot_tasktype
   *iovector      = NULL;
   if( !( r = iovec_increase( iovec_entries, iovector, OT_STATS_TMPSIZE ) ) )
     return;
-  
+
   switch( mode & TASK_TASK_MASK ) {
     case TASK_STATS_TORRENTS:    r += stats_torrents_mrtg( r );             break;
-    case TASK_STATS_PEERS:       r += stats_peers_mrtg( r );                break;      
+    case TASK_STATS_PEERS:       r += stats_peers_mrtg( r );                break;
     case TASK_STATS_SLASH24S:    r += stats_slash24s_txt( r, 25, 16 );      break;
     case TASK_STATS_TOP10:       r += stats_top10_txt( r );                 break;
     case TASK_STATS_MEMORY:      r += stats_vector_usage( r );              break;
@@ -609,9 +609,9 @@ void stats_issue_event( ot_status_event event, PROTO_FLAG proto, uint32_t event_
 static void * stats_worker( void * args ) {
   int iovec_entries;
   struct iovec *iovector;
-  
+
   args = args;
-  
+
   while( 1 ) {
     ot_tasktype tasktype = TASK_STATS;
     ot_taskid   taskid   = mutex_workqueue_poptask( &tasktype );
