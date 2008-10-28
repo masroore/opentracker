@@ -316,9 +316,9 @@ static ssize_t stats_vector_usage( char * reply ) {
           return 0;
         }
         if( !exactmatch ) {
-          vec_member[0] = peer_list->peers[j].size;          
-          vec_member[1] = peer_list->peers[j].space;          
-          vec_member[2] = 0;          
+          vec_member[0] = peer_list->peers[j].size;
+          vec_member[1] = peer_list->peers[j].space;
+          vec_member[2] = 1;
         } else
           ++vec_member[2];
       }
