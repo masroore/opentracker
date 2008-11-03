@@ -265,6 +265,8 @@ static ssize_t http_handle_stats( const int64 client_socket, char *data, char *d
         case 5:
           if( !byte_diff(data,5,"top10"))
             mode = TASK_STATS_TOP10;
+          if( !byte_diff(data,5,"renew"))
+            mode = TASK_STATS_RENEW;
           else
             HTTPERROR_400_PARAM;
           break;
