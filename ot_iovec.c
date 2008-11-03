@@ -48,9 +48,8 @@ void  iovec_fixlast( int *iovec_entries, struct iovec **iovector, void *last_ptr
   old_pages = 1 + old_alloc / page_size;
   new_pages = 1 + new_alloc / page_size;
 
-  if( old_pages != new_pages ) {
+  if( old_pages != new_pages )
     munmap( base + new_pages * page_size, old_alloc - new_pages * page_size );
-  }
   ((*iovector)[*iovec_entries - 1 ]).iov_len = new_alloc;
 }
 
