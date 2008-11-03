@@ -91,6 +91,8 @@ ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer  WANT_SYNC_PARAM( 
       return torrent;
     }
     base_pool = 1;
+    if( torrent->peer_list->base < NOW )
+      torrent->peer_list->base = NOW;
   }
 #endif
 
@@ -125,6 +127,7 @@ ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer  WANT_SYNC_PARAM( 
         case 1: default:
                 torrent->peer_list->peer_count--;
                 mutex_bucket_unlock_by_hash( hash );
+                stats_issue_event( EVENT_RENEW, 0, i );
                 return torrent;
       }
     }
@@ -142,6 +145,7 @@ ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer  WANT_SYNC_PARAM( 
     if( OT_FLAG( peer_dest ) & PEER_FLAG_COMPLETED )
       OT_FLAG( peer ) |= PEER_FLAG_COMPLETED;
 
+    stats_issue_event( EVENT_RENEW, 0, base_pool );
     memmove( peer_dest, peer, sizeof( ot_peer ) );
   }
 

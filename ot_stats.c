@@ -46,6 +46,7 @@ static unsigned long long ot_full_scrape_count = 0;
 static unsigned long long ot_full_scrape_request_count = 0;
 static unsigned long long ot_full_scrape_size = 0;
 static unsigned long long ot_failed_request_counts[CODE_HTTPERROR_COUNT];
+static unsigned long long ot_renewed[OT_POOLS_COUNT];
 
 static time_t ot_start_time;
 
@@ -492,6 +493,15 @@ static size_t stats_httperrors_txt ( char * reply ) {
   ot_failed_request_counts[6] );
 }
 
+static size_t stats_return_renew_bucket( char * reply ) {
+  char *r = reply;
+  int i;
+
+  for( i=0; i<OT_BUCKET_COUNT; ++i )
+    r+=sprintf(r,"%02i %llu\n", i, ot_renewed[i] );
+  return r - reply;
+}
+
 extern const char
 *g_version_opentracker_c, *g_version_accesslist_c, *g_version_clean_c, *g_version_fullscrape_c, *g_version_http_c,
 *g_version_iovec_c, *g_version_mutex_c, *g_version_stats_c, *g_version_sync_c, *g_version_udp_c, *g_version_vector_c,
@@ -525,6 +535,8 @@ size_t return_stats_for_tracker( char *reply, int mode, int format ) {
       return stats_httperrors_txt( reply );
     case TASK_STATS_VERSION:
       return stats_return_tracker_version( reply );
+    case TASK_STATS_RENEW:
+      return stats_return_renew_bucket( reply );
 #ifdef WANT_LOG_NETWORKS
     case TASK_STATS_BUSY_NETWORKS:
       return stats_return_busy_networks( reply );
@@ -595,6 +607,9 @@ void stats_issue_event( ot_status_event event, PROTO_FLAG proto, uint32_t event_
       break;
     case EVENT_FAILED:
       ot_failed_request_counts[event_data]++;
+      break;
+    case EVENT_RENEW:
+      ot_renewed[event_data]++;
       break;
     case EVENT_SYNC_IN_REQUEST:
     case EVENT_SYNC_IN:

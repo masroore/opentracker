@@ -28,6 +28,7 @@ typedef enum {
   TASK_STATS_VERSION               = 0x000a,
   TASK_STATS_BUSY_NETWORKS         = 0x000b,
   TASK_STATS_VECTOR_DEBUG          = 0x000c,
+  TASK_STATS_RENEW                 = 0x000d,
 
   TASK_STATS                       = 0x0100, /* Mask */
   TASK_STATS_TORRENTS              = 0x0101,
