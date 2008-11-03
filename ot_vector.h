@@ -7,10 +7,10 @@
 #define __OT_VECTOR_H__
 
 /* These defines control vectors behaviour */
-#define OT_VECTOR_MIN_MEMBERS   4
-#define OT_VECTOR_GROW_RATIO    8
-#define OT_VECTOR_SHRINK_THRESH 6
-#define OT_VECTOR_SHRINK_RATIO  4
+#define OT_VECTOR_MIN_MEMBERS   2
+#define OT_VECTOR_GROW_RATIO    2
+#define OT_VECTOR_SHRINK_THRESH 4
+#define OT_VECTOR_SHRINK_RATIO  2
 
 typedef struct {
   void   *data;
