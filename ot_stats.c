@@ -497,7 +497,7 @@ static size_t stats_return_renew_bucket( char * reply ) {
   char *r = reply;
   int i;
 
-  for( i=0; i<OT_BUCKET_COUNT; ++i )
+  for( i=0; i<OT_POOLS_COUNT; ++i )
     r+=sprintf(r,"%02i %llu\n", i, ot_renewed[i] );
   return r - reply;
 }
