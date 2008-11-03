@@ -8,6 +8,7 @@
 #include <string.h>
 #include <pthread.h>
 #include <sys/uio.h>
+#include <unistd.h>
 
 /* Libowfat */
 #include "byte.h"
@@ -103,6 +104,11 @@ static void clean_make() {
       }
     }
     mutex_bucket_unlock( bucket );
+    
+    /* We want the cleanup to be spread about 2 Minutes to reduce load spikes
+       during cleanup. Sleeping around two minutes was chosen to allow enough
+       time for the actual work and fluctuations in timer. */
+    usleep( ( 2 * 60 * 1000000 ) / OT_BUCKET_COUNT );
   }
 }
 
