@@ -125,7 +125,7 @@ int vector_remove_peer( ot_vector *vector, ot_peer *peer, int hysteresis ) {
   if( !exactmatch ) return 0;
   exactmatch = ( OT_FLAG( match ) & PEER_FLAG_SEEDING ) ? 2 : 1;
   memmove( match, match + 1, sizeof(ot_peer) * ( end - match - 1 ) );
-  if( ( --vector->size * shrink_thresh < vector->space ) && ( vector->space > OT_VECTOR_MIN_MEMBERS ) ) {
+  if( ( --vector->size * shrink_thresh < vector->space ) && ( vector->space >= OT_VECTOR_SHRINK_RATIO * OT_VECTOR_MIN_MEMBERS ) ) {
     vector->space /= OT_VECTOR_SHRINK_RATIO;
     vector->data = realloc( vector->data, vector->space * sizeof( ot_peer ) );
   }
@@ -155,7 +155,7 @@ void vector_remove_torrent( ot_vector *vector, ot_torrent *match ) {
   if( match->peer_list) free_peerlist( match->peer_list );
 
   memmove( match, match + 1, sizeof(ot_torrent) * ( end - match - 1 ) );
-  if( ( --vector->size * OT_VECTOR_SHRINK_THRESH < vector->space ) && ( vector->space > OT_VECTOR_MIN_MEMBERS ) ) {
+  if( ( --vector->size * OT_VECTOR_SHRINK_THRESH < vector->space ) && ( vector->space >= OT_VECTOR_SHRINK_RATIO * OT_VECTOR_MIN_MEMBERS ) ) {
     vector->space /= OT_VECTOR_SHRINK_RATIO;
     vector->data = realloc( vector->data, vector->space * sizeof( ot_torrent ) );
   }
