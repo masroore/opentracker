@@ -50,7 +50,7 @@ void livesync_init( ) {
   livesync_outbuffer_pos = livesync_outbuffer_start;
   memmove( livesync_outbuffer_pos, &g_tracker_id, sizeof( g_tracker_id ) );
   livesync_outbuffer_pos += sizeof( g_tracker_id );
-  livesync_lastpacket_time = g_now;
+  livesync_lastpacket_time = g_now_seconds;
 
   pthread_create( &thread_id, NULL, livesync_worker, NULL );
 }
@@ -88,14 +88,13 @@ static void livesync_issuepacket( ) {
   socket_send4(g_livesync_socket_out, (char*)livesync_outbuffer_start, livesync_outbuffer_pos - livesync_outbuffer_start,
                groupip_1, LIVESYNC_PORT);
   livesync_outbuffer_pos = livesync_outbuffer_start + sizeof( g_tracker_id );
-  livesync_lastpacket_time = g_now;
+  livesync_lastpacket_time = g_now_seconds;
 }
 
 /* Inform live sync about whats going on. */
-void livesync_tell( ot_hash * const info_hash, const ot_peer * const peer, const uint8_t peerflag ) {
+void livesync_tell( ot_hash * const info_hash, const ot_peer * const peer ) {
   memmove( livesync_outbuffer_pos                  , info_hash, sizeof(ot_hash));
   memmove( livesync_outbuffer_pos + sizeof(ot_hash), peer,      sizeof(ot_peer));
-  OT_FLAG( livesync_outbuffer_pos + sizeof(ot_hash) ) |= peerflag;
 
   livesync_outbuffer_pos += sizeof(ot_hash) + sizeof(ot_peer);
   if( livesync_outbuffer_pos >= livesync_outbuffer_highwater )
@@ -106,7 +105,7 @@ void livesync_tell( ot_hash * const info_hash, const ot_peer * const peer, const
  stuck when there's not enough traffic to fill udp packets fast
  enough */
 void livesync_ticker( ) {
-  if( ( g_now - livesync_lastpacket_time > LIVESYNC_MAXDELAY) &&
+  if( ( g_now_seconds - livesync_lastpacket_time > LIVESYNC_MAXDELAY) &&
       ( livesync_outbuffer_pos > livesync_outbuffer_start + sizeof( g_tracker_id ) ) )
     livesync_issuepacket();
 }
@@ -126,22 +125,22 @@ static void * livesync_worker( void * args ) {
       continue;
 
     if( datalen < (ssize_t)(sizeof( g_tracker_id ) + sizeof( ot_hash ) + sizeof( ot_peer ) ) ) {
-      // TODO: log invalid sync packet
+      /* TODO: log invalid sync packet */
       continue;
     }
 
     if( !accesslist_isblessed((char*)in_ip, OT_PERMISSION_MAY_LIVESYNC)) {
-      // TODO: log invalid sync packet
+      /* TODO: log invalid sync packet */
       continue;
     }
 
     if( !memcmp( livesync_inbuffer, &g_tracker_id, sizeof( g_tracker_id ) ) ) {
-      // TODO: log packet coming from ourselves
+      /* TODO: log packet coming from ourselves */
       continue;
     }
 
-    // Now basic sanity checks have been done on the live sync packet
-    // We might add more testing and logging.
+    /* Now basic sanity checks have been done on the live sync packet
+       We might add more testing and logging. */
     while( off + (ssize_t)sizeof( ot_hash ) + (ssize_t)sizeof( ot_peer ) <= datalen ) {
       ot_peer *peer = (ot_peer*)(livesync_inbuffer + off + sizeof(ot_hash));
       ot_hash *hash = (ot_hash*)(livesync_inbuffer + off);

@@ -5,42 +5,36 @@
    $Id$ */
 
 /* System */
-#include <string.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <arpa/inet.h>
-#include <unistd.h>
 #include <stdlib.h>
+#include <string.h>
+#include <arpa/inet.h>
+#include <sys/socket.h>
+#include <unistd.h>
 #include <errno.h>
 #include <signal.h>
 #include <stdio.h>
 #include <pwd.h>
 #include <ctype.h>
-#include <arpa/inet.h>
 
 /* Libowfat */
 #include "socket.h"
 #include "io.h"
 #include "iob.h"
-#include "array.h"
 #include "byte.h"
-#include "fmt.h"
 #include "scan.h"
 #include "ip4.h"
 
 /* Opentracker */
 #include "trackerlogic.h"
-#include "ot_iovec.h"
 #include "ot_mutex.h"
 #include "ot_http.h"
 #include "ot_udp.h"
-#include "ot_clean.h"
 #include "ot_accesslist.h"
 #include "ot_stats.h"
 #include "ot_livesync.h"
 
 /* Globals */
-time_t   g_now;
+time_t   g_now_seconds;
 char *   g_redirecturl = NULL;
 uint32_t g_tracker_id;
 
@@ -61,7 +55,7 @@ static void signal_handler( int s ) {
     trackerlogic_deinit();
     exit( 0 );
   } else if( s == SIGALRM ) {
-    g_now = time(NULL);
+    g_now_seconds = time(NULL);
     alarm(5);
   }
 }
@@ -135,7 +129,7 @@ static ssize_t handle_read( const int64 clientsocket ) {
   if( array_failed( &h->request ) )
     return http_issue_error( clientsocket, CODE_HTTPERROR_500 );
 
-  if( ( array_bytes( &h->request ) > 8192 ) && !accesslist_isblessed( (char*)&h->ip, OT_PERMISSION_MAY_SYNC ) )
+  if( array_bytes( &h->request ) > 8192 )
      return http_issue_error( clientsocket, CODE_HTTPERROR_500 );
 
   if( memchr( array_start( &h->request ), '\n', array_bytes( &h->request ) ) )
@@ -178,7 +172,7 @@ static void handle_accept( const int64 serversocket ) {
     /* That breaks taia encapsulation. But there is no way to take system
        time this often in FreeBSD and libowfat does not allow to set unix time */
     taia_uint( &t, 0 ); /* Clear t */
-    tai_unix( &(t.sec), (g_now + OT_CLIENT_TIMEOUT) );
+    tai_unix( &(t.sec), (g_now_seconds + OT_CLIENT_TIMEOUT) );
     io_timeout( i, t );
   }
 
@@ -187,8 +181,7 @@ static void handle_accept( const int64 serversocket ) {
 }
 
 static void server_mainloop( ) {
-  static time_t ot_last_clean_time;
-  time_t        next_timeout_check = g_now + OT_CLIENT_TIMEOUT_CHECKINTERVAL;
+  time_t        next_timeout_check = g_now_seconds + OT_CLIENT_TIMEOUT_CHECKINTERVAL;
   struct        iovec *iovector;
   int           iovec_entries;
 
@@ -213,19 +206,13 @@ static void server_mainloop( ) {
     while( ( i = io_canwrite( ) ) != -1 )
       handle_write( i );
 
-    if( g_now > next_timeout_check ) {
+    if( g_now_seconds > next_timeout_check ) {
       while( ( i = io_timeouted() ) != -1 )
         handle_dead( i );
-      next_timeout_check = g_now + OT_CLIENT_TIMEOUT_CHECKINTERVAL;
+      next_timeout_check = g_now_seconds + OT_CLIENT_TIMEOUT_CHECKINTERVAL;
     }
 
     livesync_ticker();
-
-    /* See if we need to move our pools */
-    if( NOW != ot_last_clean_time ) {
-      ot_last_clean_time = NOW;
-      clean_all_torrents();
-    }
 
     /* Enforce setting the clock */
     signal_handler( SIGALRM );
@@ -266,7 +253,7 @@ char * set_config_option( char **option, char *value ) {
   fprintf( stderr, "Setting config option: %s\n", value );
 #endif
   while( isspace(*value) ) ++value;
-  if( *option ) free( *option );
+  free( *option );
   return *option = strdup( value );
 }
 
@@ -342,11 +329,6 @@ int parse_configfile( char * config_filename ) {
 #endif
     } else if(!byte_diff(p, 20, "tracker.redirect_url" ) && isspace(p[20])) {
       set_config_option( &g_redirecturl, p+21 );
-#ifdef WANT_SYNC_BATCH
-    } else if(!byte_diff(p, 26, "batchsync.cluster.admin_ip" ) && isspace(p[26])) {
-      if(!scan_ip4( p+27, tmpip )) goto parse_error;
-      accesslist_blessip( tmpip, OT_PERMISSION_MAY_SYNC );
-#endif
 #ifdef WANT_SYNC_LIVE
     } else if(!byte_diff(p, 24, "livesync.cluster.node_ip" ) && isspace(p[24])) {
       if( !scan_ip4( p+25, tmpip )) goto parse_error;
@@ -408,7 +390,7 @@ while( scanon ) {
         break;
       case 'f': bound += parse_configfile( optarg ); break;
       case 'h': help( argv[0] ); exit( 0 );
-      case 'v': write( 2, static_inbuf, stats_return_tracker_version( static_inbuf )); exit( 0 );
+      case 'v': stats_return_tracker_version( static_inbuf ); fputs( static_inbuf, stderr ); exit( 0 );
       default:
       case '?': usage( argv[0] ); exit( 1 );
     }
@@ -435,7 +417,7 @@ while( scanon ) {
   signal( SIGINT,  signal_handler );
   signal( SIGALRM, signal_handler );
 
-  g_now = time( NULL );
+  g_now_seconds = time( NULL );
 
   if( trackerlogic_init( g_serverdir ? g_serverdir : "." ) == -1 )
     panic( "Logic not started" );

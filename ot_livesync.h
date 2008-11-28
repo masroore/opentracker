@@ -35,7 +35,6 @@
     ]+
   ]*
 
-
  */
 
 #ifdef WANT_SYNC_LIVE
@@ -49,7 +48,7 @@ void livesync_deinit();
 void livesync_bind_mcast( char *ip, uint16_t port );
 
 /* Inform live sync about whats going on. */
-void livesync_tell( ot_hash * const info_hash, const ot_peer * const peer, const uint8_t peerflag );
+void livesync_tell( ot_hash * const info_hash, const ot_peer * const peer );
 
 /* Tickle the live sync module from time to time, so no events get
    stuck when there's not enough traffic to fill udp packets fast
@@ -63,7 +62,6 @@ void handle_livesync( const int64 serversocket );
 
 /* If no syncing is required, save calling code from #ifdef
    constructions */
-
 #define livesync_init()
 #define livesync_ticker()
 #define handle_livesync(a)

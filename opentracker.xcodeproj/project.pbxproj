@@ -14,7 +14,6 @@
 		654A808A0CD832FD009035DE /* scan_urlencoded_query.c in Sources */ = {isa = PBXBuildFile; fileRef = 654A80850CD832FC009035DE /* scan_urlencoded_query.c */; };
 		654A808B0CD832FD009035DE /* trackerlogic.c in Sources */ = {isa = PBXBuildFile; fileRef = 654A80870CD832FC009035DE /* trackerlogic.c */; };
 		65542D8B0CE078E800469330 /* ot_vector.c in Sources */ = {isa = PBXBuildFile; fileRef = 65542D8A0CE078E800469330 /* ot_vector.c */; };
-		65542D8E0CE07BA900469330 /* ot_sync.c in Sources */ = {isa = PBXBuildFile; fileRef = 65542D8D0CE07BA900469330 /* ot_sync.c */; };
 		65542D930CE07CED00469330 /* ot_mutex.c in Sources */ = {isa = PBXBuildFile; fileRef = 65542D8F0CE07CED00469330 /* ot_mutex.c */; };
 		65542D940CE07CED00469330 /* ot_stats.c in Sources */ = {isa = PBXBuildFile; fileRef = 65542D910CE07CED00469330 /* ot_stats.c */; };
 		65542E750CE08B9100469330 /* ot_clean.c in Sources */ = {isa = PBXBuildFile; fileRef = 65542E740CE08B9100469330 /* ot_clean.c */; };
@@ -53,8 +52,6 @@
 		654A80880CD832FC009035DE /* trackerlogic.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = trackerlogic.h; sourceTree = "<group>"; };
 		65542D890CE078E800469330 /* ot_vector.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ot_vector.h; sourceTree = "<group>"; };
 		65542D8A0CE078E800469330 /* ot_vector.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = ot_vector.c; sourceTree = "<group>"; };
-		65542D8C0CE07BA900469330 /* ot_sync.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ot_sync.h; sourceTree = "<group>"; };
-		65542D8D0CE07BA900469330 /* ot_sync.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = ot_sync.c; sourceTree = "<group>"; };
 		65542D8F0CE07CED00469330 /* ot_mutex.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = ot_mutex.c; sourceTree = "<group>"; };
 		65542D900CE07CED00469330 /* ot_mutex.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ot_mutex.h; sourceTree = "<group>"; };
 		65542D910CE07CED00469330 /* ot_stats.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = ot_stats.c; sourceTree = "<group>"; };
@@ -114,7 +111,6 @@
 				653A56B40CE28EC5000CF140 /* ot_iovec.c */,
 				65542D8F0CE07CED00469330 /* ot_mutex.c */,
 				65542D910CE07CED00469330 /* ot_stats.c */,
-				65542D8D0CE07BA900469330 /* ot_sync.c */,
 				65542EE70CE0CA6B00469330 /* ot_udp.c */,
 				65542D8A0CE078E800469330 /* ot_vector.c */,
 				654A80850CD832FC009035DE /* scan_urlencoded_query.c */,
@@ -144,9 +140,8 @@
 				653A56B30CE28EC5000CF140 /* ot_iovec.h */,
 				65542D900CE07CED00469330 /* ot_mutex.h */,
 				65542D920CE07CED00469330 /* ot_stats.h */,
-				65542D8C0CE07BA900469330 /* ot_sync.h */,
-				65542EE60CE0CA6B00469330 /* ot_udp.h */,
 				65542D890CE078E800469330 /* ot_vector.h */,
+				65542EE60CE0CA6B00469330 /* ot_udp.h */,
 				654A80860CD832FC009035DE /* scan_urlencoded_query.h */,
 				654A80880CD832FC009035DE /* trackerlogic.h */,
 			);
@@ -244,7 +239,6 @@
 				654A808A0CD832FD009035DE /* scan_urlencoded_query.c in Sources */,
 				654A808B0CD832FD009035DE /* trackerlogic.c in Sources */,
 				65542D8B0CE078E800469330 /* ot_vector.c in Sources */,
-				65542D8E0CE07BA900469330 /* ot_sync.c in Sources */,
 				65542D930CE07CED00469330 /* ot_mutex.c in Sources */,
 				65542D940CE07CED00469330 /* ot_stats.c in Sources */,
 				65542E750CE08B9100469330 /* ot_clean.c in Sources */,
@@ -282,6 +276,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				GCC_ENABLE_FIX_AND_CONTINUE = YES;
 				GCC_MODEL_TUNING = G5;
 				INSTALL_PATH = /usr/local/bin;
 				LIBRARY_SEARCH_PATHS = (
@@ -295,6 +290,7 @@
 		1DEB928A08733DD80010E9CD /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				GCC_PREPROCESSOR_DEFINITIONS = WANT_IP_FROM_QUERY_STRING;
 				GCC_WARN_ABOUT_RETURN_TYPE = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				HEADER_SEARCH_PATHS = ../libowfat/;
@@ -309,6 +305,7 @@
 			buildSettings = {
 				ARCHS = ppc;
 				DEAD_CODE_STRIPPING = NO;
+				GCC_PREPROCESSOR_DEFINITIONS = WANT_IP_FROM_QUERY_STRING;
 				GCC_WARN_ABOUT_RETURN_TYPE = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				HEADER_SEARCH_PATHS = ../libowfat/;

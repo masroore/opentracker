@@ -8,7 +8,7 @@ while true; do
 
   echo $request_string
   echo
-  echo $request_string | nc 10.0.1.3 6969 >/dev/null
+  echo $request_string | nc 23.23.23.237 6969 >/dev/null
   echo
 
 done

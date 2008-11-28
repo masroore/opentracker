@@ -5,7 +5,6 @@
 
 /* System */
 #include <sys/types.h>
-#include <sys/uio.h>
 #include <arpa/inet.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -26,7 +25,6 @@
 #include "ot_fullscrape.h"
 #include "ot_stats.h"
 #include "ot_accesslist.h"
-#include "ot_sync.h"
 
 #define OT_MAXMULTISCRAPE_COUNT 64
 static ot_hash multiscrape_buf[OT_MAXMULTISCRAPE_COUNT];
@@ -165,52 +163,6 @@ ssize_t http_sendiovecdata( const int64 client_socket, int iovec_entries, struct
   return 0;
 }
 
-#ifdef WANT_SYNC_BATCH
-static ssize_t http_handle_sync( const int64 client_socket, char *data ) {
-  struct http_data* h = io_getcookie( client_socket );
-  size_t len;
-  int mode = SYNC_OUT, scanon = 1;
-  char *c = data;
-
-  if( !accesslist_isblessed( h->ip, OT_PERMISSION_MAY_SYNC ) )
-    HTTPERROR_403_IP;
-
-  while( scanon ) {
-    switch( scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_PARAM ) ) {
-    case -2: scanon = 0; break;   /* TERMINATOR */
-    case -1: HTTPERROR_400_PARAM; /* PARSE ERROR */
-    default: scan_urlencoded_skipvalue( &c ); break;
-    case 9:
-      if(byte_diff(data,9,"changeset")) {
-        scan_urlencoded_skipvalue( &c );
-        continue;
-      }
-      /* ignore this, when we dont at least see "d4:syncdee" */
-      if( ( len = scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE ) ) < 10 ) HTTPERROR_400_PARAM;
-      if( add_changeset_to_tracker( (uint8_t*)data, len ) ) HTTPERROR_400_PARAM;
-      if( mode == SYNC_OUT ) {
-        stats_issue_event( EVENT_SYNC_IN, FLAG_TCP, 0 );
-        mode = SYNC_IN;
-      }
-      break;
-    }
-  }
-
-  if( mode == SYNC_OUT ) {
-    /* Pass this task to the worker thread */
-    h->flag |= STRUCT_HTTP_FLAG_WAITINGFORTASK;
-    stats_issue_event( EVENT_SYNC_OUT_REQUEST, FLAG_TCP, 0 );
-    sync_deliver( client_socket );
-    io_dontwantread( client_socket );
-    return -2;
-  }
-
-  /* Simple but proof for now */
-  memmove( static_outbuf + SUCCESS_HTTP_HEADER_LENGTH, "OK", 2);
-  return 2;
-}
-#endif
-
 static ssize_t http_handle_stats( const int64 client_socket, char *data, char *d, size_t l ) {
   char *c = data;
   int mode = TASK_STATS_PEERS, scanon = 1, format = 0;
@@ -245,10 +197,6 @@ static ssize_t http_handle_stats( const int64 client_socket, char *data, char *d
             mode = TASK_STATS_UDP;
           else if( !byte_diff(data,4,"busy"))
             mode = TASK_STATS_BUSY_NETWORKS;
-          else if( !byte_diff(data,4,"dmem"))
-            mode = TASK_STATS_MEMORY;
-          else if( !byte_diff(data,4,"vdeb"))
-            mode = TASK_STATS_VECTOR_DEBUG;
           else if( !byte_diff(data,4,"torr"))
             mode = TASK_STATS_TORRENTS;
           else if( !byte_diff(data,4,"fscr"))
@@ -265,7 +213,7 @@ static ssize_t http_handle_stats( const int64 client_socket, char *data, char *d
         case 5:
           if( !byte_diff(data,5,"top10"))
             mode = TASK_STATS_TOP10;
-          if( !byte_diff(data,5,"renew"))
+          else if( !byte_diff(data,5,"renew"))
             mode = TASK_STATS_RENEW;
           else
             HTTPERROR_400_PARAM;
@@ -524,7 +472,7 @@ static ssize_t http_handle_announce( const int64 client_socket, char *data ) {
     len = remove_peer_from_torrent( hash, &peer, SUCCESS_HTTP_HEADER_LENGTH + static_outbuf, FLAG_TCP );
   else {
     torrent = add_peer_to_torrent( hash, &peer  WANT_SYNC_PARAM( 0 ) );
-    if( !torrent || !( len = return_peers_for_torrent( hash, numwant, SUCCESS_HTTP_HEADER_LENGTH + static_outbuf, FLAG_TCP ) ) ) HTTPERROR_500;
+    if( !torrent || !( len = return_peers_for_torrent( torrent, numwant, SUCCESS_HTTP_HEADER_LENGTH + static_outbuf, FLAG_TCP ) ) ) HTTPERROR_500;
   }
   stats_issue_event( EVENT_ANNOUNCE, FLAG_TCP, len);
   return len;
@@ -573,12 +521,6 @@ ssize_t http_handle_request( const int64 client_socket, char *data, size_t recv_
     reply_size = http_handle_scrape( client_socket, c );
   /* All the rest is matched the standard way */
   else switch( len ) {
-#ifdef WANT_SYNC_BATCH
-  case 4: /* sync ? */
-    if( byte_diff( data, 4, "sync") ) HTTPERROR_404;
-    reply_size = http_handle_sync( client_socket, c );
-    break;
-#endif
   case 5: /* stats ? */
     if( byte_diff( data, 5, "stats") ) HTTPERROR_404;
     reply_size = http_handle_stats( client_socket, c, recv_header, recv_length );

@@ -7,7 +7,7 @@
 #define __OT_ACCESSLIST_H__
 
 #if defined ( WANT_ACCESSLIST_BLACK ) && defined (WANT_ACCESSLIST_WHITE )
-  #error WANT_ACCESSLIST_BLACK and WANT_ACCESSLIST_WHITE are exclusive.
+#  error WANT_ACCESSLIST_BLACK and WANT_ACCESSLIST_WHITE are exclusive.
 #endif
 
 #if defined ( WANT_ACCESSLIST_BLACK ) || defined (WANT_ACCESSLIST_WHITE )
@@ -24,9 +24,8 @@ extern char *g_accesslist_filename;
 
 typedef enum {
   OT_PERMISSION_MAY_FULLSCRAPE = 0x1,
-  OT_PERMISSION_MAY_SYNC       = 0x2,
-  OT_PERMISSION_MAY_STAT       = 0x4,
-  OT_PERMISSION_MAY_LIVESYNC   = 0x8
+  OT_PERMISSION_MAY_STAT       = 0x2,
+  OT_PERMISSION_MAY_LIVESYNC   = 0x4
 } ot_permissions;
 
 int  accesslist_blessip( char * ip, ot_permissions permissions );

@@ -16,6 +16,7 @@
 /* Opentracker */
 #include "trackerlogic.h"
 #include "ot_accesslist.h"
+#include "ot_vector.h"
 
 /* GLOBAL VARIABLES */
 #ifdef WANT_ACCESSLIST
@@ -110,7 +111,6 @@ int accesslist_blessip( char *ip, ot_permissions permissions ) {
   uint8_t *_ip = (uint8_t*)ip;
   fprintf( stderr, "Blessing ip address %d.%d.%d.%d with:", _ip[0], _ip[1], _ip[2], _ip[3]);
   if( permissions & OT_PERMISSION_MAY_STAT       ) fputs( " may_fetch_stats", stderr );
-  if( permissions & OT_PERMISSION_MAY_SYNC       ) fputs( " may_sync_batch", stderr );
   if( permissions & OT_PERMISSION_MAY_LIVESYNC   ) fputs( " may_sync_live", stderr );
   if( permissions & OT_PERMISSION_MAY_FULLSCRAPE ) fputs( " may_fetch_fullscrapes", stderr );
   if( !permissions ) fputs(" nothing.\n", stderr); else fputs(".\n", stderr );

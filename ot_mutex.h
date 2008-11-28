@@ -6,6 +6,8 @@
 #ifndef __OT_MUTEX_H__
 #define __OT_MUTEX_H__
 
+#include <sys/uio.h>
+
 void mutex_init( );
 void mutex_deinit( );
 
@@ -27,27 +29,20 @@ typedef enum {
   TASK_STATS_TORADDREM             = 0x0009,
   TASK_STATS_VERSION               = 0x000a,
   TASK_STATS_BUSY_NETWORKS         = 0x000b,
-  TASK_STATS_VECTOR_DEBUG          = 0x000c,
-  TASK_STATS_RENEW                 = 0x000d,
+  TASK_STATS_RENEW                 = 0x000c,
 
   TASK_STATS                       = 0x0100, /* Mask */
   TASK_STATS_TORRENTS              = 0x0101,
   TASK_STATS_PEERS                 = 0x0102,
   TASK_STATS_SLASH24S              = 0x0103,
   TASK_STATS_TOP10                 = 0x0104,
-  TASK_STATS_MEMORY                = 0x0105,
 
   TASK_FULLSCRAPE                  = 0x0200, /* Default mode */
   TASK_FULLSCRAPE_TPB_BINARY       = 0x0201,
   TASK_FULLSCRAPE_TPB_ASCII        = 0x0202,
   TASK_FULLSCRAPE_TPB_URLENCODED   = 0x0203,
 
-  TASK_CLEAN                       = 0x0300,
-
-  TASK_SYNC_OUT                    = 0x0400,
-  TASK_SYNC_IN                     = 0x0401,
-
-  TASK_DMEM                        = 0x0500,
+  TASK_DMEM                        = 0x0300,
 
   TASK_DONE                        = 0x0f00,
 

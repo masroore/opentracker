@@ -7,7 +7,6 @@
 
 /* System */
 #include <sys/param.h>
-#include <sys/uio.h>
 #include <stdio.h>
 #include <string.h>
 #include <pthread.h>

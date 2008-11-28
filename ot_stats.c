@@ -46,7 +46,7 @@ static unsigned long long ot_full_scrape_count = 0;
 static unsigned long long ot_full_scrape_request_count = 0;
 static unsigned long long ot_full_scrape_size = 0;
 static unsigned long long ot_failed_request_counts[CODE_HTTPERROR_COUNT];
-static unsigned long long ot_renewed[OT_POOLS_COUNT];
+static unsigned long long ot_renewed[OT_PEER_TIMEOUT];
 
 static time_t ot_start_time;
 
@@ -214,7 +214,7 @@ static size_t stats_slash24s_txt( char * reply, size_t amount, uint32_t thresh )
 
   uint32_t *counts[ NUM_BUFS ];
   uint32_t  slash24s[amount*2];  /* first dword amount, second dword subnet */
-  int       bucket;
+//  int       bucket;
   size_t    i, j, k, l;
   char     *r  = reply;
 
@@ -223,6 +223,8 @@ static size_t stats_slash24s_txt( char * reply, size_t amount, uint32_t thresh )
 
   r += sprintf( r, "Stats for all /24s with more than %u announced torrents:\n\n", thresh );
 
+#if 0
+  /* XXX: TOOD: Doesn't work yet with new peer storage model */
   for( bucket=0; bucket<OT_BUCKET_COUNT; ++bucket ) {
     ot_vector *torrents_list = mutex_bucket_lock( bucket );
     for( j=0; j<torrents_list->size; ++j ) {
@@ -248,6 +250,7 @@ static size_t stats_slash24s_txt( char * reply, size_t amount, uint32_t thresh )
     }
     mutex_bucket_unlock( bucket );
   }
+#endif
 
   k = l = 0; /* Debug: count allocated bufs */
   for( i=0; i < NUM_BUFS; ++i ) {
@@ -283,8 +286,6 @@ static size_t stats_slash24s_txt( char * reply, size_t amount, uint32_t thresh )
 
   return r - reply;
 
-bailout_cleanup:
-
   for( i=0; i < NUM_BUFS; ++i )
     free( counts[i] );
 
@@ -298,44 +299,6 @@ bailout_cleanup:
    size_t count
  }
  */
-
-static ssize_t stats_vector_usage( char * reply ) {
-  size_t i, j, *vec_member;
-  char *r = reply;
-  int exactmatch, bucket;
-
-  ot_vector bucketsizes;
-  memset( &bucketsizes, 0, sizeof( bucketsizes ));
-
-  for( bucket=0; bucket<OT_BUCKET_COUNT; ++bucket ) {
-    ot_vector *torrents_list = mutex_bucket_lock( bucket );
-    for( i=0; i<torrents_list->size; ++i ) {
-      ot_peerlist *peer_list = ( ((ot_torrent*)(torrents_list->data))[i] ).peer_list;
-      for( j=0; j<OT_POOLS_COUNT; ++j ) {
-        if( ! ( vec_member = vector_find_or_insert(&bucketsizes, &peer_list->peers[j].size, 3 * sizeof( size_t ), 2 * sizeof(size_t), &exactmatch) ) ) {
-          mutex_bucket_unlock( bucket );
-          return 0;
-        }
-        if( !exactmatch ) {
-          vec_member[0] = peer_list->peers[j].size;
-          vec_member[1] = peer_list->peers[j].space;
-          vec_member[2] = 1;
-        } else
-          ++vec_member[2];
-      }
-    }
-    mutex_bucket_unlock( bucket );
-  }
-
-  for( i = 0; i<bucketsizes.size; ++i ) {
-    r += sprintf( r, "%zd\t%zd\t%zd\n", ((size_t*)bucketsizes.data)[3*i], ((size_t*)bucketsizes.data)[3*i+1], ((size_t*)bucketsizes.data)[3*i+2] );
-    /* Prevent overflow. 8k should be enough for debugging */
-    if( r - reply > OT_STATS_TMPSIZE - 3*10+3 /* 3*%zd + 2*\t + \n */ )
-      break;
-  }
-
-  return r - reply;
-}
 
 static unsigned long events_per_time( unsigned long long events, time_t t ) {
   return events / ( (unsigned int)t ? (unsigned int)t : 1 );
@@ -497,20 +460,20 @@ static size_t stats_return_renew_bucket( char * reply ) {
   char *r = reply;
   int i;
 
-  for( i=0; i<OT_POOLS_COUNT; ++i )
+  for( i=0; i<OT_PEER_TIMEOUT; ++i )
     r+=sprintf(r,"%02i %llu\n", i, ot_renewed[i] );
   return r - reply;
 }
 
 extern const char
 *g_version_opentracker_c, *g_version_accesslist_c, *g_version_clean_c, *g_version_fullscrape_c, *g_version_http_c,
-*g_version_iovec_c, *g_version_mutex_c, *g_version_stats_c, *g_version_sync_c, *g_version_udp_c, *g_version_vector_c,
+*g_version_iovec_c, *g_version_mutex_c, *g_version_stats_c, *g_version_udp_c, *g_version_vector_c,
 *g_version_scan_urlencoded_query_c, *g_version_trackerlogic_c, *g_version_livesync_c;
 
 size_t stats_return_tracker_version( char *reply ) {
-  return sprintf( reply, "%s%s%s%s%s%s%s%s%s%s%s%s%s%s",
+  return sprintf( reply, "%s%s%s%s%s%s%s%s%s%s%s%s%s",
   g_version_opentracker_c, g_version_accesslist_c, g_version_clean_c, g_version_fullscrape_c, g_version_http_c,
-  g_version_iovec_c, g_version_mutex_c, g_version_stats_c, g_version_sync_c, g_version_udp_c, g_version_vector_c,
+  g_version_iovec_c, g_version_mutex_c, g_version_stats_c, g_version_udp_c, g_version_vector_c,
   g_version_scan_urlencoded_query_c, g_version_trackerlogic_c, g_version_livesync_c );
 }
 
@@ -541,10 +504,6 @@ size_t return_stats_for_tracker( char *reply, int mode, int format ) {
     case TASK_STATS_BUSY_NETWORKS:
       return stats_return_busy_networks( reply );
 #endif
-#ifdef _DEBUG_VECTOR
-    case TASK_STATS_VECTOR_DEBUG:
-      return vector_info( reply );
-#endif
     default:
       return 0;
   }
@@ -563,7 +522,6 @@ static void stats_make( int *iovec_entries, struct iovec **iovector, ot_tasktype
     case TASK_STATS_PEERS:       r += stats_peers_mrtg( r );                break;
     case TASK_STATS_SLASH24S:    r += stats_slash24s_txt( r, 25, 16 );      break;
     case TASK_STATS_TOP10:       r += stats_top10_txt( r );                 break;
-    case TASK_STATS_MEMORY:      r += stats_vector_usage( r );              break;
     default:
       iovec_free(iovec_entries, iovector);
       return;
@@ -594,14 +552,14 @@ void stats_issue_event( ot_status_event event, PROTO_FLAG proto, uint32_t event_
     case EVENT_FULLSCRAPE_REQUEST:
       {
       uint8_t ip[4]; *(uint32_t*)ip = (uint32_t)proto; /* ugly hack to transfer ip to stats */
-      LOG_TO_STDERR( "[%08d] scrp: %d.%d.%d.%d - FULL SCRAPE\n", (unsigned int)(g_now - ot_start_time), ip[0], ip[1], ip[2], ip[3] );
+      LOG_TO_STDERR( "[%08d] scrp: %d.%d.%d.%d - FULL SCRAPE\n", (unsigned int)(g_now_seconds - ot_start_time)/60, ip[0], ip[1], ip[2], ip[3] );
       ot_full_scrape_request_count++;
       }
       break;
     case EVENT_FULLSCRAPE_REQUEST_GZIP:
       {
       uint8_t ip[4]; *(uint32_t*)ip = (uint32_t)proto; /* ugly hack to transfer ip to stats */
-      LOG_TO_STDERR( "[%08d] scrp: %d.%d.%d.%d - FULL SCRAPE GZIP\n", (unsigned int)(g_now - ot_start_time), ip[0], ip[1], ip[2], ip[3] );
+      LOG_TO_STDERR( "[%08d] scrp: %d.%d.%d.%d - FULL SCRAPE GZIP\n", (unsigned int)(g_now_seconds - ot_start_time)/60, ip[0], ip[1], ip[2], ip[3] );
       ot_full_scrape_request_count++;
       }
       break;
@@ -610,11 +568,6 @@ void stats_issue_event( ot_status_event event, PROTO_FLAG proto, uint32_t event_
       break;
     case EVENT_RENEW:
       ot_renewed[event_data]++;
-      break;
-    case EVENT_SYNC_IN_REQUEST:
-    case EVENT_SYNC_IN:
-    case EVENT_SYNC_OUT_REQUEST:
-    case EVENT_SYNC_OUT:
       break;
     default:
       break;
@@ -643,7 +596,7 @@ void stats_deliver( int64 socket, int tasktype ) {
 
 static pthread_t thread_id;
 void stats_init( ) {
-  ot_start_time = g_now;
+  ot_start_time = g_now_seconds;
   pthread_create( &thread_id, NULL, stats_worker, NULL );
 }
 
