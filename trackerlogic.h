@@ -26,6 +26,9 @@ typedef time_t         ot_time;
 
 #define OT_CLIENT_REQUEST_INTERVAL_RANDOM ( OT_CLIENT_REQUEST_INTERVAL - OT_CLIENT_REQUEST_VARIATION/2 + (int)( random( ) % OT_CLIENT_REQUEST_VARIATION ) )
 
+/* If peers come back before 10 minutes, don't live sync them */
+#define OT_CLIENT_SYNC_RENEW_BOUNDARY 10
+
 /* We maintain a list of 1024 pointers to sorted list of ot_torrent structs
    Sort key is, of course, its hash */
 #define OT_BUCKET_COUNT 1024
