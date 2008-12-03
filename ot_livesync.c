@@ -17,6 +17,7 @@
 #include "trackerlogic.h"
 #include "ot_livesync.h"
 #include "ot_accesslist.h"
+#include "ot_stats.h"
 
 #ifdef WANT_SYNC_LIVE
 
@@ -152,6 +153,8 @@ static void * livesync_worker( void * args ) {
 
       off += sizeof( ot_hash ) + sizeof( ot_peer );
     }
+
+    stats_issue_event(EVENT_SYNC, 0, datalen / ((ssize_t)sizeof( ot_hash ) + (ssize_t)sizeof( ot_peer )));
   }
   /* Never returns. */
   return NULL;

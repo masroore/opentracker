@@ -47,6 +47,7 @@ static unsigned long long ot_full_scrape_request_count = 0;
 static unsigned long long ot_full_scrape_size = 0;
 static unsigned long long ot_failed_request_counts[CODE_HTTPERROR_COUNT];
 static unsigned long long ot_renewed[OT_PEER_TIMEOUT];
+static unsigned long long ot_overall_sync_count;
 
 static time_t ot_start_time;
 
@@ -465,6 +466,20 @@ static size_t stats_return_renew_bucket( char * reply ) {
   return r - reply;
 }
 
+static size_t stats_return_sync_mrtg( char * reply )
+{
+	ot_time t = time( NULL ) - ot_start_time;
+	return sprintf( reply,
+				   "%llu\n%llu\n%i seconds (%i hours)\nopentracker connections, %lu conns/s :: %lu success/s.",
+				   ot_overall_sync_count,
+				   0,
+				   (int)t,
+				   (int)(t / 3600),
+				   events_per_time( ot_overall_tcp_connections+ot_overall_udp_connections, t ),
+				   events_per_time( ot_overall_tcp_successfulannounces+ot_overall_udp_successfulannounces+ot_overall_udp_connects, t )
+				   );
+}
+
 extern const char
 *g_version_opentracker_c, *g_version_accesslist_c, *g_version_clean_c, *g_version_fullscrape_c, *g_version_http_c,
 *g_version_iovec_c, *g_version_mutex_c, *g_version_stats_c, *g_version_udp_c, *g_version_vector_c,
@@ -500,6 +515,8 @@ size_t return_stats_for_tracker( char *reply, int mode, int format ) {
       return stats_return_tracker_version( reply );
     case TASK_STATS_RENEW:
       return stats_return_renew_bucket( reply );
+    case TASK_STATS_SYNCS:
+	  return stats_return_sync_mrtg( reply );
 #ifdef WANT_LOG_NETWORKS
     case TASK_STATS_BUSY_NETWORKS:
       return stats_return_busy_networks( reply );
@@ -566,9 +583,12 @@ void stats_issue_event( ot_status_event event, PROTO_FLAG proto, uint32_t event_
     case EVENT_FAILED:
       ot_failed_request_counts[event_data]++;
       break;
-    case EVENT_RENEW:
+	case EVENT_RENEW:
       ot_renewed[event_data]++;
       break;
+    case EVENT_SYNC:
+      ot_overall_sync_count+=event_data;
+	  break;
     default:
       break;
   }
