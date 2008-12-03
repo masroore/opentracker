@@ -41,6 +41,11 @@ static char static_outbuf[8192];
 static char debug_request[8192];
 #endif
 
+#ifdef _DEBUG_PEERID
+size_t g_this_peerid_len = 0;
+char  *g_this_peerid_data = NULL;
+#endif
+
 static void http_senddata( const int64 client_socket, char *buffer, size_t size ) {
   struct http_data *h = io_getcookie( client_socket );
   ssize_t written_size;
@@ -154,8 +159,7 @@ ssize_t http_sendiovecdata( const int64 client_socket, int iovec_entries, struct
 
   h->flag |= STRUCT_HTTP_FLAG_IOB_USED;
 
-  /* writeable sockets timeout after twice the pool timeout
-     which defaults to 5 minutes (e.g. after 10 minutes) */
+  /* writeable sockets timeout after 10 minutes) */
   taia_now( &t ); taia_addsec( &t, &t, OT_CLIENT_TIMEOUT_SEND );
   io_timeout( client_socket, t );
   io_dontwantread( client_socket );
@@ -169,7 +173,7 @@ static ssize_t http_handle_stats( const int64 client_socket, char *data, char *d
 #ifdef WANT_RESTRICT_STATS
   struct http_data *h = io_getcookie( client_socket );
 
-  if( !accesslist_isblessed( h->ip, OT_PERMISSION_MAY_STAT ) )
+  if( !h || !accesslist_isblessed( h->ip, OT_PERMISSION_MAY_STAT ) )
     HTTPERROR_403_IP;
 #endif
 
@@ -452,6 +456,12 @@ static ssize_t http_handle_announce( const int64 client_socket, char *data ) {
         if( ( len <= 0 ) || scan_fixed_int( data, len, &tmp ) ) HTTPERROR_400_PARAM;
         if( !tmp ) HTTPERROR_400_COMPACT;
       } else
+#ifdef _DEBUG_PEERID
+        if(!byte_diff(data,7,"peer_id")) {
+          g_this_peerid_len  = scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE );
+          g_this_peerid_data = g_this_peerid_len > 0 ? data : 0;
+        } else
+#endif
         scan_urlencoded_skipvalue( &c );
       break;
     case 9:
