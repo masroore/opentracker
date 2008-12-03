@@ -52,6 +52,7 @@ typedef struct {
 static const uint8_t PEER_FLAG_SEEDING   = 0x80;
 static const uint8_t PEER_FLAG_COMPLETED = 0x40;
 static const uint8_t PEER_FLAG_STOPPED   = 0x20;
+static const uint8_t PEER_FLAG_FROM_SYNC = 0x10;
 static const uint8_t PEER_FLAG_LEECHING  = 0x00;
 
 #define OT_SETIP( peer, ip ) memmove((peer),(ip),4);
