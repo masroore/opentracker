@@ -113,9 +113,8 @@ ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer  WANT_SYNC_PARAM( 
       uint8_t *_ip = (uint8_t*)peer_dest;
       int i;
       for( i=0;i<20;++i)printf("%02X",(*hash)[i]);
-      printf( " %d.%d.%d.%d:%d\t%d %02X ", _ip[0], _ip[1], _ip[2], _ip[3], OT_PEERTIME( peer_dest ), OT_PEERTIME( peer_dest ), OT_FLAG(peer_dest));
-      if( g_this_peerid_len ) write( 1, g_this_peerid_data, g_this_peerid_len );
-      putchar(10);
+      if( g_this_peerid_len ) g_this_peerid_data[g_this_peerid_len] = 0;
+      printf( " %d.%d.%d.%d:%d\t%d %02X %s\n", _ip[0], _ip[1], _ip[2], _ip[3], OT_PEERTIME( peer_dest ), OT_PEERTIME( peer_dest ), OT_FLAG(peer_dest), g_this_peerid_data ? g_this_peerid_data : "-" );
     }
 #endif
     
