@@ -38,6 +38,11 @@ void free_peerlist( ot_peerlist *peer_list ) {
   free( peer_list );
 }
 
+#ifdef _DEBUG_PEERID
+extern size_t g_this_peerid_len;
+extern char  *g_this_peerid_data;
+#endif
+
 ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer  WANT_SYNC_PARAM( int from_sync ) ) {
   int         exactmatch;
   ot_torrent *torrent;
@@ -66,11 +71,9 @@ ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer  WANT_SYNC_PARAM( 
     }
 
     byte_zero( torrent->peer_list, sizeof( ot_peerlist ) );
+    torrent->peer_list->base = g_now_minutes;
   } else
     clean_single_torrent( torrent );
-
-  /* Timestamp our first pool */
-  torrent->peer_list->base = g_now_minutes;
 
   /* Check for peer in torrent */
   peer_dest = vector_find_or_insert_peer( &(torrent->peer_list->peers), peer, &exactmatch );
@@ -92,6 +95,8 @@ ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer  WANT_SYNC_PARAM( 
 #ifdef WANT_SYNC_LIVE
     if( !from_sync )
       livesync_tell( hash, peer );
+    else
+      OT_FLAG( peer ) |= PEER_FLAG_FROM_SYNC;
 #endif
 
     torrent->peer_list->peer_count++;
@@ -103,6 +108,17 @@ ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer  WANT_SYNC_PARAM( 
   } else {
     stats_issue_event( EVENT_RENEW, 0, OT_PEERTIME( peer_dest ) );
 
+#ifdef _DEBUG_PEERID
+    if( OT_PEERTIME( peer_dest ) < 2 ) {
+      uint8_t *_ip = (uint8_t*)peer_dest;
+      int i;
+      for( i=0;i<20;++i)printf("%02X",(*hash)[i]);
+      printf( " %d.%d.%d.%d:%d\t%d %02X ", _ip[0], _ip[1], _ip[2], _ip[3], OT_PEERTIME( peer_dest ), OT_PEERTIME( peer_dest ), OT_FLAG(peer_dest));
+      if( g_this_peerid_len ) write( 1, g_this_peerid_data, g_this_peerid_len );
+      putchar(10);
+    }
+#endif
+    
 #ifdef WANT_SYNC_LIVE
     /* Won't live sync peers that come back too fast. Only exception:
        fresh "completed" reports */
