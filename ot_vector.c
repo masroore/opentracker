@@ -15,11 +15,14 @@
 
 /* Libowfat */
 #include "uint32.h"
+#include "uint16.h"
+
+#define READ16(addr,offs) ((int16_t)uint16_read((offs)+(uint8_t*)(addr)))
+#define READ32(addr,offs) ((int32_t)uint32_read((offs)+(uint8_t*)(addr)))
 
 static int vector_compare_peer(const void *peer1, const void *peer2 ) {
-  int32_t cmp = (int32_t)uint32_read(peer1) - (int32_t)uint32_read(peer2);
-  if (cmp == 0) cmp = ((int8_t*)peer1)[4] - ((int8_t*)peer2)[4];
-  if (cmp == 0) cmp = ((int8_t*)peer1)[5] - ((int8_t*)peer2)[5];
+  int32_t       cmp = READ32(peer1,0) - READ32(peer2,0);
+  if (cmp == 0) cmp = READ16(peer1,4) - READ16(peer2,4);
   return cmp;
 }
 
@@ -27,20 +30,20 @@ static int vector_compare_peer(const void *peer1, const void *peer2 ) {
    no exact match is found. In that case it sets exactmatch 0 and gives
    calling functions the chance to insert data
  
-   NOTE: Minimal compare_size is 4.
+   NOTE: Minimal compare_size is 4, member_size must be a multiple of 4
 */
 void *binary_search( const void * const key, const void * base, const size_t member_count, const size_t member_size,
                      size_t compare_size, int *exactmatch ) {
   size_t offs, mc = member_count;
   int8_t *lookat = ((int8_t*)base) + member_size * (mc >> 1);
-  int32_t key_cache = (int32_t)uint32_read(key);
+  int32_t key_cache = READ32(key,0);
   *exactmatch = 1;
-
+  
   while( mc ) {
     int32_t cmp = key_cache - (int32_t)uint32_read(lookat);
     if (cmp == 0) {
-      for( offs = 4; cmp == 0 && offs < compare_size; ++offs )
-        cmp = ((int8_t*)key)[offs] - lookat[offs];
+      for( offs = 4; cmp == 0 && offs < compare_size; offs += 4 )
+        cmp = READ32(key,offs) - READ32(lookat,offs);
       if( cmp == 0 )
         return (void *)lookat;
     }
@@ -57,6 +60,32 @@ void *binary_search( const void * const key, const void * base, const size_t mem
   *exactmatch = 0;
   return (void*)lookat;
 }
+
+ot_peer *binary_search_peer( const ot_peer * const peer, const ot_peer * base, const size_t member_count, int *exactmatch ) {
+  size_t   mc = member_count;
+  const ot_peer *lookat = base + (mc >> 1);
+  int32_t low  = READ32(peer,0);
+  int16_t high = READ16(peer,4);
+  *exactmatch = 1;
+  
+  while( mc ) {
+    int32_t      cmp = low  - READ32(lookat,0);
+    if(cmp == 0) cmp = high - READ16(lookat,4);
+    if(cmp == 0) return (ot_peer*)lookat;
+
+    if (cmp < 0) {
+      base = lookat + 1;
+      --mc;
+    }
+
+    mc >>= 1;
+    lookat = base + (mc >> 1);
+  }
+  
+  *exactmatch = 0;
+  return (ot_peer*)lookat;
+}
+
 
 static uint8_t vector_hash_peer( ot_peer *peer, int bucket_count ) {
   unsigned int hash = 5381, i = 6;
@@ -93,13 +122,30 @@ void *vector_find_or_insert( ot_vector *vector, void *key, size_t member_size, s
   return match;
 }
 
-/* This function checks, whether our peer vector is a real vector
-   or a list of buckets and dispatches accordingly */
 ot_peer *vector_find_or_insert_peer( ot_vector *vector, ot_peer *peer, int *exactmatch ) {
+  ot_peer *match;
+
   /* If space is zero but size is set, we're dealing with a list of vector->size buckets */
   if( vector->space < vector->size )
     vector = ((ot_vector*)vector->data) + vector_hash_peer(peer, vector->size );
-  return vector_find_or_insert( vector, peer, sizeof(ot_peer), OT_PEER_COMPARE_SIZE, exactmatch );
+  match = binary_search_peer( peer, vector->data, vector->size, exactmatch );
+
+  if( *exactmatch ) return match;
+  
+  if( vector->size + 1 > vector->space ) {
+    size_t   new_space = vector->space ? OT_VECTOR_GROW_RATIO * vector->space : OT_VECTOR_MIN_MEMBERS;
+    ot_peer *new_data = realloc( vector->data, new_space * sizeof(ot_peer) );
+    if( !new_data ) return NULL;
+    /* Adjust pointer if it moved by realloc */
+    match = new_data + (match - (ot_peer*)vector->data);
+    
+    vector->data = new_data;
+    vector->space = new_space;
+  }
+  memmove( match + 1, match, sizeof(ot_peer) * ( ((ot_peer*)vector->data) + vector->size - match ) );
+  
+  vector->size++;
+  return match;
 }
 
 /* This is the non-generic delete from vector-operation specialized for peers in pools.
@@ -118,7 +164,7 @@ int vector_remove_peer( ot_vector *vector, ot_peer *peer ) {
     vector = ((ot_vector*)vector->data) + vector_hash_peer(peer, vector->size );
 
   end = ((ot_peer*)vector->data) + vector->size;
-  match = binary_search( peer, vector->data, vector->size, sizeof( ot_peer ), OT_PEER_COMPARE_SIZE, &exactmatch );
+  match = binary_search_peer( peer, vector->data, vector->size,  &exactmatch );
   if( !exactmatch ) return 0;
 
   exactmatch = ( OT_FLAG( match ) & PEER_FLAG_SEEDING ) ? 2 : 1;
