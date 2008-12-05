@@ -6,6 +6,8 @@
 #ifndef __SCAN_URLENCODED_QUERY_H__
 #define __SCAN_URLENCODED_QUERY_H__
 
+#include <sys/types.h>
+
 typedef enum {
   SCAN_PATH                  = 1,
   SCAN_SEARCHPATH_PARAM      = 2,

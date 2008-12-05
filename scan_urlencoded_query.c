@@ -3,8 +3,11 @@
 
    $id$ */
 
-#include "scan.h"
+/* Opentracker */
 #include "scan_urlencoded_query.h"
+
+/* Libwofat */
+#include "scan.h"
 
 /* Idea is to do a in place replacement or guarantee at least
    strlen( string ) bytes in deststring
