@@ -192,9 +192,9 @@ static void server_mainloop( ) {
 
     while( ( i = io_canread( ) ) != -1 ) {
       const void *cookie = io_getcookie( i );
-      if( (int)cookie == FLAG_TCP )
+      if( (intptr_t)cookie == FLAG_TCP )
         handle_accept( i );
-      else if( (int)cookie == FLAG_UDP )
+      else if( (intptr_t)cookie == FLAG_UDP )
         handle_udp4( i );
       else
         handle_read( i );
