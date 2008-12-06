@@ -39,7 +39,7 @@ void *binary_search( const void * const key, const void * base, const size_t mem
   *exactmatch = 1;
   
   while( mc ) {
-    int32_t cmp = key_cache - (int32_t)uint32_read(lookat);
+    int32_t cmp = key_cache - READ32(lookat,0);
     if (cmp == 0) {
       for( offs = 4; cmp == 0 && offs < compare_size; offs += 4 )
         cmp = READ32(key,offs) - READ32(lookat,offs);
