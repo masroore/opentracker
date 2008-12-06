@@ -399,7 +399,7 @@ static ssize_t http_handle_announce( const int64 client_socket, char *data ) {
 
   OT_SETIP( &peer, ((struct http_data*)io_getcookie( client_socket ) )->ip );
   OT_SETPORT( &peer, &port );
-  OT_FLAG( &peer ) = 0;
+  OT_PEERFLAG( &peer ) = 0;
   numwant = 50;
   scanon = 1;
 
@@ -427,7 +427,7 @@ static ssize_t http_handle_announce( const int64 client_socket, char *data ) {
       } else if( !byte_diff( data, 4, "left" ) ) {
         if( ( len = scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_VALUE ) ) <= 0 ) HTTPERROR_400_PARAM;
         if( scan_fixed_int( data, len, &tmp ) ) tmp = 0;
-        if( !tmp ) OT_FLAG( &peer ) |= PEER_FLAG_SEEDING;
+        if( !tmp ) OT_PEERFLAG( &peer ) |= PEER_FLAG_SEEDING;
       } else
         scan_urlencoded_skipvalue( &c );
       break;
@@ -438,10 +438,10 @@ static ssize_t http_handle_announce( const int64 client_socket, char *data ) {
       case -1:
         HTTPERROR_400_PARAM;
       case 7:
-        if( !byte_diff( data, 7, "stopped" ) ) OT_FLAG( &peer ) |= PEER_FLAG_STOPPED;
+        if( !byte_diff( data, 7, "stopped" ) ) OT_PEERFLAG( &peer ) |= PEER_FLAG_STOPPED;
         break;
       case 9:
-        if( !byte_diff( data, 9, "completed" ) ) OT_FLAG( &peer ) |= PEER_FLAG_COMPLETED;
+        if( !byte_diff( data, 9, "completed" ) ) OT_PEERFLAG( &peer ) |= PEER_FLAG_COMPLETED;
       default: /* Fall through intended */
         break;
       }
@@ -481,7 +481,7 @@ static ssize_t http_handle_announce( const int64 client_socket, char *data ) {
   if( !hash )
     return sprintf( static_outbuf + SUCCESS_HTTP_HEADER_LENGTH, "d14:failure reason80:Your client forgot to send your torrent's info_hash. Please upgrade your client.e" );
 
-  if( OT_FLAG( &peer ) & PEER_FLAG_STOPPED )
+  if( OT_PEERFLAG( &peer ) & PEER_FLAG_STOPPED )
     len = remove_peer_from_torrent( hash, &peer, SUCCESS_HTTP_HEADER_LENGTH + static_outbuf, FLAG_TCP );
   else {
     torrent = add_peer_to_torrent( hash, &peer  WANT_SYNC_PARAM( 0 ) );
@@ -498,7 +498,7 @@ ssize_t http_handle_request( const int64 client_socket, char *data, size_t recv_
 #ifdef _DEBUG_HTTPERROR
   if( recv_length >= sizeof( debug_request ) )
     recv_length = sizeof( debug_request) - 1;
-  memcpy( debug_request, recv_header, recv_length );
+  memmove( debug_request, recv_header, recv_length );
   debug_request[ recv_length ] = 0;
 #endif
 

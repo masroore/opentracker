@@ -105,7 +105,7 @@ static unsigned int   g_adminip_count = 0;
 int accesslist_blessip( char *ip, ot_permissions permissions ) {
   if( g_adminip_count >= OT_ADMINIP_MAX )
     return -1;
-  memmove( g_adminip_addresses + g_adminip_count, ip, 4 );
+  WRITE32(g_adminip_addresses + g_adminip_count,0,READ32(ip,0));
   g_adminip_permissions[ g_adminip_count++ ] = permissions;
 #ifdef _DEBUG
   uint8_t *_ip = (uint8_t*)ip;

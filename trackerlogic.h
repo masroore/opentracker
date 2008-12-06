@@ -11,6 +11,15 @@
 #include <time.h>
 #include <stdint.h>
 
+/* Libowfat */
+#include <uint16.h>
+#include <uint32.h>
+
+#define READ16(addr,offs)      ((int16_t)uint16_read((offs)+(uint8_t*)(addr)))
+#define READ32(addr,offs)      ((int32_t)uint32_read((offs)+(uint8_t*)(addr)))
+#define WRITE16(addr,offs,val) uint16_pack((offs)+(uint8_t*)(addr),(val))
+#define WRITE32(addr,offs,val) uint32_pack((offs)+(uint8_t*)(addr),(val))
+
 typedef uint8_t        ot_hash[20];
 typedef time_t         ot_time;
 
@@ -55,10 +64,10 @@ static const uint8_t PEER_FLAG_STOPPED   = 0x20;
 static const uint8_t PEER_FLAG_FROM_SYNC = 0x10;
 static const uint8_t PEER_FLAG_LEECHING  = 0x00;
 
-#define OT_SETIP( peer, ip ) memmove((peer),(ip),4);
-#define OT_SETPORT( peer, port ) memmove(((uint8_t*)peer)+4,(port),2);
-#define OT_FLAG(peer) (((uint8_t*)(peer))[6])
-#define OT_PEERTIME(peer) (((uint8_t*)(peer))[7])
+#define OT_SETIP(peer,ip)     WRITE32((peer),0,READ32((ip),0))
+#define OT_SETPORT(peer,port) WRITE16((peer),4,READ16((port),0))
+#define OT_PEERFLAG(peer)     (((uint8_t*)(peer))[6])
+#define OT_PEERTIME(peer)     (((uint8_t*)(peer))[7])
 
 #define OT_PEER_COMPARE_SIZE ((size_t)6)
 #define OT_HASH_COMPARE_SIZE (sizeof(ot_hash))

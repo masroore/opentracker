@@ -27,7 +27,7 @@ static void udp_make_connectionid( uint32_t * connid, const char * remoteip ) {
   (void)remoteip;
 
   /* Use a static secret for now */
-  memcpy( connid, g_static_connid, 8 );
+  memmove( connid, g_static_connid, 8 );
 }
 
 static int udp_test_connectionid( const uint32_t * const connid, const char * remoteip ) {
@@ -94,21 +94,21 @@ void handle_udp4( int64 serversocket ) {
 
       OT_SETIP( &peer, remoteip );
       OT_SETPORT( &peer, &port );
-      OT_FLAG( &peer ) = 0;
+      OT_PEERFLAG( &peer ) = 0;
 
       switch( event ) {
-        case 1: OT_FLAG( &peer ) |= PEER_FLAG_COMPLETED; break;
-        case 3: OT_FLAG( &peer ) |= PEER_FLAG_STOPPED; break;
+        case 1: OT_PEERFLAG( &peer ) |= PEER_FLAG_COMPLETED; break;
+        case 3: OT_PEERFLAG( &peer ) |= PEER_FLAG_STOPPED; break;
         default: break;
       }
 
       if( !left )
-        OT_FLAG( &peer )         |= PEER_FLAG_SEEDING;
+        OT_PEERFLAG( &peer )         |= PEER_FLAG_SEEDING;
 
       outpacket[0] = htonl( 1 );    /* announce action */
       outpacket[1] = inpacket[12/4];
 
-      if( OT_FLAG( &peer ) & PEER_FLAG_STOPPED ) /* Peer is gone. */
+      if( OT_PEERFLAG( &peer ) & PEER_FLAG_STOPPED ) /* Peer is gone. */
         r = remove_peer_from_torrent( hash, &peer, static_outbuf, FLAG_UDP );
       else {
         torrent = add_peer_to_torrent( hash, &peer  WANT_SYNC_PARAM( 0 ) );

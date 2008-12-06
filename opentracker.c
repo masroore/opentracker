@@ -165,7 +165,7 @@ static void handle_accept( const int64 serversocket ) {
     io_wantread( i );
 
     memset( h, 0, sizeof( struct http_data ) );
-    memmove( h->ip, ip, sizeof( ip ) );
+    WRITE32(h->ip,0,READ32(ip,0));
 
     stats_issue_event( EVENT_ACCEPT, FLAG_TCP, ntohl(*(uint32_t*)ip));
 

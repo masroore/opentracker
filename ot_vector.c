@@ -16,9 +16,6 @@
 #include "uint32.h"
 #include "uint16.h"
 
-#define READ16(addr,offs) ((int16_t)uint16_read((offs)+(uint8_t*)(addr)))
-#define READ32(addr,offs) ((int32_t)uint32_read((offs)+(uint8_t*)(addr)))
-
 static int vector_compare_peer(const void *peer1, const void *peer2 ) {
   int32_t       cmp = READ32(peer1,0) - READ32(peer2,0);
   if (cmp == 0) cmp = READ16(peer1,4) - READ16(peer2,4);
@@ -166,7 +163,7 @@ int vector_remove_peer( ot_vector *vector, ot_peer *peer ) {
   match = binary_search_peer( peer, vector->data, vector->size,  &exactmatch );
   if( !exactmatch ) return 0;
 
-  exactmatch = ( OT_FLAG( match ) & PEER_FLAG_SEEDING ) ? 2 : 1;
+  exactmatch = ( OT_PEERFLAG( match ) & PEER_FLAG_SEEDING ) ? 2 : 1;
   memmove( match, match + 1, sizeof(ot_peer) * ( end - match - 1 ) );
 
   vector->size--;

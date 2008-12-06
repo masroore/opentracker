@@ -94,10 +94,11 @@ static void livesync_issuepacket( ) {
 
 /* Inform live sync about whats going on. */
 void livesync_tell( ot_hash * const info_hash, const ot_peer * const peer ) {
-  memmove( livesync_outbuffer_pos                  , info_hash, sizeof(ot_hash));
-  memmove( livesync_outbuffer_pos + sizeof(ot_hash), peer,      sizeof(ot_peer));
-
-  livesync_outbuffer_pos += sizeof(ot_hash) + sizeof(ot_peer);
+  int i;
+  for(i=0;i<20;i+=4) WRITE32(livesync_outbuffer_pos+=4,0,READ32(info_hash,i));
+  WRITE32(livesync_outbuffer_pos+=4,0,READ32(peer,0));
+  WRITE32(livesync_outbuffer_pos+=4,0,READ32(peer,4));
+  
   if( livesync_outbuffer_pos >= livesync_outbuffer_highwater )
     livesync_issuepacket();
 }
@@ -146,7 +147,7 @@ static void * livesync_worker( void * args ) {
       ot_peer *peer = (ot_peer*)(livesync_inbuffer + off + sizeof(ot_hash));
       ot_hash *hash = (ot_hash*)(livesync_inbuffer + off);
 
-      if( OT_FLAG(peer) & PEER_FLAG_STOPPED )
+      if( OT_PEERFLAG(peer) & PEER_FLAG_STOPPED )
         remove_peer_from_torrent(hash, peer, NULL, FLAG_MCA);
       else
         add_peer_to_torrent( hash, peer  WANT_SYNC_PARAM(1));
