@@ -177,8 +177,8 @@ static void fullscrape_make( int *iovec_entries, struct iovec **iovector, ot_tas
         break;
       case TASK_FULLSCRAPE_TPB_BINARY:
         for(i=0;i<20;i+=4) WRITE32(r+=4,0,READ32(hash,i));
-        *(uint32_t*)r++ = htonl( (uint32_t)peer_list->seed_count );
-        *(uint32_t*)r++ = htonl( (uint32_t)( peer_list->peer_count-peer_list->seed_count) );
+        *(uint32_t*)(r+=4) = htonl( (uint32_t)  peer_list->seed_count );
+        *(uint32_t*)(r+=4) = htonl( (uint32_t)( peer_list->peer_count-peer_list->seed_count) );
         break;
       case TASK_FULLSCRAPE_TPB_URLENCODED:
         r += fmt_urlencoded( r, (char *)*hash, 20 );
