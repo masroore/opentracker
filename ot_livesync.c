@@ -101,10 +101,11 @@ static void livesync_issuepacket( ) {
 /* Inform live sync about whats going on. */
 void livesync_tell( ot_hash * const info_hash, const ot_peer * const peer ) {
   int i;
-  for(i=0;i<20;i+=4) WRITE32(livesync_outbuffer_pos+=4,0,READ32(info_hash,i));
-  WRITE32(livesync_outbuffer_pos+=4,0,READ32(peer,0));
-  WRITE32(livesync_outbuffer_pos+=4,0,READ32(peer,4));
-  
+  for(i=0;i<20;i+=4) WRITE32(livesync_outbuffer_pos,i,READ32(info_hash,i));
+  WRITE32(livesync_outbuffer_pos,20,READ32(peer,0));
+  WRITE32(livesync_outbuffer_pos,24,READ32(peer,4));
+  livesync_outbuffer_pos += 28;
+
   if( livesync_outbuffer_pos >= livesync_outbuffer_highwater )
     livesync_issuepacket();
 }

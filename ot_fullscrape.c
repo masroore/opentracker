@@ -165,8 +165,7 @@ static void fullscrape_make( int *iovec_entries, struct iovec **iovector, ot_tas
 
         /* push hash as bencoded string */
         *r++='2'; *r++='0'; *r++=':';
-        for(i=0;i<20;i+=4) WRITE32(r+=4,0,READ32(hash,i));
-
+        for(i=0;i<20;i+=4) WRITE32(r,i,READ32(hash,i)); r+=20;
         /* push rest of the scrape string */
         r += sprintf( r, "d8:completei%zde10:downloadedi%zde10:incompletei%zdee", peer_list->seed_count, peer_list->down_count, peer_list->peer_count-peer_list->seed_count );
 
@@ -176,9 +175,10 @@ static void fullscrape_make( int *iovec_entries, struct iovec **iovector, ot_tas
         r += sprintf( r, ":%zd:%zd\n", peer_list->seed_count, peer_list->peer_count-peer_list->seed_count );
         break;
       case TASK_FULLSCRAPE_TPB_BINARY:
-        for(i=0;i<20;i+=4) WRITE32(r+=4,0,READ32(hash,i));
-        *(uint32_t*)(r+=4) = htonl( (uint32_t)  peer_list->seed_count );
-        *(uint32_t*)(r+=4) = htonl( (uint32_t)( peer_list->peer_count-peer_list->seed_count) );
+        for(i=0;i<20;i+=4) WRITE32(r,i,READ32(hash,i)); r+=20;
+        *(uint32_t*)(r+0) = htonl( (uint32_t)  peer_list->seed_count );
+        *(uint32_t*)(r+4) = htonl( (uint32_t)( peer_list->peer_count-peer_list->seed_count) );
+        r+=8;
         break;
       case TASK_FULLSCRAPE_TPB_URLENCODED:
         r += fmt_urlencoded( r, (char *)*hash, 20 );

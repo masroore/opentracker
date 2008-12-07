@@ -164,8 +164,9 @@ static size_t return_peers_all( ot_peerlist *peer_list, char *reply ) {
     ot_peer * peers = (ot_peer*)bucket_list[bucket].data;
     size_t    peer_count = bucket_list[bucket].size;
     while( peer_count-- ) {
-      WRITE32(r+=4,0,READ32(peers,0));
-      WRITE16(r+=2,0,READ16(peers++,4));
+      WRITE32(r,0,READ32(peers,0));
+      WRITE16(r,4,READ16(peers++,4));
+      r+=6;
     }
   }
 
@@ -208,8 +209,9 @@ static size_t return_peers_selection( ot_peerlist *peer_list, size_t amount, cha
       bucket_index = ( bucket_index + 1 ) % num_buckets;
     }
     peer = ((ot_peer*)bucket_list[bucket_index].data) + bucket_offset;
-    WRITE32(r+=4,0,READ32(peer,0));
-    WRITE16(r+=2,0,READ16(peer,4));
+    WRITE32(r,0,READ32(peer,0));
+    WRITE16(r,4,READ16(peer,4));
+    r+=6;
   }
   return r - reply;
 }
@@ -294,7 +296,7 @@ size_t return_tcp_scrape_for_torrent( ot_hash *hash_list, int amount, char *repl
       } else {
         int j;
         *r++='2';*r++='0';*r++=':';
-        for(j=0;j<20;j+=4) WRITE32(r+=4,0,READ32(hash,j));
+        for(j=0;j<20;j+=4) WRITE32(r,j,READ32(hash,j)); r += 20;
         r += sprintf( r, "d8:completei%zde10:downloadedi%zde10:incompletei%zdee",
           torrent->peer_list->seed_count, torrent->peer_list->down_count, torrent->peer_list->peer_count-torrent->peer_list->seed_count );
       }
