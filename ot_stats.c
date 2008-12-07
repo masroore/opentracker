@@ -188,6 +188,8 @@ size_t stats_top10_txt( char * reply ) {
       }
     }
     mutex_bucket_unlock( bucket );
+    if( !g_opentracker_running )
+      return 0;
   }
 
   r += sprintf( r, "Top 10 torrents by peers:\n" );
@@ -250,6 +252,8 @@ static size_t stats_slash24s_txt( char * reply, size_t amount, uint32_t thresh )
       }
     }
     mutex_bucket_unlock( bucket );
+    if( !g_opentracker_running )
+      goto bailout_cleanup;
   }
 #endif
 
@@ -381,6 +385,8 @@ static size_t stats_peers_mrtg( char * reply ) {
       peer_count += peer_list->peer_count; seed_count += peer_list->seed_count;
     }
     mutex_bucket_unlock( bucket );
+    if( !g_opentracker_running )
+      return 0;
   }
   return sprintf( reply, "%zd\n%zd\nopentracker serving %zd torrents\nopentracker",
     peer_count,
@@ -399,6 +405,8 @@ static size_t stats_startstop_mrtg( char * reply )
     ot_vector *torrents_list = mutex_bucket_lock( bucket );
     torrent_count += torrents_list->size;
     mutex_bucket_unlock( bucket );
+    if( !g_opentracker_running )
+      return 0;
   }
 
   return sprintf( reply, "%zd\n%zd\nopentracker handling %zd torrents\nopentracker",
@@ -422,6 +430,8 @@ static size_t stats_toraddrem_mrtg( char * reply )
       peer_count += peer_list->peer_count;
     }
     mutex_bucket_unlock( bucket );
+    if( !g_opentracker_running )
+      return 0;
   }
 
   return sprintf( reply, "%zd\n%zd\nopentracker handling %zd peers\nopentracker",

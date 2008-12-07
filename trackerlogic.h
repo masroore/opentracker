@@ -50,6 +50,7 @@ typedef time_t         ot_time;
 
 /* From opentracker.c */
 extern time_t g_now_seconds;
+extern volatile int g_opentracker_running;
 #define       g_now_minutes (g_now_seconds/60)
 
 extern uint32_t g_tracker_id;

@@ -62,6 +62,7 @@ void handle_livesync( const int64 serversocket );
 
 /* If no syncing is required, save calling code from #ifdef
    constructions */
+#define livesync_deinit()
 #define livesync_init()
 #define livesync_ticker()
 #define handle_livesync(a)

@@ -114,6 +114,8 @@ static void * clean_worker( void * args ) {
         }
       }
       mutex_bucket_unlock( bucket );
+      if( !g_opentracker_running )
+        return NULL;      
       usleep( OT_CLEAN_SLEEP );
     }
   }

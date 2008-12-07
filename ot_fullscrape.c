@@ -65,6 +65,8 @@ static void * fullscrape_worker( void * args ) {
     fullscrape_make( &iovec_entries, &iovector, tasktype );
     if( mutex_workqueue_pushresult( taskid, iovec_entries, iovector ) )
       iovec_free( &iovec_entries, &iovector );
+    if( !g_opentracker_running )
+      return NULL;
   }
   return NULL;
 }
@@ -150,7 +152,7 @@ static void fullscrape_make( int *iovec_entries, struct iovec **iovector, ot_tas
     /* Get exclusive access to that bucket */
     ot_vector *torrents_list = mutex_bucket_lock( bucket );
     size_t tor_offset;
-
+    
     /* For each torrent in this bucket.. */
     for( tor_offset=0; tor_offset<torrents_list->size; ++tor_offset ) {
       /* Address torrents members */
@@ -202,8 +204,12 @@ static void fullscrape_make( int *iovec_entries, struct iovec **iovector, ot_tas
       IF_COMPRESSION( r = compress_buffer; )
     }
 
-    /* All torrents done: release lock on currenct bucket */
+    /* All torrents done: release lock on current bucket */
     mutex_bucket_unlock( bucket );
+
+    /* Parent thread died? */
+    if( !g_opentracker_running )
+      return;
   }
 
   if( ( mode & TASK_TASK_MASK ) == TASK_FULLSCRAPE )

@@ -8,6 +8,7 @@
 #include <sys/uio.h>
 #include <string.h>
 #include <pthread.h>
+#include <unistd.h>
 
 /* Libowfat */
 #include "socket.h"
@@ -57,6 +58,11 @@ void livesync_init( ) {
 }
 
 void livesync_deinit() {
+  if( g_livesync_socket_in != -1 )
+    close( g_livesync_socket_in );
+  if( g_livesync_socket_out != -1 )
+    close( g_livesync_socket_out );
+
   pthread_cancel( thread_id );
 }
 
@@ -146,6 +152,9 @@ static void * livesync_worker( void * args ) {
     while( off + (ssize_t)sizeof( ot_hash ) + (ssize_t)sizeof( ot_peer ) <= datalen ) {
       ot_peer *peer = (ot_peer*)(livesync_inbuffer + off + sizeof(ot_hash));
       ot_hash *hash = (ot_hash*)(livesync_inbuffer + off);
+
+      if( !g_opentracker_running )
+        return NULL;
 
       if( OT_PEERFLAG(peer) & PEER_FLAG_STOPPED )
         remove_peer_from_torrent(hash, peer, NULL, FLAG_MCA);

@@ -13,12 +13,14 @@
 #if defined ( WANT_ACCESSLIST_BLACK ) || defined (WANT_ACCESSLIST_WHITE )
 #define WANT_ACCESSLIST
 void accesslist_init( );
+void accesslist_deinit( );
 int  accesslist_hashisvalid( ot_hash *hash );
 
 extern char *g_accesslist_filename;
 
 #else
 #define accesslist_init( accesslist_filename )
+#define accesslist_deinit( )
 #define accesslist_hashisvalid( hash ) 1
 #endif
 
