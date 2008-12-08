@@ -17,8 +17,8 @@
 #include "uint16.h"
 
 static int vector_compare_peer(const void *peer1, const void *peer2 ) {
-  int32_t       cmp = READ32(peer1,0) - READ32(peer2,0);
-  if (cmp == 0) cmp = READ16(peer1,4) - READ16(peer2,4);
+  int32_t       cmp = READ32(peer2,0) - READ32(peer1,0);
+  if (cmp == 0) cmp = READ16(peer2,4) - READ16(peer1,4);
   return cmp;
 }
 
@@ -36,10 +36,10 @@ void *binary_search( const void * const key, const void * base, const size_t mem
   *exactmatch = 1;
   
   while( mc ) {
-    int32_t cmp = key_cache - READ32(lookat,0);
+    int32_t cmp = READ32(lookat,0) - key_cache;
     if (cmp == 0) {
       for( offs = 4; cmp == 0 && offs < compare_size; offs += 4 )
-        cmp = READ32(key,offs) - READ32(lookat,offs);
+        cmp = READ32(lookat,offs) - READ32(key,offs);
       if( cmp == 0 )
         return (void *)lookat;
     }
@@ -65,8 +65,8 @@ ot_peer *binary_search_peer( const ot_peer * const peer, const ot_peer * base, c
   *exactmatch = 1;
   
   while( mc ) {
-    int32_t      cmp = low  - READ32(lookat,0);
-    if(cmp == 0) cmp = high - READ16(lookat,4);
+    int32_t      cmp = READ32(lookat,0) - low; 
+    if(cmp == 0) cmp = READ16(lookat,4) - high;
     if(cmp == 0) return (ot_peer*)lookat;
 
     if (cmp < 0) {

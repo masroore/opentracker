@@ -80,7 +80,7 @@ ot_vector *mutex_bucket_lock( int bucket ) {
 }
 
 ot_vector *mutex_bucket_lock_by_hash( ot_hash *hash ) {
-  int bucket =  uint32_read( *hash ) % OT_BUCKET_COUNT;
+  int bucket =  uint32_read_big( (char*)*hash ) >> OT_BUCKET_COUNT_SHIFT;
 
   /* Can block */
   mutex_bucket_lock( bucket );
@@ -95,7 +95,7 @@ void mutex_bucket_unlock( int bucket ) {
 }
 
 void mutex_bucket_unlock_by_hash( ot_hash *hash ) {
-  mutex_bucket_unlock( uint32_read( *hash ) % OT_BUCKET_COUNT );
+  mutex_bucket_unlock( uint32_read_big( (char*)*hash ) >> OT_BUCKET_COUNT_SHIFT );
 }
 
 /* TaskQueue Magic */

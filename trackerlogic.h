@@ -38,15 +38,18 @@ typedef time_t         ot_time;
 /* If peers come back before 10 minutes, don't live sync them */
 #define OT_CLIENT_SYNC_RENEW_BOUNDARY 10
 
-/* We maintain a list of 1024 pointers to sorted list of ot_torrent structs
-   Sort key is, of course, its hash */
-#define OT_BUCKET_COUNT 1024
-
 /* Number of tracker admin ip addresses allowed */
 #define OT_ADMINIP_MAX 64
 #define OT_MAX_THREADS 16
 
 #define OT_PEER_TIMEOUT 45
+
+/* We maintain a list of 1024 pointers to sorted list of ot_torrent structs
+ Sort key is, of course, its hash */
+#define OT_BUCKET_COUNT_BITS 10
+
+#define OT_BUCKET_COUNT (1<<OT_BUCKET_COUNT_BITS)
+#define OT_BUCKET_COUNT_SHIFT (32-OT_BUCKET_COUNT_BITS)
 
 /* From opentracker.c */
 extern time_t g_now_seconds;
