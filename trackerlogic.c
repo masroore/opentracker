@@ -335,7 +335,7 @@ size_t remove_peer_from_torrent( ot_hash *hash, ot_peer *peer, char *reply, PROT
 
   if( proto == FLAG_TCP ) {
     int erval = OT_CLIENT_REQUEST_INTERVAL_RANDOM;
-    reply_size = sprintf( reply, "d8:completei%zde10:incompletei%zde8:intervali%ie12min intervali%ie5:peers0:e", peer_list->seed_count, peer_list->peer_count - peer_list->seed_count, erval, erval / 2 );
+    reply_size = sprintf( reply, "d8:completei%zde10:incompletei%zde8:intervali%ie12:min intervali%ie5:peers0:e", peer_list->seed_count, peer_list->peer_count - peer_list->seed_count, erval, erval / 2 );
   }
   
   /* Handle UDP reply */
