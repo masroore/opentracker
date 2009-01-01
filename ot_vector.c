@@ -25,7 +25,7 @@ static int vector_compare_peer(const void *peer1, const void *peer2 ) {
 /* This function gives us a binary search that returns a pointer, even if
    no exact match is found. In that case it sets exactmatch 0 and gives
    calling functions the chance to insert data
- 
+
    NOTE: Minimal compare_size is 4, member_size must be a multiple of 4
 */
 void *binary_search( const void * const key, const void * base, const size_t member_count, const size_t member_size,
@@ -34,7 +34,7 @@ void *binary_search( const void * const key, const void * base, const size_t mem
   int8_t *lookat = ((int8_t*)base) + member_size * (mc >> 1);
   int32_t key_cache = READ32(key,0);
   *exactmatch = 1;
-  
+
   while( mc ) {
     int32_t cmp = READ32(lookat,0) - key_cache;
     if (cmp == 0) {
@@ -63,9 +63,9 @@ ot_peer *binary_search_peer( const ot_peer * const peer, const ot_peer * base, c
   int32_t low  = READ32(peer,0);
   int16_t high = READ16(peer,4);
   *exactmatch = 1;
-  
+
   while( mc ) {
-    int32_t      cmp = READ32(lookat,0) - low; 
+    int32_t      cmp = READ32(lookat,0) - low;
     if(cmp == 0) cmp = READ16(lookat,4) - high;
     if(cmp == 0) return (ot_peer*)lookat;
 
@@ -77,7 +77,7 @@ ot_peer *binary_search_peer( const ot_peer * const peer, const ot_peer * base, c
     mc >>= 1;
     lookat = base + (mc >> 1);
   }
-  
+
   *exactmatch = 0;
   return (ot_peer*)lookat;
 }
@@ -127,19 +127,19 @@ ot_peer *vector_find_or_insert_peer( ot_vector *vector, ot_peer *peer, int *exac
   match = binary_search_peer( peer, vector->data, vector->size, exactmatch );
 
   if( *exactmatch ) return match;
-  
+
   if( vector->size + 1 > vector->space ) {
     size_t   new_space = vector->space ? OT_VECTOR_GROW_RATIO * vector->space : OT_VECTOR_MIN_MEMBERS;
     ot_peer *new_data = realloc( vector->data, new_space * sizeof(ot_peer) );
     if( !new_data ) return NULL;
     /* Adjust pointer if it moved by realloc */
     match = new_data + (match - (ot_peer*)vector->data);
-    
+
     vector->data = new_data;
     vector->space = new_space;
   }
   memmove( match + 1, match, sizeof(ot_peer) * ( ((ot_peer*)vector->data) + vector->size - match ) );
-  
+
   vector->size++;
   return match;
 }
@@ -154,7 +154,7 @@ int vector_remove_peer( ot_vector *vector, ot_peer *peer ) {
   ot_peer *match, *end;
 
   if( !vector->size ) return 0;
-  
+
   /* If space is zero but size is set, we're dealing with a list of vector->size buckets */
   if( vector->space < vector->size )
     vector = ((ot_vector*)vector->data) + vector_hash_peer(peer, vector->size );
@@ -209,7 +209,7 @@ void vector_redistribute_buckets( ot_peerlist * peer_list ) {
     num_buckets_new = 64;
   else if( peer_list->peer_count >= 512 && peer_list->peer_count < 4096 )
     num_buckets_new = 16;
-  else if( peer_list->peer_count < 512 && num_buckets_old <= 16 ) 
+  else if( peer_list->peer_count < 512 && num_buckets_old <= 16 )
     num_buckets_new = num_buckets_old;
   else if( peer_list->peer_count < 512 )
     num_buckets_new = 1;
@@ -229,7 +229,7 @@ void vector_redistribute_buckets( ot_peerlist * peer_list ) {
   tmp = peer_list->peer_count / num_buckets_new;
   bucket_size_new = OT_VECTOR_MIN_MEMBERS;
   while( bucket_size_new < tmp)
-    bucket_size_new *= OT_VECTOR_GROW_RATIO; 
+    bucket_size_new *= OT_VECTOR_GROW_RATIO;
 
   /* preallocate vectors to hold all peers */
   for( bucket=0; bucket<num_buckets_new; ++bucket ) {
@@ -267,7 +267,7 @@ void vector_redistribute_buckets( ot_peerlist * peer_list ) {
     vector_clean_list( (ot_vector*)peer_list->peers.data, peer_list->peers.size );
   else
     free( peer_list->peers.data );
-    
+
   if( num_buckets_new > 1 ) {
     peer_list->peers.data  = bucket_list_new;
     peer_list->peers.size  = num_buckets_new;
@@ -289,7 +289,7 @@ void vector_fixup_peers( ot_vector * vector ) {
     vector->space = 0;
     return;
   }
-  
+
   while( ( vector->size * OT_VECTOR_SHRINK_THRESH < vector->space ) &&
          ( vector->space >= OT_VECTOR_SHRINK_RATIO * OT_VECTOR_MIN_MEMBERS ) ) {
     vector->space /= OT_VECTOR_SHRINK_RATIO;
