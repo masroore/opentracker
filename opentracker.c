@@ -222,7 +222,7 @@ static void server_mainloop( ) {
 }
 
 static int64_t ot_try_bind( char ip[4], uint16_t port, PROTO_FLAG proto ) {
-  int64 s = proto == FLAG_TCP ? socket_tcp4( ) : socket_udp4();
+  int64 s = proto == FLAG_TCP ? socket_tcp4( ) : socket_udp4( );
 
 #ifdef _DEBUG
   char *protos[] = {"TCP","UDP","UDP mcast"};
