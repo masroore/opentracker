@@ -23,13 +23,13 @@
 char *g_accesslist_filename = NULL;
 static ot_vector accesslist;
 
-static void access_list_deinit( void ) {
-  accesslist_reset( );
-}
-
 static void accesslist_reset( void ) {
   free( accesslist.data );
   byte_zero( &accesslist, sizeof( accesslist ) );
+}
+
+void accesslist_deinit( void ) {
+  accesslist_reset( );
 }
 
 static int accesslist_addentry( ot_hash *infohash ) {
