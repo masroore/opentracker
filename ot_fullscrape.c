@@ -152,7 +152,7 @@ static void fullscrape_make( int *iovec_entries, struct iovec **iovector, ot_tas
     /* Get exclusive access to that bucket */
     ot_vector *torrents_list = mutex_bucket_lock( bucket );
     size_t tor_offset;
-    
+
     /* For each torrent in this bucket.. */
     for( tor_offset=0; tor_offset<torrents_list->size; ++tor_offset ) {
       /* Address torrents members */
@@ -199,13 +199,13 @@ static void fullscrape_make( int *iovec_entries, struct iovec **iovector, ot_tas
       /* Check if there still is enough buffer left */
       while( r >= re )
        if( fullscrape_increase( iovec_entries, iovector, &r, &re WANT_COMPRESSION_GZIP_PARAM( &strm, mode, Z_NO_FLUSH ) ) )
-         return mutex_bucket_unlock( bucket );
+         return mutex_bucket_unlock( bucket, 0 );
 
       IF_COMPRESSION( r = compress_buffer; )
     }
 
     /* All torrents done: release lock on current bucket */
-    mutex_bucket_unlock( bucket );
+    mutex_bucket_unlock( bucket, 0 );
 
     /* Parent thread died? */
     if( !g_opentracker_running )
@@ -225,7 +225,7 @@ static void fullscrape_make( int *iovec_entries, struct iovec **iovector, ot_tas
 
     while( r >= re )
       if( fullscrape_increase( iovec_entries, iovector, &r, &re WANT_COMPRESSION_GZIP_PARAM( &strm, mode, Z_FINISH ) ) )
-        return mutex_bucket_unlock( bucket );
+        return mutex_bucket_unlock( bucket, 0 );
     deflateEnd(&strm);
   }
 #endif

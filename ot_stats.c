@@ -187,7 +187,7 @@ size_t stats_top10_txt( char * reply ) {
         top10s[idx].torrent = (ot_torrent*)(torrents_list->data) + j;
       }
     }
-    mutex_bucket_unlock( bucket );
+    mutex_bucket_unlock( bucket, 0 );
     if( !g_opentracker_running )
       return 0;
   }
@@ -241,7 +241,7 @@ static size_t stats_slash24s_txt( char * reply, size_t amount, uint32_t thresh )
           if( !count ) {
             count = malloc( sizeof(uint32_t) * NUM_S24S );
             if( !count ) {
-              mutex_bucket_unlock( bucket );
+              mutex_bucket_unlock( bucket, 0 );
               goto bailout_cleanup;
             }
             byte_zero( count, sizeof( uint32_t ) * NUM_S24S );
@@ -251,7 +251,7 @@ static size_t stats_slash24s_txt( char * reply, size_t amount, uint32_t thresh )
         }
       }
     }
-    mutex_bucket_unlock( bucket );
+    mutex_bucket_unlock( bucket, 0 );
     if( !g_opentracker_running )
       goto bailout_cleanup;
   }
@@ -384,7 +384,7 @@ static size_t stats_peers_mrtg( char * reply ) {
       ot_peerlist *peer_list = ( ((ot_torrent*)(torrents_list->data))[j] ).peer_list;
       peer_count += peer_list->peer_count; seed_count += peer_list->seed_count;
     }
-    mutex_bucket_unlock( bucket );
+    mutex_bucket_unlock( bucket, 0 );
     if( !g_opentracker_running )
       return 0;
   }
@@ -397,17 +397,7 @@ static size_t stats_peers_mrtg( char * reply ) {
 
 static size_t stats_startstop_mrtg( char * reply )
 {
-  size_t    torrent_count = 0;
-  int bucket;
-
-  for( bucket=0; bucket<OT_BUCKET_COUNT; ++bucket )
-  {
-    ot_vector *torrents_list = mutex_bucket_lock( bucket );
-    torrent_count += torrents_list->size;
-    mutex_bucket_unlock( bucket );
-    if( !g_opentracker_running )
-      return 0;
-  }
+  size_t    torrent_count = mutex_get_torrent_count();
 
   return sprintf( reply, "%zd\n%zd\nopentracker handling %zd torrents\nopentracker",
     (size_t)0,
@@ -429,7 +419,7 @@ static size_t stats_toraddrem_mrtg( char * reply )
       ot_peerlist *peer_list = ( ((ot_torrent*)(torrents_list->data))[j] ).peer_list;
       peer_count += peer_list->peer_count;
     }
-    mutex_bucket_unlock( bucket );
+    mutex_bucket_unlock( bucket, 0 );
     if( !g_opentracker_running )
       return 0;
   }
@@ -443,15 +433,7 @@ static size_t stats_toraddrem_mrtg( char * reply )
 
 static size_t stats_torrents_mrtg( char * reply )
 {
-  size_t torrent_count = 0;
-  int bucket;
-
-  for( bucket=0; bucket<OT_BUCKET_COUNT; ++bucket )
-  {
-    ot_vector *torrents_list = mutex_bucket_lock( bucket );
-    torrent_count += torrents_list->size;
-    mutex_bucket_unlock( bucket );
-  }
+  size_t torrent_count = mutex_get_torrent_count();
 
   return sprintf( reply, "%zd\n%zd\nopentracker serving %zd torrents\nopentracker",
     torrent_count,

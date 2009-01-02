@@ -385,7 +385,6 @@ static ssize_t http_handle_announce( const int64 client_socket, char *data ) {
   char       *c = data;
   int         numwant, tmp, scanon;
   ot_peer     peer;
-  ot_torrent *torrent;
   ot_hash    *hash = NULL;
   unsigned short port = htons(6881);
   ssize_t     len;
@@ -402,6 +401,10 @@ static ssize_t http_handle_announce( const int64 client_socket, char *data ) {
   OT_PEERFLAG( &peer ) = 0;
   numwant = 50;
   scanon = 1;
+
+#ifdef _DEBUG_PEERID
+  g_this_peerid_data = NULL;
+#endif
 
   while( scanon ) {
     switch( scan_urlencoded_query( &c, data = c, SCAN_SEARCHPATH_PARAM ) ) {
@@ -483,10 +486,11 @@ static ssize_t http_handle_announce( const int64 client_socket, char *data ) {
 
   if( OT_PEERFLAG( &peer ) & PEER_FLAG_STOPPED )
     len = remove_peer_from_torrent( hash, &peer, SUCCESS_HTTP_HEADER_LENGTH + static_outbuf, FLAG_TCP );
-  else {
-    torrent = add_peer_to_torrent( hash, &peer  WANT_SYNC_PARAM( 0 ) );
-    if( !torrent || !( len = return_peers_for_torrent( torrent, numwant, SUCCESS_HTTP_HEADER_LENGTH + static_outbuf, FLAG_TCP ) ) ) HTTPERROR_500;
-  }
+  else
+    len = add_peer_to_torrent_and_return_peers(hash, &peer, FLAG_TCP, numwant, SUCCESS_HTTP_HEADER_LENGTH + static_outbuf);
+
+  if( !len ) HTTPERROR_500;
+
   stats_issue_event( EVENT_ANNOUNCE, FLAG_TCP, len);
   return len;
 }

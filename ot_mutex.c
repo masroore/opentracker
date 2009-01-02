@@ -24,6 +24,7 @@
 
 /* Our global all torrents list */
 static ot_vector all_torrents[OT_BUCKET_COUNT];
+static size_t    g_torrent_count;
 
 /* Bucket Magic */
 static int bucket_locklist[ OT_MAX_THREADS ];
@@ -87,15 +88,24 @@ ot_vector *mutex_bucket_lock_by_hash( ot_hash *hash ) {
   return all_torrents + bucket;
 }
 
-void mutex_bucket_unlock( int bucket ) {
+void mutex_bucket_unlock( int bucket, int delta_torrentcount ) {
   pthread_mutex_lock( &bucket_mutex );
   bucket_remove( bucket );
+  g_torrent_count += delta_torrentcount;
   pthread_cond_broadcast( &bucket_being_unlocked );
   pthread_mutex_unlock( &bucket_mutex );
 }
 
-void mutex_bucket_unlock_by_hash( ot_hash *hash ) {
-  mutex_bucket_unlock( uint32_read_big( (char*)*hash ) >> OT_BUCKET_COUNT_SHIFT );
+void mutex_bucket_unlock_by_hash( ot_hash *hash, int delta_torrentcount ) {
+  mutex_bucket_unlock( uint32_read_big( (char*)*hash ) >> OT_BUCKET_COUNT_SHIFT, delta_torrentcount );
+}
+
+size_t mutex_get_torrent_count( ) {
+  size_t torrent_count;
+  pthread_mutex_lock( &bucket_mutex );
+  torrent_count = g_torrent_count;
+  pthread_mutex_unlock( &bucket_mutex );
+  return torrent_count;
 }
 
 /* TaskQueue Magic */

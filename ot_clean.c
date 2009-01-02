@@ -20,7 +20,7 @@
 static ssize_t clean_single_bucket( ot_peer *peers, size_t peer_count, time_t timedout, int *removed_seeders ) {
   ot_peer *last_peer = peers + peer_count, *insert_point;
   time_t timediff;
- 
+
   /* Two scan modes: unless there is one peer removed, just increase ot_peertime */
   while( peers < last_peer ) {
     if( ( timediff = timedout + OT_PEERTIME( peers ) ) >= OT_PEER_TIMEOUT )
@@ -105,17 +105,19 @@ static void * clean_worker( void * args ) {
     while( bucket-- ) {
       ot_vector *torrents_list = mutex_bucket_lock( bucket );
       size_t     toffs;
+      int        delta_torrentcount = 0;
 
       for( toffs=0; toffs<torrents_list->size; ++toffs ) {
         ot_torrent *torrent = ((ot_torrent*)(torrents_list->data)) + toffs;
         if( clean_single_torrent( torrent ) ) {
           vector_remove_torrent( torrents_list, torrent );
+          delta_torrentcount -= 1;
           --toffs; continue;
         }
       }
-      mutex_bucket_unlock( bucket );
+      mutex_bucket_unlock( bucket, delta_torrentcount );
       if( !g_opentracker_running )
-        return NULL;      
+        return NULL;
       usleep( OT_CLEAN_SLEEP );
     }
   }

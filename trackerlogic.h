@@ -73,7 +73,6 @@ static const uint8_t PEER_FLAG_LEECHING  = 0x00;
 #define OT_PEERFLAG(peer)     (((uint8_t*)(peer))[6])
 #define OT_PEERTIME(peer)     (((uint8_t*)(peer))[7])
 
-#define OT_PEER_COMPARE_SIZE ((size_t)6)
 #define OT_HASH_COMPARE_SIZE (sizeof(ot_hash))
 
 struct ot_peerlist;
@@ -111,17 +110,17 @@ struct ot_peerlist {
 #define WANT_SYNC_PARAM( param )
 #endif
 
-int  trackerlogic_init( const char * const serverdir );
+void trackerlogic_init( );
 void trackerlogic_deinit( void );
 void exerr( char * message );
 
 /* add_peer_to_torrent does only release the torrent bucket if from_sync is set,
    otherwise it is released in return_peers_for_torrent */
-size_t return_peers_for_torrent( ot_torrent *torrent, size_t amount, char *reply, PROTO_FLAG proto );
-ot_torrent *add_peer_to_torrent( ot_hash *hash, ot_peer *peer  WANT_SYNC_PARAM( int from_sync ) );
-size_t remove_peer_from_torrent( ot_hash *hash, ot_peer *peer, char *reply, PROTO_FLAG proto );
-size_t return_tcp_scrape_for_torrent( ot_hash *hash, int amount, char *reply );
-size_t return_udp_scrape_for_torrent( ot_hash *hash, char *reply );
+#define add_peer_to_torrent(hash,peer,proto) add_peer_to_torrent_and_return_peers(hash,peer,proto,0,NULL)
+size_t  add_peer_to_torrent_and_return_peers( ot_hash *hash, ot_peer *peer, PROTO_FLAG proto, size_t amount, char * reply );
+size_t  remove_peer_from_torrent( ot_hash *hash, ot_peer *peer, char *reply, PROTO_FLAG proto );
+size_t  return_tcp_scrape_for_torrent( ot_hash *hash, int amount, char *reply );
+size_t  return_udp_scrape_for_torrent( ot_hash *hash, char *reply );
 
 /* Helper, before it moves to its own object */
 void free_peerlist( ot_peerlist *peer_list );

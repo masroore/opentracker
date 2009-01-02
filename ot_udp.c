@@ -41,7 +41,6 @@ static int udp_test_connectionid( const uint32_t * const connid, const char * re
 /* UDP implementation according to http://xbtt.sourceforge.net/udp_tracker_protocol.html */
 void handle_udp4( int64 serversocket ) {
   ot_peer     peer;
-  ot_torrent *torrent;
   ot_hash    *hash = NULL;
   char        remoteip[4];
   uint32_t   *inpacket = (uint32_t*)static_inbuf;
@@ -79,7 +78,7 @@ void handle_udp4( int64 serversocket ) {
       if( r < 98 )
         return;
 
-        if( !udp_test_connectionid( inpacket, remoteip ))
+      if( !udp_test_connectionid( inpacket, remoteip ))
         fprintf( stderr, "UDP connect Connection id missmatch.\n" );
 
       /* We do only want to know, if it is zero */
@@ -110,20 +109,15 @@ void handle_udp4( int64 serversocket ) {
 
       if( OT_PEERFLAG( &peer ) & PEER_FLAG_STOPPED ) /* Peer is gone. */
         r = remove_peer_from_torrent( hash, &peer, static_outbuf, FLAG_UDP );
-      else {
-        torrent = add_peer_to_torrent( hash, &peer  WANT_SYNC_PARAM( 0 ) );
-        if( !torrent )
-          return; /* XXX maybe send error */
-
-        r = 8 + return_peers_for_torrent( torrent, numwant, static_outbuf + 8, FLAG_UDP );
-      }
+      else
+        r = 8 + add_peer_to_torrent_and_return_peers( hash, &peer, FLAG_UDP, numwant, static_outbuf + 8 );
 
       socket_send4( serversocket, static_outbuf, r, remoteip, remoteport );
       stats_issue_event( EVENT_ANNOUNCE, FLAG_UDP, r );
       break;
 
     case 2: /* This is a scrape action */
-        if( !udp_test_connectionid( inpacket, remoteip ))
+      if( !udp_test_connectionid( inpacket, remoteip ))
         fprintf( stderr, "UDP scrape Connection id missmatch.\n" );
 
       outpacket[0] = htonl( 2 );    /* scrape action */
@@ -136,6 +130,10 @@ void handle_udp4( int64 serversocket ) {
       stats_issue_event( EVENT_SCRAPE, FLAG_UDP, r );
       break;
   }
+}
+
+void udp_init( ) {
+
 }
 
 const char *g_version_udp_c = "$Source$: $Revision$\n";

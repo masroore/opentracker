@@ -350,8 +350,47 @@ int parse_configfile( char * config_filename ) {
   return bound;
 }
 
-int main( int argc, char **argv ) {
+int drop_privileges (const char * const serverdir) {
   struct passwd *pws = NULL;
+
+  /* Grab pws entry before chrooting */
+  pws = getpwnam( "nobody" );
+  endpwent();
+
+  if( geteuid() == 0 ) {
+    /* Running as root: chroot and drop privileges */
+    if(chroot( serverdir )) {
+      fprintf( stderr, "Could not chroot to %s, because: %s\n", serverdir, strerror(errno) );
+      return -1;
+    }
+
+    if(chdir("/"))
+      panic("chdir() failed after chrooting: ");
+
+    if( !pws ) {
+      setegid( (gid_t)-2 ); setgid( (gid_t)-2 );
+      setuid( (uid_t)-2 );  seteuid( (uid_t)-2 );
+    }
+    else {
+      setegid( pws->pw_gid ); setgid( pws->pw_gid );
+      setuid( pws->pw_uid );  seteuid( pws->pw_uid );
+    }
+
+    if( geteuid() == 0 || getegid() == 0 )
+      panic("Still running with root privileges?!");
+  }
+  else {
+    /* Normal user, just chdir() */
+    if(chdir( serverdir )) {
+      fprintf( stderr, "Could not chroot to %s, because: %s\n", serverdir, strerror(errno) );
+      return -1;
+    }
+  }
+
+  return 0;
+}
+
+int main( int argc, char **argv ) {
   char serverip[4] = {0,0,0,0}, tmpip[4];
   int bound = 0, scanon = 1;
   uint16_t tmpport;
@@ -404,16 +443,8 @@ while( scanon ) {
     ot_try_bind( serverip, 6969, FLAG_UDP );
   }
 
-  /* Drop permissions */
-  pws = getpwnam( "nobody" );
-  if( !pws ) {
-    setegid( (gid_t)-2 ); setuid( (uid_t)-2 );
-    setgid( (gid_t)-2 ); seteuid( (uid_t)-2 );
-  } else {
-    setegid( pws->pw_gid ); setuid( pws->pw_uid );
-    setgid( pws->pw_gid ); seteuid( pws->pw_uid );
-  }
-  endpwent();
+  if( drop_privileges( g_serverdir ? g_serverdir : "." ) == -1 )
+    panic( "drop_privileges failed, exiting. Last error");
 
   signal( SIGPIPE, SIG_IGN );
   signal( SIGINT,  signal_handler );
@@ -421,9 +452,10 @@ while( scanon ) {
 
   g_now_seconds = time( NULL );
 
-  if( trackerlogic_init( g_serverdir ? g_serverdir : "." ) == -1 )
-    panic( "Logic not started" );
+  /* Init all sub systems. This call may fail with an exit() */
+  trackerlogic_init( );
 
+  /* Kick off our initial clock setting alarm */
   alarm(5);
 
   server_mainloop( );
