@@ -53,7 +53,7 @@ static void http_senddata( const int64 client_socket, char *buffer, size_t size 
   /* whoever sends data is not interested in its input-array */
   if( h && ( h->flag & STRUCT_HTTP_FLAG_ARRAY_USED ) ) {
     h->flag &= ~STRUCT_HTTP_FLAG_ARRAY_USED;
-    array_reset( &h->request );
+    array_reset( &h->data.request );
   }
 
   written_size = write( client_socket, buffer, size );
@@ -69,9 +69,9 @@ static void http_senddata( const int64 client_socket, char *buffer, size_t size 
       return;
     }
 
-    iob_reset( &h->batch );
+    iob_reset( &h->data.batch );
     memmove( outbuf, buffer + written_size, size - written_size );
-    iob_addbuf_free( &h->batch, outbuf, size - written_size );
+    iob_addbuf_free( &h->data.batch, outbuf, size - written_size );
     h->flag |= STRUCT_HTTP_FLAG_IOB_USED;
 
     /* writeable short data sockets just have a tcp timeout */
@@ -124,7 +124,7 @@ ssize_t http_sendiovecdata( const int64 client_socket, int iovec_entries, struct
      free it now */
   if( h->flag & STRUCT_HTTP_FLAG_ARRAY_USED ) {
     h->flag &= ~STRUCT_HTTP_FLAG_ARRAY_USED;
-    array_reset( &h->request );
+    array_reset( &h->data.request );
   }
 
   /* If we came here, wait for the answer is over */
@@ -149,12 +149,12 @@ ssize_t http_sendiovecdata( const int64 client_socket, int iovec_entries, struct
   else
     header_size = sprintf( header, "HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %zd\r\n\r\n", size );
 
-  iob_reset( &h->batch );
-  iob_addbuf_free( &h->batch, header, header_size );
+  iob_reset( &h->data.batch );
+  iob_addbuf_free( &h->data.batch, header, header_size );
 
   /* Will move to ot_iovec.c */
   for( i=0; i<iovec_entries; ++i )
-    iob_addbuf_munmap( &h->batch, iovector[i].iov_base, iovector[i].iov_len );
+    iob_addbuf_munmap( &h->data.batch, iovector[i].iov_base, iovector[i].iov_len );
   free( iovector );
 
   h->flag |= STRUCT_HTTP_FLAG_IOB_USED;

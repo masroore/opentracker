@@ -19,7 +19,7 @@
 #include "trackerlogic.h"
 #include "ot_mutex.h"
 
-//#define MTX_DBG( STRING ) fprintf( stderr, STRING )
+/* #define MTX_DBG( STRING ) fprintf( stderr, STRING ) */
 #define MTX_DBG( STRING )
 
 /* Our global all torrents list */

@@ -97,9 +97,9 @@ static void handle_dead( const int64 socket ) {
   struct http_data* h=io_getcookie( socket );
   if( h ) {
     if( h->flag & STRUCT_HTTP_FLAG_IOB_USED )
-      iob_reset( &h->batch );
+      iob_reset( &h->data.batch );
     if( h->flag & STRUCT_HTTP_FLAG_ARRAY_USED )
-      array_reset( &h->request );
+      array_reset( &h->data.request );
     if( h->flag & STRUCT_HTTP_FLAG_WAITINGFORTASK )
       mutex_workqueue_canceltask( socket );
     free( h );
@@ -117,32 +117,32 @@ static ssize_t handle_read( const int64 clientsocket ) {
   }
 
   /* If we get the whole request in one packet, handle it without copying */
-  if( !array_start( &h->request ) ) {
+  if( !array_start( &h->data.request ) ) {
     if( memchr( static_inbuf, '\n', l ) )
       return http_handle_request( clientsocket, static_inbuf, l );
     h->flag |= STRUCT_HTTP_FLAG_ARRAY_USED;
-    array_catb( &h->request, static_inbuf, l );
+    array_catb( &h->data.request, static_inbuf, l );
     return 0;
   }
 
   h->flag |= STRUCT_HTTP_FLAG_ARRAY_USED;
-  array_catb( &h->request, static_inbuf, l );
+  array_catb( &h->data.request, static_inbuf, l );
 
-  if( array_failed( &h->request ) )
+  if( array_failed( &h->data.request ) )
     return http_issue_error( clientsocket, CODE_HTTPERROR_500 );
 
-  if( array_bytes( &h->request ) > 8192 )
+  if( array_bytes( &h->data.request ) > 8192 )
      return http_issue_error( clientsocket, CODE_HTTPERROR_500 );
 
-  if( memchr( array_start( &h->request ), '\n', array_bytes( &h->request ) ) )
-    return http_handle_request( clientsocket, array_start( &h->request ), array_bytes( &h->request ) );
+  if( memchr( array_start( &h->data.request ), '\n', array_bytes( &h->data.request ) ) )
+    return http_handle_request( clientsocket, array_start( &h->data.request ), array_bytes( &h->data.request ) );
 
   return 0;
 }
 
 static void handle_write( const int64 clientsocket ) {
   struct http_data* h=io_getcookie( clientsocket );
-  if( !h || ( iob_send( clientsocket, &h->batch ) <= 0 ) )
+  if( !h || ( iob_send( clientsocket, &h->data.batch ) <= 0 ) )
     handle_dead( clientsocket );
 }
 

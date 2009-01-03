@@ -18,7 +18,7 @@ struct http_data {
   union {
     array          request;
     io_batch       batch;
-  };
+  } data;
   char             ip[4];
   STRUCT_HTTP_FLAG flag;
 };
