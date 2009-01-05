@@ -96,6 +96,31 @@ struct ot_peerlist {
 };
 #define OT_PEERLIST_HASBUCKETS(peer_list) ((peer_list) && ((peer_list)->peers.size > (peer_list)->peers.space))
 
+struct ot_workstruct {
+  /* Thread specific, static */
+#define THREAD_INBUF_SIZE    8192
+  char   *inbuf;
+  size_t  inbuf_size;
+#define THREAD_OUTBUF_SIZE   8192
+  char   *outbuf;
+  size_t  outbuf_size;
+#ifdef _DEBUG_HTTPERROR
+#define THREAD_DEBUGBUF_SIZE 8192
+  char   *debugbuf;
+  size_t  debugbuf_size;
+#endif
+
+  /* HTTP specific, non static */
+  char   *request;
+  ssize_t request_size;
+  char   *reply;
+  ssize_t reply_size;
+#ifdef _DEBUG_PEERID
+  char   *peer_id;
+  ssize_t peer_id_size;
+#endif
+};
+
 /*
    Exported functions
 */

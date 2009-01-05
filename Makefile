@@ -24,7 +24,6 @@ BINDIR?=$(PREFIX)/bin
 
 #FEATURES+=-DWANT_SYNC_LIVE
 #FEATURES+=-DWANT_SYNC_SCRAPE
-#FEATURES+=-DWANT_UTORRENT1600_WORKAROUND
 #FEATURES+=-DWANT_IP_FROM_QUERY_STRING
 #FEATURES+=-DWANT_COMPRESSION_GZIP 
 #FEATURES+=-DWANT_LOG_NETWORKS
@@ -37,7 +36,7 @@ FEATURES+=-DWANT_FULLSCRAPE
 OPTS_debug=-D_DEBUG -g -ggdb # -pg -fprofile-arcs -ftest-coverage
 OPTS_production=-Os
 
-CFLAGS+=-I$(LIBOWFAT_HEADERS) -Wall -pipe -Wextra #-pedantic -ansi
+CFLAGS+=-I$(LIBOWFAT_HEADERS) -Wall -pipe -Wextra #-ansi -pedantic
 LDFLAGS+=-L$(LIBOWFAT_LIBRARY) -lowfat -pthread -lz
 
 BINARY =opentracker

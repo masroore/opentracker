@@ -17,9 +17,6 @@
 #include "ot_udp.h"
 #include "ot_stats.h"
 
-static char static_inbuf[8192];
-static char static_outbuf[8192];
-
 static const uint8_t g_static_connid[8] = { 0x23, 0x42, 0x05, 0x17, 0xde, 0x41, 0x50, 0xff };
 
 static void udp_make_connectionid( uint32_t * connid, const char * remoteip ) {
@@ -39,17 +36,17 @@ static int udp_test_connectionid( const uint32_t * const connid, const char * re
 }
 
 /* UDP implementation according to http://xbtt.sourceforge.net/udp_tracker_protocol.html */
-void handle_udp4( int64 serversocket ) {
+void handle_udp4( int64 serversocket, struct ot_workstruct *ws ) {
   ot_peer     peer;
   ot_hash    *hash = NULL;
   char        remoteip[4];
-  uint32_t   *inpacket = (uint32_t*)static_inbuf;
-  uint32_t   *outpacket = (uint32_t*)static_outbuf;
+  uint32_t   *inpacket = (uint32_t*)ws->inbuf;
+  uint32_t   *outpacket = (uint32_t*)ws->outbuf;
   uint32_t    numwant, left, event;
   uint16_t    port, remoteport;
   size_t      r, r_out;
 
-  r = socket_recv4( serversocket, static_inbuf, sizeof( static_inbuf ), remoteip, &remoteport);
+  r = socket_recv4( serversocket, ws->inbuf, ws->inbuf_size, remoteip, &remoteport);
 
   stats_issue_event( EVENT_ACCEPT, FLAG_UDP, ntohl(*(uint32_t*)remoteip) );
   stats_issue_event( EVENT_READ, FLAG_UDP, r );
@@ -57,8 +54,6 @@ void handle_udp4( int64 serversocket ) {
   /* Minimum udp tracker packet size, also catches error */
   if( r < 16 )
     return;
-
-/*  fprintf( stderr, "UDP Connection id: %16llX\n", *(uint64_t*)inpacket ); */
 
   switch( ntohl( inpacket[2] ) ) {
     case 0: /* This is a connect action */
@@ -70,7 +65,7 @@ void handle_udp4( int64 serversocket ) {
       outpacket[1] = inpacket[3];
       udp_make_connectionid( outpacket + 2, remoteip );
 
-      socket_send4( serversocket, static_outbuf, 16, remoteip, remoteport );
+      socket_send4( serversocket, ws->outbuf, 16, remoteip, remoteport );
       stats_issue_event( EVENT_CONNECT, FLAG_UDP, 16 );
       break;
     case 1: /* This is an announce action */
@@ -88,8 +83,8 @@ void handle_udp4( int64 serversocket ) {
       if (numwant > 200) numwant = 200;
 
       event = ntohl( inpacket[80/4] );
-      port  = *(uint16_t*)( static_inbuf + 96 );
-      hash  = (ot_hash*)( static_inbuf + 16 );
+      port  = *(uint16_t*)( ((char*)inpacket) + 96 );
+      hash  = (ot_hash*)( ((char*)inpacket) + 16 );
 
       OT_SETIP( &peer, remoteip );
       OT_SETPORT( &peer, &port );
@@ -108,11 +103,11 @@ void handle_udp4( int64 serversocket ) {
       outpacket[1] = inpacket[12/4];
 
       if( OT_PEERFLAG( &peer ) & PEER_FLAG_STOPPED ) /* Peer is gone. */
-        r = remove_peer_from_torrent( hash, &peer, static_outbuf, FLAG_UDP );
+        r = remove_peer_from_torrent( hash, &peer, ws->outbuf, FLAG_UDP );
       else
-        r = 8 + add_peer_to_torrent_and_return_peers( hash, &peer, FLAG_UDP, numwant, static_outbuf + 8 );
+        r = 8 + add_peer_to_torrent_and_return_peers( hash, &peer, FLAG_UDP, numwant, ((char*)outpacket) + 8 );
 
-      socket_send4( serversocket, static_outbuf, r, remoteip, remoteport );
+      socket_send4( serversocket, ws->outbuf, r, remoteip, remoteport );
       stats_issue_event( EVENT_ANNOUNCE, FLAG_UDP, r );
       break;
 
@@ -124,9 +119,9 @@ void handle_udp4( int64 serversocket ) {
       outpacket[1] = inpacket[12/4];
 
       for( r_out = 0; ( r_out * 20 < r - 16) && ( r_out <= 74 ); r_out++ )
-        return_udp_scrape_for_torrent( (ot_hash*)( static_inbuf + 16 + 20 * r_out ), static_outbuf + 8 + 12 * r_out );
+        return_udp_scrape_for_torrent( (ot_hash*)( ((char*)inpacket) + 16 + 20 * r_out ), ((char*)outpacket) + 8 + 12 * r_out );
 
-      socket_send4( serversocket, static_outbuf, 8 + 12 * r_out, remoteip, remoteport );
+      socket_send4( serversocket, ws->outbuf, 8 + 12 * r_out, remoteip, remoteport );
       stats_issue_event( EVENT_SCRAPE, FLAG_UDP, r );
       break;
   }

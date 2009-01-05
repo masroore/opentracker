@@ -41,9 +41,6 @@ volatile int g_opentracker_running = 1;
 
 static char * g_serverdir = NULL;
 
-/* To always have space for error messages ;) */
-static char static_inbuf[8192];
-
 static void panic( const char *routine ) {
   fprintf( stderr, "%s: %s\n", routine, strerror(errno) );
   exit( 111 );
@@ -107,37 +104,44 @@ static void handle_dead( const int64 socket ) {
   io_close( socket );
 }
 
-static ssize_t handle_read( const int64 clientsocket ) {
+static ssize_t handle_read( const int64 clientsocket, struct ot_workstruct *ws ) {
   struct http_data* h = io_getcookie( clientsocket );
   ssize_t l;
 
-  if( ( l = io_tryread( clientsocket, static_inbuf, sizeof static_inbuf ) ) <= 0 ) {
+  if( ( l = io_tryread( clientsocket, ws->inbuf, ws->inbuf_size ) ) <= 0 ) {
     handle_dead( clientsocket );
     return 0;
   }
 
   /* If we get the whole request in one packet, handle it without copying */
   if( !array_start( &h->data.request ) ) {
-    if( memchr( static_inbuf, '\n', l ) )
-      return http_handle_request( clientsocket, static_inbuf, l );
+    if( memchr( ws->inbuf, '\n', l ) ) {
+      ws->request = ws->inbuf;
+      ws->request_size = l;
+      return http_handle_request( clientsocket, ws );
+    }
+
+    /* ... else take a copy */
     h->flag |= STRUCT_HTTP_FLAG_ARRAY_USED;
-    array_catb( &h->data.request, static_inbuf, l );
+    array_catb( &h->data.request, ws->inbuf, l );
     return 0;
   }
 
   h->flag |= STRUCT_HTTP_FLAG_ARRAY_USED;
-  array_catb( &h->data.request, static_inbuf, l );
+  array_catb( &h->data.request, ws->inbuf, l );
 
   if( array_failed( &h->data.request ) )
-    return http_issue_error( clientsocket, CODE_HTTPERROR_500 );
+    return http_issue_error( clientsocket, ws, CODE_HTTPERROR_500 );
 
   if( array_bytes( &h->data.request ) > 8192 )
-     return http_issue_error( clientsocket, CODE_HTTPERROR_500 );
+     return http_issue_error( clientsocket, ws, CODE_HTTPERROR_500 );
 
-  if( memchr( array_start( &h->data.request ), '\n', array_bytes( &h->data.request ) ) )
-    return http_handle_request( clientsocket, array_start( &h->data.request ), array_bytes( &h->data.request ) );
+  if( !memchr( array_start( &h->data.request ), '\n', array_bytes( &h->data.request ) ) )
+    return 0;
 
-  return 0;
+  ws->request      = array_start( &h->data.request );
+  ws->request_size = array_bytes( &h->data.request );
+  return http_handle_request( clientsocket, ws );
 }
 
 static void handle_write( const int64 clientsocket ) {
@@ -183,9 +187,25 @@ static void handle_accept( const int64 serversocket ) {
 }
 
 static void server_mainloop( ) {
-  time_t        next_timeout_check = g_now_seconds + OT_CLIENT_TIMEOUT_CHECKINTERVAL;
-  struct        iovec *iovector;
-  int           iovec_entries;
+  struct ot_workstruct ws;
+  time_t next_timeout_check = g_now_seconds + OT_CLIENT_TIMEOUT_CHECKINTERVAL;
+  struct iovec *iovector;
+  int    iovec_entries;
+
+  /* Initialize our "thread local storage" */
+  ws.inbuf   = malloc( THREAD_INBUF_SIZE );
+  ws.outbuf  = malloc( THREAD_OUTBUF_SIZE );
+#ifdef _DEBUG_HTTPERROR
+  ws.debugbuf= malloc( THREAD_INBUF_SIZE );
+#endif
+  if( !ws.inbuf || !ws.outbuf )
+    panic( "Initializing worker failed" );
+
+  ws.inbuf_size   = THREAD_INBUF_SIZE;
+  ws.outbuf_size  = THREAD_OUTBUF_SIZE;
+#ifdef _DEBUG_HTTPERROR
+  ws.debugbuf_size= THREAD_INBUF_SIZE;
+#endif
 
   for( ; ; ) {
     int64 i;
@@ -197,13 +217,13 @@ static void server_mainloop( ) {
       if( (intptr_t)cookie == FLAG_TCP )
         handle_accept( i );
       else if( (intptr_t)cookie == FLAG_UDP )
-        handle_udp4( i );
+        handle_udp4( i, &ws );
       else
-        handle_read( i );
+        handle_read( i, &ws );
     }
 
     while( ( i = mutex_workqueue_popresult( &iovec_entries, &iovector ) ) != -1 )
-      http_sendiovecdata( i, iovec_entries, iovector );
+      http_sendiovecdata( i, &ws, iovec_entries, iovector );
 
     while( ( i = io_canwrite( ) ) != -1 )
       handle_write( i );
@@ -431,7 +451,12 @@ while( scanon ) {
         break;
       case 'f': bound += parse_configfile( optarg ); break;
       case 'h': help( argv[0] ); exit( 0 );
-      case 'v': stats_return_tracker_version( static_inbuf ); fputs( static_inbuf, stderr ); exit( 0 );
+      case 'v': {
+        char buffer[8192];
+        stats_return_tracker_version( buffer );
+        fputs( buffer, stderr );
+        exit( 0 );
+      }
       default:
       case '?': usage( argv[0] ); exit( 1 );
     }

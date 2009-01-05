@@ -400,9 +400,6 @@ static void * livesync_worker( void * args ) {
     default:
       break;
     }
-
-    /* Handle outstanding requests */
-    livesync_ticker( );
   }
 
   /* Never returns. */

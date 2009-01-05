@@ -8,6 +8,11 @@
 
 #include <sys/types.h>
 
+typedef struct {
+  char *key;
+  int   value;
+} ot_keywords;
+
 typedef enum {
   SCAN_PATH                  = 1,
   SCAN_SEARCHPATH_PARAM      = 2,
@@ -21,8 +26,19 @@ typedef enum {
    flags      determines, what to parse
    returns    number of valid converted characters in deststring
               or -1 for parse error
+              or -2 for terminator found
 */
 ssize_t scan_urlencoded_query(char **string, char *deststring, SCAN_SEARCHPATH_FLAG flags);
+
+/* string     in: pointer to source
+              out: pointer to next scan position
+   flags      determines, what to parse
+   returns    value for matched keyword
+              or -1 for parse error
+              or -2 for terminator found
+              or -3 for no keyword matched
+ */
+int scan_find_keywords( const ot_keywords * keywords, char **string, SCAN_SEARCHPATH_FLAG flags);
 
 /* string     in: pointer to value of a param=value pair to skip
               out: pointer to next scan position on return

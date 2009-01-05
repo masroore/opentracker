@@ -23,8 +23,8 @@ struct http_data {
   STRUCT_HTTP_FLAG flag;
 };
 
-ssize_t http_handle_request( const int64 s, char *data, size_t l );
-ssize_t http_sendiovecdata( const int64 s, int iovec_entries, struct iovec *iovector );
-ssize_t http_issue_error( const int64 s, int code );
+ssize_t http_handle_request( const int64 s, struct ot_workstruct *ws );
+ssize_t http_sendiovecdata( const int64 s, struct ot_workstruct *ws, int iovec_entries, struct iovec *iovector );
+ssize_t http_issue_error( const int64 s, struct ot_workstruct *ws, int code );
 
 #endif

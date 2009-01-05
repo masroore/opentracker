@@ -9,6 +9,9 @@
 /* Libwofat */
 #include "scan.h"
 
+/* System */
+#include <string.h>
+
 /* Idea is to do a in place replacement or guarantee at least
    strlen( string ) bytes in deststring
    watch http://www.ietf.org/rfc/rfc2396.txt
@@ -64,6 +67,22 @@ void scan_urlencoded_skipvalue( char **string ) {
   *string = (char*)s;
 }
 
+int scan_find_keywords( const ot_keywords * keywords, char **string, SCAN_SEARCHPATH_FLAG flags) {
+  char *deststring = *string;
+  ssize_t match_length = scan_urlencoded_query(string, deststring, flags );
+
+  if( match_length < 0 ) return match_length;
+  if( match_length == 0 ) return -3;
+
+  while( keywords->key ) {
+    if( !memcmp( keywords->key, deststring, match_length ) )
+      return keywords->value;
+    keywords++;
+  }
+
+  return -3;
+}
+
 ssize_t scan_urlencoded_query(char **string, char *deststring, SCAN_SEARCHPATH_FLAG flags) {
   const unsigned char* s=*(const unsigned char**) string;
   unsigned char *d = (unsigned char*)deststring;
@@ -95,9 +114,7 @@ ssize_t scan_urlencoded_query(char **string, char *deststring, SCAN_SEARCHPATH_F
     --s;
     break;
   case '?':
-    /* XXX to help us parse path?param=value?param=value?... sent by µTorrent 1600
-       do not return an error but silently terminate
-    if( flags != SCAN_PATH ) return -1; */
+    if( flags != SCAN_PATH ) return -1;
     break;
   case '=':
     if( flags != SCAN_SEARCHPATH_PARAM ) return -1;
