@@ -14,7 +14,7 @@
 #define WANT_ACCESSLIST
 void accesslist_init( );
 void accesslist_deinit( );
-int  accesslist_hashisvalid( ot_hash *hash );
+int  accesslist_hashisvalid( ot_hash hash );
 
 extern char *g_accesslist_filename;
 
@@ -30,7 +30,7 @@ typedef enum {
   OT_PERMISSION_MAY_LIVESYNC   = 0x4
 } ot_permissions;
 
-int  accesslist_blessip( char * ip, ot_permissions permissions );
-int  accesslist_isblessed( char * ip, ot_permissions permissions );
+int  accesslist_blessip( ot_ip6 ip, ot_permissions permissions );
+int  accesslist_isblessed( ot_ip6 ip, ot_permissions permissions );
 
 #endif

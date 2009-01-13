@@ -115,7 +115,7 @@ static int fullscrape_increase( int *iovec_entries, struct iovec **iovector,
 }
 
 static void fullscrape_make( int *iovec_entries, struct iovec **iovector, ot_tasktype mode ) {
-  int      bucket,i;
+  int      bucket;
   char    *r, *re;
 #ifdef WANT_COMPRESSION_GZIP
   char     compress_buffer[OT_SCRAPE_MAXENTRYLEN];
@@ -165,17 +165,17 @@ static void fullscrape_make( int *iovec_entries, struct iovec **iovector, ot_tas
 
         /* push hash as bencoded string */
         *r++='2'; *r++='0'; *r++=':';
-        for(i=0;i<20;i+=4) WRITE32(r,i,READ32(hash,i)); r+=20;
+        memcpy( r, hash, sizeof(ot_hash) ); r += sizeof(ot_hash);
         /* push rest of the scrape string */
         r += sprintf( r, "d8:completei%zde10:downloadedi%zde10:incompletei%zdee", peer_list->seed_count, peer_list->down_count, peer_list->peer_count-peer_list->seed_count );
 
          break;
       case TASK_FULLSCRAPE_TPB_ASCII:
-        to_hex( r, *hash ); r+=40;
+        to_hex( r, *hash ); r+= 2 * sizeof(ot_hash);
         r += sprintf( r, ":%zd:%zd\n", peer_list->seed_count, peer_list->peer_count-peer_list->seed_count );
         break;
       case TASK_FULLSCRAPE_TPB_BINARY:
-        for(i=0;i<20;i+=4) WRITE32(r,i,READ32(hash,i)); r+=20;
+        memcpy( r, *hash, sizeof(ot_hash) ); r += sizeof(ot_hash);
         *(uint32_t*)(r+0) = htonl( (uint32_t)  peer_list->seed_count );
         *(uint32_t*)(r+4) = htonl( (uint32_t)( peer_list->peer_count-peer_list->seed_count) );
         r+=8;

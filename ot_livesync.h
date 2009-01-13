@@ -86,7 +86,7 @@ void livesync_deinit();
 void livesync_bind_mcast( char *ip, uint16_t port );
 
 /* Inform live sync about whats going on. */
-void livesync_tell( ot_hash * const info_hash, const ot_peer * const peer );
+void livesync_tell( ot_hash const info_hash, const ot_peer * const peer );
 
 /* Tickle the live sync module from time to time, so no events get
    stuck when there's not enough traffic to fill udp packets fast

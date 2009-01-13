@@ -17,9 +17,7 @@
 #include "uint16.h"
 
 static int vector_compare_peer(const void *peer1, const void *peer2 ) {
-  int32_t       cmp = READ32(peer2,0) - READ32(peer1,0);
-  if (cmp == 0) cmp = READ16(peer2,4) - READ16(peer1,4);
-  return cmp;
+  return memcmp( peer1, peer2, OT_PEER_COMPARE_SIZE );
 }
 
 /* This function gives us a binary search that returns a pointer, even if
@@ -30,19 +28,14 @@ static int vector_compare_peer(const void *peer1, const void *peer2 ) {
 */
 void *binary_search( const void * const key, const void * base, const size_t member_count, const size_t member_size,
                      size_t compare_size, int *exactmatch ) {
-  size_t offs, mc = member_count;
+  size_t mc = member_count;
   int8_t *lookat = ((int8_t*)base) + member_size * (mc >> 1);
-  int32_t key_cache = READ32(key,0);
   *exactmatch = 1;
 
   while( mc ) {
-    int32_t cmp = READ32(lookat,0) - key_cache;
-    if (cmp == 0) {
-      for( offs = 4; cmp == 0 && offs < compare_size; offs += 4 )
-        cmp = READ32(lookat,offs) - READ32(key,offs);
-      if( cmp == 0 )
-        return (void *)lookat;
-    }
+    int32_t cmp = memcmp( lookat, key, compare_size );
+    if( cmp == 0 )
+      return (void *)lookat;
 
     if (cmp < 0) {
       base = (void*)(lookat + member_size);
@@ -60,13 +53,10 @@ void *binary_search( const void * const key, const void * base, const size_t mem
 ot_peer *binary_search_peer( const ot_peer * const peer, const ot_peer * base, const size_t member_count, int *exactmatch ) {
   size_t   mc = member_count;
   const ot_peer *lookat = base + (mc >> 1);
-  int32_t low  = READ32(peer,0);
-  int16_t high = READ16(peer,4);
   *exactmatch = 1;
 
   while( mc ) {
-    int32_t      cmp = READ32(lookat,0) - low;
-    if(cmp == 0) cmp = READ16(lookat,4) - high;
+    int32_t cmp = memcmp(lookat,peer,OT_PEER_COMPARE_SIZE );
     if(cmp == 0) return (ot_peer*)lookat;
 
     if (cmp < 0) {
@@ -84,7 +74,7 @@ ot_peer *binary_search_peer( const ot_peer * const peer, const ot_peer * base, c
 
 
 static uint8_t vector_hash_peer( ot_peer *peer, int bucket_count ) {
-  unsigned int hash = 5381, i = 6;
+  unsigned int hash = 5381, i = OT_PEER_COMPARE_SIZE;
   uint8_t *p = (uint8_t*)peer;
   while( i-- ) hash += (hash<<5) + *(p++);
   return hash % bucket_count;

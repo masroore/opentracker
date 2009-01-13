@@ -19,7 +19,7 @@ struct http_data {
     array          request;
     io_batch       batch;
   } data;
-  char             ip[4];
+  ot_ip6           ip;
   STRUCT_HTTP_FLAG flag;
 };
 

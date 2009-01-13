@@ -12,10 +12,12 @@
 #include <stdio.h>
 #include <string.h>
 #include <pthread.h>
+#include <unistd.h>
 
 /* Libowfat */
 #include "byte.h"
 #include "io.h"
+#include "ip6.h"
 
 /* Opentracker */
 #include "trackerlogic.h"
@@ -132,8 +134,8 @@ static void stats_get_highscore_networks( stats_network_node *node, int depth, u
       while( (j<network_count) && (node->counters[i]>scores[j] ) ) ++j;
       --j;
 
-      memmove( scores, scores + 1, j * sizeof( *scores ) );
-      memmove( networks, networks + 1, j * sizeof( *networks ) );
+      memcpy( scores, scores + 1, j * sizeof( *scores ) );
+      memcpy( networks, networks + 1, j * sizeof( *networks ) );
       scores[ j ] = node->counters[ i ];
       networks[ j ] = node_value | ( i << ( 32 - depth * STATS_NETWORK_NODE_BITWIDTH ) );
   }
@@ -176,13 +178,13 @@ size_t stats_top10_txt( char * reply ) {
       ot_peerlist *peer_list = ( ((ot_torrent*)(torrents_list->data))[j] ).peer_list;
       int idx = 9; while( (idx >= 0) && ( peer_list->peer_count > top10c[idx].val ) ) --idx;
       if ( idx++ != 9 ) {
-        memmove( top10c + idx + 1, top10c + idx, ( 9 - idx ) * sizeof( ot_record ) );
+        memcpy( top10c + idx + 1, top10c + idx, ( 9 - idx ) * sizeof( ot_record ) );
         top10c[idx].val = peer_list->peer_count;
         top10c[idx].torrent = (ot_torrent*)(torrents_list->data) + j;
       }
       idx = 9; while( (idx >= 0) && ( peer_list->seed_count > top10s[idx].val ) ) --idx;
       if ( idx++ != 9 ) {
-        memmove( top10s + idx + 1, top10s + idx, ( 9 - idx ) * sizeof( ot_record ) );
+        memcpy( top10s + idx + 1, top10s + idx, ( 9 - idx ) * sizeof( ot_record ) );
         top10s[idx].val = peer_list->seed_count;
         top10s[idx].torrent = (ot_torrent*)(torrents_list->data) + j;
       }
@@ -269,7 +271,7 @@ static size_t stats_slash24s_txt( char * reply, size_t amount, uint32_t thresh )
         while( ( insert_pos >= 0 ) && ( count[j] > slash24s[ 2 * insert_pos ] ) )
           --insert_pos;
         ++insert_pos;
-        memmove( slash24s + 2 * ( insert_pos + 1 ), slash24s + 2 * ( insert_pos ), 2 * sizeof( uint32_t ) * ( amount - insert_pos - 1 ) );
+        memcpy( slash24s + 2 * ( insert_pos + 1 ), slash24s + 2 * ( insert_pos ), 2 * sizeof( uint32_t ) * ( amount - insert_pos - 1 ) );
         slash24s[ 2 * insert_pos     ] = count[j];
         slash24s[ 2 * insert_pos + 1 ] = ( i << NUM_TOPBITS ) + j;
         if( slash24s[ 2 * amount - 2 ] > thresh )
@@ -537,7 +539,7 @@ static void stats_make( int *iovec_entries, struct iovec **iovector, ot_tasktype
   iovec_fixlast( iovec_entries, iovector, r );
 }
 
-void stats_issue_event( ot_status_event event, PROTO_FLAG proto, uint32_t event_data ) {
+void stats_issue_event( ot_status_event event, PROTO_FLAG proto, uintptr_t event_data ) {
   switch( event ) {
     case EVENT_ACCEPT:
       if( proto == FLAG_TCP ) ot_overall_tcp_connections++; else ot_overall_udp_connections++;
@@ -559,16 +561,24 @@ void stats_issue_event( ot_status_event event, PROTO_FLAG proto, uint32_t event_
       break;
     case EVENT_FULLSCRAPE_REQUEST:
       {
-      uint8_t ip[4]; *(uint32_t*)ip = (uint32_t)proto; /* ugly hack to transfer ip to stats */
-      LOG_TO_STDERR( "[%08d] scrp: %d.%d.%d.%d - FULL SCRAPE\n", (unsigned int)(g_now_seconds - ot_start_time)/60, ip[0], ip[1], ip[2], ip[3] );
-      ot_full_scrape_request_count++;
+        ot_ip6 *ip = (ot_ip6*)event_data; /* ugly hack to transfer ip to stats */
+        char _debug[512];
+        int off = snprintf( _debug, sizeof(_debug), "[%08d] scrp:  ", (unsigned int)(g_now_seconds - ot_start_time)/60 );
+        off += fmt_ip6( _debug+off, *ip );
+        off += snprintf( _debug, sizeof(_debug)-off, " - FULL SCRAPE\n" );
+        write( 2, _debug, off );
+        ot_full_scrape_request_count++;
       }
       break;
     case EVENT_FULLSCRAPE_REQUEST_GZIP:
       {
-      uint8_t ip[4]; *(uint32_t*)ip = (uint32_t)proto; /* ugly hack to transfer ip to stats */
-      LOG_TO_STDERR( "[%08d] scrp: %d.%d.%d.%d - FULL SCRAPE GZIP\n", (unsigned int)(g_now_seconds - ot_start_time)/60, ip[0], ip[1], ip[2], ip[3] );
-      ot_full_scrape_request_count++;
+        ot_ip6 *ip = (ot_ip6*)event_data; /* ugly hack to transfer ip to stats */
+        char _debug[512];
+        int off = snprintf( _debug, sizeof(_debug), "[%08d] scrp:  ", (unsigned int)(g_now_seconds - ot_start_time)/60 );
+        off += fmt_ip6(_debug+off, *ip );
+        off += snprintf( _debug, sizeof(_debug)-off, " - FULL SCRAPE\n" );
+        write( 2, _debug, off );
+        ot_full_scrape_request_count++;
       }
       break;
     case EVENT_FAILED:

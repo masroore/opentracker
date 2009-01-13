@@ -11,17 +11,16 @@
 #include <time.h>
 #include <stdint.h>
 
-/* Libowfat */
-#include <uint16.h>
-#include <uint32.h>
-
-#define READ16(addr,offs)      ((int16_t)uint16_read((offs)+(uint8_t*)(addr)))
-#define READ32(addr,offs)      ((int32_t)uint32_read((offs)+(uint8_t*)(addr)))
-#define WRITE16(addr,offs,val) uint16_pack((offs)+(uint8_t*)(addr),(val))
-#define WRITE32(addr,offs,val) uint32_pack((offs)+(uint8_t*)(addr),(val))
-
 typedef uint8_t        ot_hash[20];
 typedef time_t         ot_time;
+typedef char           ot_ip6[16];
+#ifdef WANT_V6
+#define OT_IP_SIZE 16
+#define PEERS6 "6"
+#else
+#define OT_IP_SIZE 4
+#define PEERS6 ""
+#endif
 
 /* Some tracker behaviour tunable */
 #define OT_CLIENT_TIMEOUT 30
@@ -60,7 +59,7 @@ extern uint32_t g_tracker_id;
 typedef enum { FLAG_TCP, FLAG_UDP, FLAG_MCA } PROTO_FLAG;
 
 typedef struct {
-  uint8_t data[8];
+  uint8_t data[OT_IP_SIZE+2+2];
 } ot_peer;
 static const uint8_t PEER_FLAG_SEEDING   = 0x80;
 static const uint8_t PEER_FLAG_COMPLETED = 0x40;
@@ -68,12 +67,17 @@ static const uint8_t PEER_FLAG_STOPPED   = 0x20;
 static const uint8_t PEER_FLAG_FROM_SYNC = 0x10;
 static const uint8_t PEER_FLAG_LEECHING  = 0x00;
 
-#define OT_SETIP(peer,ip)     WRITE32((peer),0,READ32((ip),0))
-#define OT_SETPORT(peer,port) WRITE16((peer),4,READ16((port),0))
-#define OT_PEERFLAG(peer)     (((uint8_t*)(peer))[6])
-#define OT_PEERTIME(peer)     (((uint8_t*)(peer))[7])
+#ifdef WANT_V6
+#define OT_SETIP(peer,ip)     memcpy((peer),(ip),(OT_IP_SIZE))
+#else
+#define OT_SETIP(peer,ip)     memcpy((peer),(((uint8_t*)ip)+12),(OT_IP_SIZE))
+#endif
+#define OT_SETPORT(peer,port) memcpy(((uint8_t*)(peer))+(OT_IP_SIZE),(port),2)
+#define OT_PEERFLAG(peer)     (((uint8_t*)(peer))[(OT_IP_SIZE)+2])
+#define OT_PEERTIME(peer)     (((uint8_t*)(peer))[(OT_IP_SIZE)+3])
 
 #define OT_HASH_COMPARE_SIZE (sizeof(ot_hash))
+#define OT_PEER_COMPARE_SIZE ((OT_IP_SIZE)+2)
 
 struct ot_peerlist;
 typedef struct ot_peerlist ot_peerlist;
@@ -98,16 +102,13 @@ struct ot_peerlist {
 
 struct ot_workstruct {
   /* Thread specific, static */
-#define THREAD_INBUF_SIZE    8192
   char   *inbuf;
-  size_t  inbuf_size;
-#define THREAD_OUTBUF_SIZE   8192
+#define G_INBUF_SIZE    8192
   char   *outbuf;
-  size_t  outbuf_size;
+#define G_OUTBUF_SIZE   8192
 #ifdef _DEBUG_HTTPERROR
-#define THREAD_DEBUGBUF_SIZE 8192
   char   *debugbuf;
-  size_t  debugbuf_size;
+#define G_DEBUGBUF_SIZE 8192
 #endif
 
   /* HTTP specific, non static */
@@ -115,10 +116,6 @@ struct ot_workstruct {
   ssize_t request_size;
   char   *reply;
   ssize_t reply_size;
-#ifdef _DEBUG_PEERID
-  char   *peer_id;
-  ssize_t peer_id_size;
-#endif
 };
 
 /*
@@ -135,6 +132,10 @@ struct ot_workstruct {
 #define WANT_SYNC_PARAM( param )
 #endif
 
+#if defined WANT_V6 && defined WANT_LOG_NETWORKS
+#undef WANT_LOG_NETWORKS
+#endif
+
 void trackerlogic_init( );
 void trackerlogic_deinit( void );
 void exerr( char * message );
@@ -142,10 +143,10 @@ void exerr( char * message );
 /* add_peer_to_torrent does only release the torrent bucket if from_sync is set,
    otherwise it is released in return_peers_for_torrent */
 #define add_peer_to_torrent(hash,peer,proto) add_peer_to_torrent_and_return_peers(hash,peer,proto,0,NULL)
-size_t  add_peer_to_torrent_and_return_peers( ot_hash *hash, ot_peer *peer, PROTO_FLAG proto, size_t amount, char * reply );
-size_t  remove_peer_from_torrent( ot_hash *hash, ot_peer *peer, char *reply, PROTO_FLAG proto );
+size_t  add_peer_to_torrent_and_return_peers( ot_hash hash, ot_peer *peer, PROTO_FLAG proto, size_t amount, char * reply );
+size_t  remove_peer_from_torrent( ot_hash hash, ot_peer *peer, char *reply, PROTO_FLAG proto );
 size_t  return_tcp_scrape_for_torrent( ot_hash *hash, int amount, char *reply );
-size_t  return_udp_scrape_for_torrent( ot_hash *hash, char *reply );
+size_t  return_udp_scrape_for_torrent( ot_hash hash, char *reply );
 
 /* Helper, before it moves to its own object */
 void free_peerlist( ot_peerlist *peer_list );

@@ -140,21 +140,4 @@ ssize_t scan_fixed_int( char *data, size_t len, int *tmp ) {
   return len;
 }
 
-ssize_t scan_fixed_ip( char *data, size_t len, unsigned char ip[4] ) {
-  int u, i;
-
-  for( i=0; i<4; ++i ) {
-    ssize_t j = scan_fixed_int( data, len, &u );
-    if( j == (ssize_t)len ) return len;
-    ip[i] = u;
-    data += len - j;
-    len = j;
-    if ( i<3 ) {
-      if( !len || *data != '.') return -1;
-      --len; ++data;
-    }
-  }
-  return len;
-}
-
 const char *g_version_scan_urlencoded_query_c = "$Source$: $Revision$\n";

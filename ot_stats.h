@@ -32,7 +32,7 @@ enum {
   CODE_HTTPERROR_COUNT
 };
 
-void   stats_issue_event( ot_status_event event, PROTO_FLAG proto, uint32_t event_data );
+void   stats_issue_event( ot_status_event event, PROTO_FLAG proto, uintptr_t event_data );
 void   stats_deliver( int64 socket, int tasktype );
 size_t return_stats_for_tracker( char *reply, int mode, int format );
 size_t stats_return_tracker_version( char *reply );

@@ -19,15 +19,15 @@
 
 static const uint8_t g_static_connid[8] = { 0x23, 0x42, 0x05, 0x17, 0xde, 0x41, 0x50, 0xff };
 
-static void udp_make_connectionid( uint32_t * connid, const char * remoteip ) {
+static void udp_make_connectionid( uint32_t * connid, const ot_ip6 remoteip ) {
   /* Touch unused variable */
   (void)remoteip;
 
   /* Use a static secret for now */
-  memmove( connid, g_static_connid, 8 );
+  memcpy( connid, g_static_connid, 8 );
 }
 
-static int udp_test_connectionid( const uint32_t * const connid, const char * remoteip ) {
+static int udp_test_connectionid( const uint32_t * const connid, const ot_ip6 remoteip ) {
   /* Touch unused variable */
   (void)remoteip;
 
@@ -36,19 +36,19 @@ static int udp_test_connectionid( const uint32_t * const connid, const char * re
 }
 
 /* UDP implementation according to http://xbtt.sourceforge.net/udp_tracker_protocol.html */
-void handle_udp4( int64 serversocket, struct ot_workstruct *ws ) {
+void handle_udp6( int64 serversocket, struct ot_workstruct *ws ) {
   ot_peer     peer;
   ot_hash    *hash = NULL;
-  char        remoteip[4];
+  ot_ip6      remoteip;
   uint32_t   *inpacket = (uint32_t*)ws->inbuf;
   uint32_t   *outpacket = (uint32_t*)ws->outbuf;
-  uint32_t    numwant, left, event;
+  uint32_t    numwant, left, event, scopeid;
   uint16_t    port, remoteport;
   size_t      r, r_out;
 
-  r = socket_recv4( serversocket, ws->inbuf, ws->inbuf_size, remoteip, &remoteport);
+  r = socket_recv6( serversocket, ws->inbuf, G_INBUF_SIZE, remoteip, &remoteport, &scopeid );
 
-  stats_issue_event( EVENT_ACCEPT, FLAG_UDP, ntohl(*(uint32_t*)remoteip) );
+  stats_issue_event( EVENT_ACCEPT, FLAG_UDP, (uintptr_t)remoteip );
   stats_issue_event( EVENT_READ, FLAG_UDP, r );
 
   /* Minimum udp tracker packet size, also catches error */
@@ -65,7 +65,7 @@ void handle_udp4( int64 serversocket, struct ot_workstruct *ws ) {
       outpacket[1] = inpacket[3];
       udp_make_connectionid( outpacket + 2, remoteip );
 
-      socket_send4( serversocket, ws->outbuf, 16, remoteip, remoteport );
+      socket_send6( serversocket, ws->outbuf, 16, remoteip, remoteport, 0 );
       stats_issue_event( EVENT_CONNECT, FLAG_UDP, 16 );
       break;
     case 1: /* This is an announce action */
@@ -103,11 +103,11 @@ void handle_udp4( int64 serversocket, struct ot_workstruct *ws ) {
       outpacket[1] = inpacket[12/4];
 
       if( OT_PEERFLAG( &peer ) & PEER_FLAG_STOPPED ) /* Peer is gone. */
-        r = remove_peer_from_torrent( hash, &peer, ws->outbuf, FLAG_UDP );
+        r = remove_peer_from_torrent( *hash, &peer, ws->outbuf, FLAG_UDP );
       else
-        r = 8 + add_peer_to_torrent_and_return_peers( hash, &peer, FLAG_UDP, numwant, ((char*)outpacket) + 8 );
+        r = 8 + add_peer_to_torrent_and_return_peers( *hash, &peer, FLAG_UDP, numwant, ((char*)outpacket) + 8 );
 
-      socket_send4( serversocket, ws->outbuf, r, remoteip, remoteport );
+      socket_send6( serversocket, ws->outbuf, r, remoteip, remoteport, 0 );
       stats_issue_event( EVENT_ANNOUNCE, FLAG_UDP, r );
       break;
 
@@ -119,9 +119,9 @@ void handle_udp4( int64 serversocket, struct ot_workstruct *ws ) {
       outpacket[1] = inpacket[12/4];
 
       for( r_out = 0; ( r_out * 20 < r - 16) && ( r_out <= 74 ); r_out++ )
-        return_udp_scrape_for_torrent( (ot_hash*)( ((char*)inpacket) + 16 + 20 * r_out ), ((char*)outpacket) + 8 + 12 * r_out );
+        return_udp_scrape_for_torrent( *(ot_hash*)( ((char*)inpacket) + 16 + 20 * r_out ), ((char*)outpacket) + 8 + 12 * r_out );
 
-      socket_send4( serversocket, ws->outbuf, 8 + 12 * r_out, remoteip, remoteport );
+      socket_send6( serversocket, ws->outbuf, 8 + 12 * r_out, remoteip, remoteport, 0 );
       stats_issue_event( EVENT_SCRAPE, FLAG_UDP, r );
       break;
   }

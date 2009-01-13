@@ -80,8 +80,8 @@ ot_vector *mutex_bucket_lock( int bucket ) {
   return all_torrents + bucket;
 }
 
-ot_vector *mutex_bucket_lock_by_hash( ot_hash *hash ) {
-  int bucket =  uint32_read_big( (char*)*hash ) >> OT_BUCKET_COUNT_SHIFT;
+ot_vector *mutex_bucket_lock_by_hash( ot_hash hash ) {
+  int bucket =  uint32_read_big( (char*)hash ) >> OT_BUCKET_COUNT_SHIFT;
 
   /* Can block */
   mutex_bucket_lock( bucket );
@@ -96,8 +96,8 @@ void mutex_bucket_unlock( int bucket, int delta_torrentcount ) {
   pthread_mutex_unlock( &bucket_mutex );
 }
 
-void mutex_bucket_unlock_by_hash( ot_hash *hash, int delta_torrentcount ) {
-  mutex_bucket_unlock( uint32_read_big( (char*)*hash ) >> OT_BUCKET_COUNT_SHIFT, delta_torrentcount );
+void mutex_bucket_unlock_by_hash( ot_hash hash, int delta_torrentcount ) {
+  mutex_bucket_unlock( uint32_read_big( (char*)hash ) >> OT_BUCKET_COUNT_SHIFT, delta_torrentcount );
 }
 
 size_t mutex_get_torrent_count( ) {

@@ -15,6 +15,7 @@
 #include "socket.h"
 #include "ndelay.h"
 #include "byte.h"
+#include "ip6.h"
 
 /* Opentracker */
 #include "trackerlogic.h"
@@ -88,14 +89,14 @@ void livesync_init( ) {
 
   /* Prepare outgoing peers buffer */
   g_peerbuffer_pos = g_peerbuffer_start;
-  memmove( g_peerbuffer_pos, &g_tracker_id, sizeof( g_tracker_id ) );
+  memcpy( g_peerbuffer_pos, &g_tracker_id, sizeof( g_tracker_id ) );
   uint32_pack_big( (char*)g_peerbuffer_pos + sizeof( g_tracker_id ), OT_SYNC_PEER);
   g_peerbuffer_pos += sizeof( g_tracker_id ) + sizeof( uint32_t);
 
 #ifdef WANT_SYNC_SCRAPE
   /* Prepare outgoing scrape buffer */
   g_scrapebuffer_pos = g_scrapebuffer_start;
-  memmove( g_scrapebuffer_pos, &g_tracker_id, sizeof( g_tracker_id ) );
+  memcpy( g_scrapebuffer_pos, &g_tracker_id, sizeof( g_tracker_id ) );
   uint32_pack_big( (char*)g_scrapebuffer_pos + sizeof( g_tracker_id ), OT_SYNC_SCRAPE_TELL);
   g_scrapebuffer_pos += sizeof( g_tracker_id ) + sizeof( uint32_t);
 
@@ -116,8 +117,13 @@ void livesync_deinit() {
   pthread_cancel( thread_id );
 }
 
-void livesync_bind_mcast( char *ip, uint16_t port) {
+void livesync_bind_mcast( ot_ip6 ip, uint16_t port) {
   char tmpip[4] = {0,0,0,0};
+  char *v4ip;
+
+  if( !ip6_isv4mapped(ip))
+    exerr("v6 mcast support not yet available.");
+  v4ip = ip+12;
 
   if( g_socket_in != -1 )
     exerr("Error: Livesync listen ip specified twice.");
@@ -129,12 +135,12 @@ void livesync_bind_mcast( char *ip, uint16_t port) {
   if( socket_bind4_reuse( g_socket_in, tmpip, port ) == -1 )
     exerr("Error: Cant bind live sync incoming socket." );
 
-  if( socket_mcjoin4( g_socket_in, groupip_1, ip ) )
+  if( socket_mcjoin4( g_socket_in, groupip_1, v4ip ) )
     exerr("Error: Cant make live sync incoming socket join mcast group.");
 
   if( ( g_socket_out = socket_udp4()) < 0)
     exerr("Error: Cant create live sync outgoing socket." );
-  if( socket_bind4_reuse( g_socket_out, ip, port ) == -1 )
+  if( socket_bind4_reuse( g_socket_out, v4ip, port ) == -1 )
     exerr("Error: Cant bind live sync outgoing socket." );
 
   socket_mcttl4(g_socket_out, 1);
@@ -160,9 +166,9 @@ static void livesync_handle_peersync( ssize_t datalen ) {
     if( !g_opentracker_running ) return;
 
     if( OT_PEERFLAG(peer) & PEER_FLAG_STOPPED )
-      remove_peer_from_torrent(hash, peer, NULL, FLAG_MCA );
+      remove_peer_from_torrent( *hash, peer, NULL, FLAG_MCA );
     else
-      add_peer_to_torrent( hash, peer, FLAG_MCA );
+      add_peer_to_torrent( *hash, peer, FLAG_MCA );
 
     off += sizeof( ot_hash ) + sizeof( ot_peer );
   }
@@ -175,7 +181,7 @@ void livesync_issue_beacon( ) {
   size_t torrent_count = mutex_get_torrent_count();
   uint8_t beacon[ sizeof(g_tracker_id) + sizeof(uint32_t) + sizeof( uint64_t ) ];
 
-  memmove( beacon, &g_tracker_id, sizeof( g_tracker_id ) );
+  memcpy( beacon, &g_tracker_id, sizeof( g_tracker_id ) );
   uint32_pack_big( (char*)beacon + sizeof( g_tracker_id ), OT_SYNC_SCRAPE_BEACON);
   uint32_pack_big( (char*)beacon + sizeof( g_tracker_id ) +     sizeof(uint32_t), (uint32_t)((uint64_t)(torrent_count)>>32) );
   uint32_pack_big( (char*)beacon + sizeof( g_tracker_id ) + 2 * sizeof(uint32_t), (uint32_t)torrent_count );
@@ -202,7 +208,7 @@ void livesync_handle_beacon( ssize_t datalen ) {
 
     if( torrent_count_remote > g_inquire_remote_count ) {
       g_inquire_remote_count = torrent_count_remote;
-      memmove( &g_inquire_remote_host, g_inbuffer, sizeof( g_tracker_id ) );
+      memcpy( &g_inquire_remote_host, g_inbuffer, sizeof( g_tracker_id ) );
     }
   }
 }
@@ -210,9 +216,9 @@ void livesync_handle_beacon( ssize_t datalen ) {
 void livesync_issue_inquire( ) {
   uint8_t inquire[ sizeof(g_tracker_id) + sizeof(uint32_t) + sizeof(g_tracker_id)];
 
-  memmove( inquire, &g_tracker_id, sizeof( g_tracker_id ) );
+  memcpy( inquire, &g_tracker_id, sizeof( g_tracker_id ) );
   uint32_pack_big( (char*)inquire + sizeof( g_tracker_id ), OT_SYNC_SCRAPE_INQUIRE);
-  memmove( inquire + sizeof(g_tracker_id) + sizeof(uint32_t), &g_inquire_remote_host, sizeof( g_tracker_id ) );
+  memcpy( inquire + sizeof(g_tracker_id) + sizeof(uint32_t), &g_inquire_remote_host, sizeof( g_tracker_id ) );
 
   socket_send4(g_socket_out, (char*)inquire, sizeof(inquire), groupip_1, LIVESYNC_PORT);
 }
@@ -239,7 +245,7 @@ void livesync_issue_tell( ) {
     unsigned int j;
     for( j=0; j<torrents_list->size; ++j ) {
       ot_torrent *torrent = (ot_torrent*)(torrents_list->data) + j;
-      memmove(g_scrapebuffer_pos, torrent->hash, sizeof(ot_hash));
+      memcpy(g_scrapebuffer_pos, torrent->hash, sizeof(ot_hash));
       g_scrapebuffer_pos += sizeof(ot_hash);
       uint32_pack_big( (char*)g_scrapebuffer_pos    , (uint32_t)(g_now_minutes - torrent->peer_list->base ));
       uint32_pack_big( (char*)g_scrapebuffer_pos + 4, (uint32_t)((uint64_t)(torrent->peer_list->down_count)>>32) );
@@ -268,29 +274,29 @@ void livesync_handle_tell( ssize_t datalen ) {
   /* Some instance is in progress of telling. Our inquiry was successful.
      Don't ask again until we see next beacon. */
   g_next_inquire_time = 0;
-  
+
   /* Don't cause any new inquiries during another tracker's tell */
   if( g_next_beacon_time - g_now_seconds < LIVESYNC_BEACON_INTERVAL )
     g_next_beacon_time = g_now_seconds + LIVESYNC_BEACON_INTERVAL;
 
   while( off + sizeof(ot_hash) + 12 <= (size_t)datalen ) {
     ot_hash *hash = (ot_hash*)(g_inbuffer+off);
-    ot_vector *torrents_list = mutex_bucket_lock_by_hash(hash);
+    ot_vector *torrents_list = mutex_bucket_lock_by_hash(*hash);
     size_t     down_count_remote;
     int exactmatch;
     ot_torrent * torrent = vector_find_or_insert(torrents_list, hash, sizeof(ot_hash), OT_HASH_COMPARE_SIZE, &exactmatch);
     if( !torrent ) {
-      mutex_bucket_unlock_by_hash( hash, 0 );
+      mutex_bucket_unlock_by_hash( *hash, 0 );
       continue;
     }
 
     if( !exactmatch ) {
       /* Create a new torrent entry, then */
-      int i; for(i=0;i<20;i+=4) WRITE32(&torrent->hash,i,READ32(hash,i));
+      memcpy( &torrent->hash, hash, sizeof(ot_hash));
 
       if( !( torrent->peer_list = malloc( sizeof (ot_peerlist) ) ) ) {
         vector_remove_torrent( torrents_list, torrent );
-        mutex_bucket_unlock_by_hash( hash, 0 );
+        mutex_bucket_unlock_by_hash( *hash, 0 );
         continue;
       }
 
@@ -298,8 +304,8 @@ void livesync_handle_tell( ssize_t datalen ) {
       torrent->peer_list->base = g_now_minutes - uint32_read_big((char*)g_inbuffer+off+sizeof(ot_hash));
     }
 
-    down_count_remote  = (size_t)(((uint64_t)uint32_read_big((char*)g_inbuffer+off+sizeof( ot_hash ) +     sizeof(uint32_t))) << 32);
-    down_count_remote |= (size_t)            uint32_read_big((char*)g_inbuffer+off+sizeof( ot_hash ) + 2 * sizeof(uint32_t));
+    down_count_remote  = (size_t)(((uint64_t)uint32_read_big((char*)g_inbuffer+off+sizeof(ot_hash ) +     sizeof(uint32_t))) << 32);
+    down_count_remote |= (size_t)            uint32_read_big((char*)g_inbuffer+off+sizeof(ot_hash ) + 2 * sizeof(uint32_t));
 
     if( down_count_remote > torrent->peer_list->down_count )
       torrent->peer_list->down_count = down_count_remote;
@@ -319,7 +325,7 @@ void livesync_handle_tell( ssize_t datalen ) {
    stuck when there's not enough traffic to fill udp packets fast
    enough */
 void livesync_ticker( ) {
-  
+
   /* livesync_issue_peersync sets g_next_packet_time */
   if( g_now_seconds > g_next_packet_time &&
      g_peerbuffer_pos > g_peerbuffer_start + sizeof( g_tracker_id ) )
@@ -350,21 +356,19 @@ void livesync_ticker( ) {
 }
 
 /* Inform live sync about whats going on. */
-void livesync_tell( ot_hash * const info_hash, const ot_peer * const peer ) {
-  unsigned int i;
-  for(i=0;i<sizeof(ot_hash)/4;i+=4) WRITE32(g_peerbuffer_pos,i,READ32(info_hash,i));
+void livesync_tell( ot_hash const info_hash, const ot_peer * const peer ) {
 
-  WRITE32(g_peerbuffer_pos,sizeof(ot_hash)  ,READ32(peer,0));
-  WRITE32(g_peerbuffer_pos,sizeof(ot_hash)+4,READ32(peer,4));
+  memcpy( g_peerbuffer_pos, info_hash, sizeof(ot_hash) );
+  memcpy( g_peerbuffer_pos+sizeof(ot_hash), peer, sizeof(ot_peer) );
 
-  g_peerbuffer_pos += sizeof(ot_hash)+8;
+  g_peerbuffer_pos += sizeof(ot_hash)+sizeof(ot_peer);
 
   if( g_peerbuffer_pos >= g_peerbuffer_highwater )
     livesync_issue_peersync();
 }
 
 static void * livesync_worker( void * args ) {
-  uint8_t in_ip[4]; uint16_t in_port;
+  ot_ip6 in_ip; uint16_t in_port;
   ssize_t datalen;
 
   (void)args;
@@ -375,7 +379,7 @@ static void * livesync_worker( void * args ) {
     /* Expect at least tracker id and packet type */
     if( datalen <= (ssize_t)(sizeof( g_tracker_id ) + sizeof( uint32_t )) )
       continue;
-    if( !accesslist_isblessed((char*)in_ip, OT_PERMISSION_MAY_LIVESYNC))
+    if( !accesslist_isblessed(in_ip, OT_PERMISSION_MAY_LIVESYNC))
       continue;
     if( !memcmp( g_inbuffer, &g_tracker_id, sizeof( g_tracker_id ) ) ) {
       /* TODO: log packet coming from ourselves */

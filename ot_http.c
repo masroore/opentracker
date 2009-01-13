@@ -15,6 +15,7 @@
 #include "byte.h"
 #include "array.h"
 #include "iob.h"
+#include "ip6.h"
 
 /* Opentracker */
 #include "trackerlogic.h"
@@ -33,11 +34,6 @@ enum {
   SUCCESS_HTTP_HEADER_LENGTH = 80,
   SUCCESS_HTTP_HEADER_LENGTH_CONTENT_ENCODING = 32,
   SUCCESS_HTTP_SIZE_OFF = 17 };
-
-#ifdef _DEBUG_PEERID
-size_t g_this_peerid_len = 0;
-char  *g_this_peerid_data = NULL;
-#endif
 
 static void http_senddata( const int64 client_socket, struct ot_workstruct *ws ) {
   struct http_data *h = io_getcookie( client_socket );
@@ -63,7 +59,7 @@ static void http_senddata( const int64 client_socket, struct ot_workstruct *ws )
     }
 
     iob_reset( &h->data.batch );
-    memmove( outbuf, ws->reply + written_size, ws->reply_size - written_size );
+    memcpy( outbuf, ws->reply + written_size, ws->reply_size - written_size );
     iob_addbuf_free( &h->data.batch, outbuf, ws->reply_size - written_size );
     h->flag |= STRUCT_HTTP_FLAG_IOB_USED;
 
@@ -89,9 +85,9 @@ ssize_t http_issue_error( const int64 client_socket, struct ot_workstruct *ws, i
 
   ws->reply = ws->outbuf;
   if( code == CODE_HTTPERROR_302 )
-    ws->reply_size = snprintf( ws->reply, ws->outbuf_size, "HTTP/1.0 302 Found\r\nContent-Length: 0\r\nLocation: %s\r\n\r\n", g_redirecturl );
+    ws->reply_size = snprintf( ws->reply, G_OUTBUF_SIZE, "HTTP/1.0 302 Found\r\nContent-Length: 0\r\nLocation: %s\r\n\r\n", g_redirecturl );
   else
-    ws->reply_size = snprintf( ws->reply, ws->outbuf_size, "HTTP/1.0 %s\r\nContent-Type: text/html\r\nConnection: close\r\nContent-Length: %zd\r\n\r\n<title>%s</title>\n", title, strlen(title)+16-4,title+4);
+    ws->reply_size = snprintf( ws->reply, G_OUTBUF_SIZE, "HTTP/1.0 %s\r\nContent-Type: text/html\r\nConnection: close\r\nContent-Length: %zd\r\n\r\n<title>%s</title>\n", title, strlen(title)+16-4,title+4);
 
 #ifdef _DEBUG_HTTPERROR
   fprintf( stderr, "DEBUG: invalid request was: %s\n", ws->debugbuf );
@@ -245,13 +241,13 @@ static ssize_t http_handle_fullscrape( const int64 client_socket, struct ot_work
   if( strstr( ws->request, "gzip" ) ) {
     h->flag |= STRUCT_HTTP_FLAG_GZIP;
     format = TASK_FLAG_GZIP;
-    stats_issue_event( EVENT_FULLSCRAPE_REQUEST_GZIP, *(int*)h->ip, 0 );
+    stats_issue_event( EVENT_FULLSCRAPE_REQUEST_GZIP, 0, (uintptr_t)h->ip );
   } else
 #endif
-    stats_issue_event( EVENT_FULLSCRAPE_REQUEST, *(int*)h->ip, 0 );
+    stats_issue_event( EVENT_FULLSCRAPE_REQUEST, 0, (uintptr_t)h->ip );
 
 #ifdef _DEBUG_HTTPERROR
-write( 2, ws->debugbuf, ws->debugbuf_size );
+write( 2, ws->debugbuf, G_DEBUGBUF_SIZE );
 #endif
 
   /* Pass this task to the worker thread */
@@ -263,6 +259,7 @@ write( 2, ws->debugbuf, ws->debugbuf_size );
   return ws->reply_size = -2;
 }
 #endif
+
 static ssize_t http_handle_scrape( const int64 client_socket, struct ot_workstruct *ws, char *read_ptr ) {
   static const ot_keywords keywords_scrape[] = { { "info_hash", 1 }, { NULL, -3 } };
 
@@ -306,9 +303,6 @@ static ot_keywords keywords_announce[] = { { "port", 1 }, { "left", 2 }, { "even
 #ifdef WANT_IP_FROM_QUERY_STRING
 { "ip", 7 },
 #endif
-#ifdef _DEBUG_PEERID
-{ "peer_id", 8 },
-#endif
 { NULL, -3 } };
 static ot_keywords keywords_announce_event[] = { { "completed", 1 }, { "stopped", 2 }, { NULL, -3 } };
 static ssize_t http_handle_announce( const int64 client_socket, struct ot_workstruct *ws, char *read_ptr ) {
@@ -331,10 +325,6 @@ static ssize_t http_handle_announce( const int64 client_socket, struct ot_workst
   OT_PEERFLAG( &peer ) = 0;
   numwant = 50;
   scanon = 1;
-
-#ifdef _DEBUG_PEERID
-  ws->peer_id = NULL;
-#endif
 
   while( scanon ) {
     switch( scan_find_keywords(keywords_announce, &read_ptr, SCAN_SEARCHPATH_PARAM ) ) {
@@ -383,16 +373,14 @@ static ssize_t http_handle_announce( const int64 client_socket, struct ot_workst
       break;
 #ifdef WANT_IP_FROM_QUERY_STRING
     case  7: /* matched "ip" */
-      len = scan_urlencoded_query( &read_ptr, write_ptr = read_ptr, SCAN_SEARCHPATH_VALUE );
-      if( ( len <= 0 ) || scan_fixed_ip( write_ptr, len, (unsigned char*)/*tmp*/ws->reply ) ) HTTPERROR_400_PARAM;
-      OT_SETIP( &peer, /*tmp*/ws->reply );
+      {
+        char *tmp_buf1 = ws->reply, *tmp_buf2 = ws->reply+16;
+        len = scan_urlencoded_query( &read_ptr, tmp_buf2, SCAN_SEARCHPATH_VALUE );
+        tmp_buf2[len] = 0;
+        if( ( len <= 0 ) || scan_ip6( tmp_buf2, tmp_buf1 ) ) HTTPERROR_400_PARAM;
+        OT_SETIP( &peer, tmp_buf1 );
+      }
       break;
-#endif
-#ifdef _DEBUG_PEERID
-    case 8: /* matched "peer_id" */
-       ws->peer_id_size = scan_urlencoded_query( &read_ptr, write_ptr = read_ptr, SCAN_SEARCHPATH_VALUE );
-       ws->peer_id = ws->peer_id_size > 0 ? write_ptr : 0;
-       break;
 #endif
     }
   }
@@ -402,9 +390,9 @@ static ssize_t http_handle_announce( const int64 client_socket, struct ot_workst
     return ws->reply_size = sprintf( ws->reply, "d14:failure reason80:Your client forgot to send your torrent's info_hash. Please upgrade your client.e" );
 
   if( OT_PEERFLAG( &peer ) & PEER_FLAG_STOPPED )
-    ws->reply_size = remove_peer_from_torrent( hash, &peer, ws->reply, FLAG_TCP );
+    ws->reply_size = remove_peer_from_torrent( *hash, &peer, ws->reply, FLAG_TCP );
   else
-    ws->reply_size = add_peer_to_torrent_and_return_peers(hash, &peer, FLAG_TCP, numwant, ws->reply );
+    ws->reply_size = add_peer_to_torrent_and_return_peers( *hash, &peer, FLAG_TCP, numwant, ws->reply );
 
   if( !ws->reply_size ) HTTPERROR_500;
 
@@ -418,9 +406,9 @@ ssize_t http_handle_request( const int64 client_socket, struct ot_workstruct *ws
 
 #ifdef _DEBUG_HTTPERROR
   reply_off = ws->request_size;
-  if( ws->request_size >= (ssize_t)ws->debugbuf_size )
-    reply_off = ws->debugbuf_size - 1;
-  memmove( ws->debugbuf, ws->request, reply_off );
+  if( ws->request_size >= G_DEBUGBUF_SIZE )
+    reply_off = G_DEBUGBUF_SIZE - 1;
+  memcpy( ws->debugbuf, ws->request, reply_off );
   ws->debugbuf[ reply_off ] = 0;
 #endif
 

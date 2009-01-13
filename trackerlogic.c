@@ -41,12 +41,7 @@ void free_peerlist( ot_peerlist *peer_list ) {
   free( peer_list );
 }
 
-#ifdef _DEBUG_PEERID
-extern size_t g_this_peerid_len;
-extern char  *g_this_peerid_data;
-#endif
-
-size_t add_peer_to_torrent_and_return_peers( ot_hash *hash, ot_peer *peer, PROTO_FLAG proto, size_t amount, char * reply ) {
+size_t add_peer_to_torrent_and_return_peers( ot_hash hash, ot_peer *peer, PROTO_FLAG proto, size_t amount, char * reply ) {
   int         exactmatch, delta_torrentcount = 0;
   size_t      reply_size;
   ot_torrent *torrent;
@@ -66,7 +61,7 @@ size_t add_peer_to_torrent_and_return_peers( ot_hash *hash, ot_peer *peer, PROTO
 
   if( !exactmatch ) {
     /* Create a new torrent entry, then */
-    int i; for(i=0;i<20;i+=4) WRITE32(&torrent->hash,i,READ32(hash,i));
+    memcpy( torrent->hash, hash, sizeof(ot_hash) );
 
     if( !( torrent->peer_list = malloc( sizeof (ot_peerlist) ) ) ) {
       vector_remove_torrent( torrents_list, torrent );
@@ -114,16 +109,6 @@ size_t add_peer_to_torrent_and_return_peers( ot_hash *hash, ot_peer *peer, PROTO
   } else {
     stats_issue_event( EVENT_RENEW, 0, OT_PEERTIME( peer_dest ) );
 
-#ifdef _DEBUG_PEERID
-    if( OT_PEERTIME( peer_dest ) < 2 ) {
-      uint8_t *_ip = (uint8_t*)peer_dest;
-      int i;
-      for( i=0;i<20;++i)printf("%02X",(*hash)[i]);
-      if( g_this_peerid_data ) g_this_peerid_data[g_this_peerid_len] = 0;
-      printf( " %d.%d.%d.%d:%d\t%d %02X %s\n", _ip[0], _ip[1], _ip[2], _ip[3], OT_PEERTIME( peer_dest ), *(uint16_t*)( ((char*)peer_dest)+4 ), OT_PEERFLAG(peer_dest), g_this_peerid_data ? g_this_peerid_data : "-" );
-    }
-#endif
-
 #ifdef WANT_SYNC_LIVE
     /* Won't live sync peers that come back too fast. Only exception:
        fresh "completed" reports */
@@ -144,7 +129,7 @@ size_t add_peer_to_torrent_and_return_peers( ot_hash *hash, ot_peer *peer, PROTO
       OT_PEERFLAG( peer ) |= PEER_FLAG_COMPLETED;
   }
 
-  *(uint64_t*)(peer_dest) = *(uint64_t*)(peer);
+  *peer_dest = *peer;
 #ifdef WANT_SYNC
   if( proto == FLAG_MCA ) {
     mutex_bucket_unlock_by_hash( hash, delta_torrentcount );
@@ -153,7 +138,7 @@ size_t add_peer_to_torrent_and_return_peers( ot_hash *hash, ot_peer *peer, PROTO
 #endif
 
   reply_size = return_peers_for_torrent( torrent, amount, reply, proto );
-  mutex_bucket_unlock_by_hash( &torrent->hash, delta_torrentcount );
+  mutex_bucket_unlock_by_hash( torrent->hash, delta_torrentcount );
   return reply_size;
 }
 
@@ -171,9 +156,9 @@ static size_t return_peers_all( ot_peerlist *peer_list, char *reply ) {
     ot_peer * peers = (ot_peer*)bucket_list[bucket].data;
     size_t    peer_count = bucket_list[bucket].size;
     while( peer_count-- ) {
-      WRITE32(r,0,READ32(peers,0));
-      WRITE16(r,4,READ16(peers++,4));
-      r+=6;
+      memcpy(r,peers,OT_PEER_COMPARE_SIZE);
+      peers+=sizeof(ot_peer);
+      r+=OT_PEER_COMPARE_SIZE;
     }
   }
 
@@ -216,9 +201,8 @@ static size_t return_peers_selection( ot_peerlist *peer_list, size_t amount, cha
       bucket_index = ( bucket_index + 1 ) % num_buckets;
     }
     peer = ((ot_peer*)bucket_list[bucket_index].data) + bucket_offset;
-    WRITE32(r,0,READ32(peer,0));
-    WRITE16(r,4,READ16(peer,4));
-    r+=6;
+    memcpy(r,peer,OT_PEER_COMPARE_SIZE);
+    r+=OT_PEER_COMPARE_SIZE;
   }
   return r - reply;
 }
@@ -236,7 +220,7 @@ size_t return_peers_for_torrent( ot_torrent *torrent, size_t amount, char *reply
 
   if( proto == FLAG_TCP ) {
     int erval = OT_CLIENT_REQUEST_INTERVAL_RANDOM;
-    r += sprintf( r, "d8:completei%zde10:downloadedi%zde10:incompletei%zde8:intervali%ie12:min intervali%ie5:peers%zd:", peer_list->seed_count, peer_list->down_count, peer_list->peer_count-peer_list->seed_count, erval, erval/2, 6*amount );
+    r += sprintf( r, "d8:completei%zde10:downloadedi%zde10:incompletei%zde8:intervali%ie12:min intervali%ie5:peers" PEERS6 "%zd:", peer_list->seed_count, peer_list->down_count, peer_list->peer_count-peer_list->seed_count, erval, erval/2, OT_PEER_COMPARE_SIZE*amount );
   } else {
     *(uint32_t*)(r+0) = htonl( OT_CLIENT_REQUEST_INTERVAL_RANDOM );
     *(uint32_t*)(r+4) = htonl( peer_list->peer_count );
@@ -258,7 +242,7 @@ size_t return_peers_for_torrent( ot_torrent *torrent, size_t amount, char *reply
 }
 
 /* Fetches scrape info for a specific torrent */
-size_t return_udp_scrape_for_torrent( ot_hash *hash, char *reply ) {
+size_t return_udp_scrape_for_torrent( ot_hash hash, char *reply ) {
   int          exactmatch, delta_torrentcount = 0;
   ot_vector   *torrents_list = mutex_bucket_lock_by_hash( hash );
   ot_torrent  *torrent = binary_search( hash, torrents_list->data, torrents_list->size, sizeof( ot_torrent ), OT_HASH_COMPARE_SIZE, &exactmatch );
@@ -292,7 +276,7 @@ size_t return_tcp_scrape_for_torrent( ot_hash *hash_list, int amount, char *repl
 
   for( i=0; i<amount; ++i ) {
     ot_hash     *hash = hash_list + i;
-    ot_vector   *torrents_list = mutex_bucket_lock_by_hash( hash );
+    ot_vector   *torrents_list = mutex_bucket_lock_by_hash( *hash );
     ot_torrent  *torrent = binary_search( hash, torrents_list->data, torrents_list->size, sizeof( ot_torrent ), OT_HASH_COMPARE_SIZE, &exactmatch );
 
     if( exactmatch ) {
@@ -300,14 +284,13 @@ size_t return_tcp_scrape_for_torrent( ot_hash *hash_list, int amount, char *repl
         vector_remove_torrent( torrents_list, torrent );
         delta_torrentcount = -1;
       } else {
-        int j;
         *r++='2';*r++='0';*r++=':';
-        for(j=0;j<20;j+=4) WRITE32(r,j,READ32(hash,j)); r += 20;
+        memcpy( r, hash, sizeof(ot_hash) ); r+=sizeof(ot_hash);
         r += sprintf( r, "d8:completei%zde10:downloadedi%zde10:incompletei%zdee",
           torrent->peer_list->seed_count, torrent->peer_list->down_count, torrent->peer_list->peer_count-torrent->peer_list->seed_count );
       }
     }
-    mutex_bucket_unlock_by_hash( hash, delta_torrentcount );
+    mutex_bucket_unlock_by_hash( *hash, delta_torrentcount );
   }
 
   *r++ = 'e'; *r++ = 'e';
@@ -315,7 +298,7 @@ size_t return_tcp_scrape_for_torrent( ot_hash *hash_list, int amount, char *repl
 }
 
 static ot_peerlist dummy_list;
-size_t remove_peer_from_torrent( ot_hash *hash, ot_peer *peer, char *reply, PROTO_FLAG proto ) {
+size_t remove_peer_from_torrent( ot_hash hash, ot_peer *peer, char *reply, PROTO_FLAG proto ) {
   int          exactmatch;
   size_t       reply_size = 0;
   ot_vector   *torrents_list = mutex_bucket_lock_by_hash( hash );
