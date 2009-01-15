@@ -220,7 +220,7 @@ size_t return_peers_for_torrent( ot_torrent *torrent, size_t amount, char *reply
 
   if( proto == FLAG_TCP ) {
     int erval = OT_CLIENT_REQUEST_INTERVAL_RANDOM;
-    r += sprintf( r, "d8:completei%zde10:downloadedi%zde10:incompletei%zde8:intervali%ie12:min intervali%ie5:peers" PEERS6 "%zd:", peer_list->seed_count, peer_list->down_count, peer_list->peer_count-peer_list->seed_count, erval, erval/2, OT_PEER_COMPARE_SIZE*amount );
+    r += sprintf( r, "d8:completei%zde10:downloadedi%zde10:incompletei%zde8:intervali%ie12:min intervali%ie" PEERS_BENCODED "%zd:", peer_list->seed_count, peer_list->down_count, peer_list->peer_count-peer_list->seed_count, erval, erval/2, OT_PEER_COMPARE_SIZE*amount );
   } else {
     *(uint32_t*)(r+0) = htonl( OT_CLIENT_REQUEST_INTERVAL_RANDOM );
     *(uint32_t*)(r+4) = htonl( peer_list->peer_count );
@@ -323,7 +323,7 @@ size_t remove_peer_from_torrent( ot_hash hash, ot_peer *peer, char *reply, PROTO
 
   if( proto == FLAG_TCP ) {
     int erval = OT_CLIENT_REQUEST_INTERVAL_RANDOM;
-    reply_size = sprintf( reply, "d8:completei%zde10:incompletei%zde8:intervali%ie12:min intervali%ie5:peers0:e", peer_list->seed_count, peer_list->peer_count - peer_list->seed_count, erval, erval / 2 );
+    reply_size = sprintf( reply, "d8:completei%zde10:incompletei%zde8:intervali%ie12:min intervali%ie" PEERS_BENCODED "0:e", peer_list->seed_count, peer_list->peer_count - peer_list->seed_count, erval, erval / 2 );
   }
 
   /* Handle UDP reply */

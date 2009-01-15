@@ -16,10 +16,10 @@ typedef time_t         ot_time;
 typedef char           ot_ip6[16];
 #ifdef WANT_V6
 #define OT_IP_SIZE 16
-#define PEERS6 "6"
+#define PEERS_BENCODED "6:peers6"
 #else
 #define OT_IP_SIZE 4
-#define PEERS6 ""
+#define PEERS_BENCODED "5:peers"
 #endif
 
 /* Some tracker behaviour tunable */
