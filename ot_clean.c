@@ -33,7 +33,7 @@ static ssize_t clean_single_bucket( ot_peer *peers, size_t peer_count, time_t ti
   while( peers < last_peer )
     if( ( timediff = timedout + OT_PEERTIME( peers ) ) < OT_PEER_TIMEOUT ) {
       OT_PEERTIME( peers ) = timediff;
-      *(uint64_t*)(insert_point++) = *(uint64_t*)(peers++);
+      memcpy( insert_point++, peers++, sizeof(ot_peer));
     } else
       if( OT_PEERFLAG( peers++ ) & PEER_FLAG_SEEDING )
         (*removed_seeders)++;

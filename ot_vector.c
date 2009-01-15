@@ -244,7 +244,7 @@ void vector_redistribute_buckets( ot_peerlist * peer_list ) {
         bucket_dest->space *= OT_VECTOR_GROW_RATIO;
       }
       peers_new = (ot_peer*)bucket_dest->data;
-      *(uint64_t*)(peers_new + bucket_dest->size++) = *(uint64_t*)(peers_old++);
+      memcpy(peers_new + bucket_dest->size++, peers_old++, sizeof(ot_peer));
     }
   }
 
