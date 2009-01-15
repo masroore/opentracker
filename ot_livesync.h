@@ -94,7 +94,7 @@ void livesync_tell( ot_hash const info_hash, const ot_peer * const peer );
 void livesync_ticker( );
 
 /* Handle an incoming live sync packet */
-void handle_livesync( const int64 serversocket );
+void handle_livesync( const int64 sock );
 
 #else
 

@@ -80,8 +80,8 @@ void fullscrape_deinit( ) {
   pthread_cancel( thread_id );
 }
 
-void fullscrape_deliver( int64 socket, ot_tasktype tasktype ) {
-  mutex_workqueue_pushtask( socket, tasktype );
+void fullscrape_deliver( int64 sock, ot_tasktype tasktype ) {
+  mutex_workqueue_pushtask( sock, tasktype );
 }
 
 static int fullscrape_increase( int *iovec_entries, struct iovec **iovector,

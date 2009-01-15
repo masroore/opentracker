@@ -611,8 +611,8 @@ static void * stats_worker( void * args ) {
   return NULL;
 }
 
-void stats_deliver( int64 socket, int tasktype ) {
-  mutex_workqueue_pushtask( socket, tasktype );
+void stats_deliver( int64 sock, int tasktype ) {
+  mutex_workqueue_pushtask( sock, tasktype );
 }
 
 static pthread_t thread_id;

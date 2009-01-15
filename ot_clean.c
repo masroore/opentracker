@@ -6,6 +6,7 @@
 /* System */
 #include <pthread.h>
 #include <unistd.h>
+#include <string.h>
 
 /* Libowfat */
 #include "io.h"

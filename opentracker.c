@@ -48,12 +48,17 @@ static void panic( const char *routine ) {
 
 static void signal_handler( int s ) {
   if( s == SIGINT ) {
-    signal( SIGINT, SIG_IGN);
+    /* Any new interrupt signal quits the application */
+    signal( SIGINT, SIG_DFL);
+    
+    /* Tell all other threads to not acquire any new lock on a bucket
+       but cancel their operations and return */
     g_opentracker_running = 0;
 
     trackerlogic_deinit();
     exit( 0 );
   } else if( s == SIGALRM ) {
+    /* Maintain our copy of the clock. time() on BSDs is very expensive. */
     g_now_seconds = time(NULL);
     alarm(5);
   }
@@ -90,88 +95,87 @@ static void help( char *name ) {
 }
 #undef HELPLINE
 
-static void handle_dead( const int64 socket ) {
-  struct http_data* h=io_getcookie( socket );
-  if( h ) {
-    if( h->flag & STRUCT_HTTP_FLAG_IOB_USED )
-      iob_reset( &h->data.batch );
-    if( h->flag & STRUCT_HTTP_FLAG_ARRAY_USED )
-      array_reset( &h->data.request );
-    if( h->flag & STRUCT_HTTP_FLAG_WAITINGFORTASK )
-      mutex_workqueue_canceltask( socket );
-    free( h );
+static void handle_dead( const int64 sock ) {
+  struct http_data* cookie=io_getcookie( sock );
+  if( cookie ) {
+    if( cookie->flag & STRUCT_HTTP_FLAG_IOB_USED )
+      iob_reset( &cookie->data.batch );
+    if( cookie->flag & STRUCT_HTTP_FLAG_ARRAY_USED )
+      array_reset( &cookie->data.request );
+    if( cookie->flag & STRUCT_HTTP_FLAG_WAITINGFORTASK )
+      mutex_workqueue_canceltask( sock );
+    free( cookie );
   }
-  io_close( socket );
+  io_close( sock );
 }
 
-static ssize_t handle_read( const int64 clientsocket, struct ot_workstruct *ws ) {
-  struct http_data* h = io_getcookie( clientsocket );
-  ssize_t l;
+static ssize_t handle_read( const int64 sock, struct ot_workstruct *ws ) {
+  struct http_data* cookie = io_getcookie( sock );
+  ssize_t byte_count;
 
-  if( ( l = io_tryread( clientsocket, ws->inbuf, G_INBUF_SIZE ) ) <= 0 ) {
-    handle_dead( clientsocket );
+  if( ( byte_count = io_tryread( sock, ws->inbuf, G_INBUF_SIZE ) ) <= 0 ) {
+    handle_dead( sock );
     return 0;
   }
 
   /* If we get the whole request in one packet, handle it without copying */
-  if( !array_start( &h->data.request ) ) {
-    if( memchr( ws->inbuf, '\n', l ) ) {
+  if( !array_start( &cookie->data.request ) ) {
+    if( memchr( ws->inbuf, '\n', byte_count ) ) {
       ws->request = ws->inbuf;
-      ws->request_size = l;
-      return http_handle_request( clientsocket, ws );
+      ws->request_size = byte_count;
+      return http_handle_request( sock, ws );
     }
 
     /* ... else take a copy */
-    h->flag |= STRUCT_HTTP_FLAG_ARRAY_USED;
-    array_catb( &h->data.request, ws->inbuf, l );
+    cookie->flag |= STRUCT_HTTP_FLAG_ARRAY_USED;
+    array_catb( &cookie->data.request, ws->inbuf, byte_count );
     return 0;
   }
 
-  h->flag |= STRUCT_HTTP_FLAG_ARRAY_USED;
-  array_catb( &h->data.request, ws->inbuf, l );
+  array_catb( &cookie->data.request, ws->inbuf, byte_count );
 
-  if( array_failed( &h->data.request ) )
-    return http_issue_error( clientsocket, ws, CODE_HTTPERROR_500 );
+  if( array_failed( &cookie->data.request ) )
+    return http_issue_error( sock, ws, CODE_HTTPERROR_500 );
 
-  if( array_bytes( &h->data.request ) > 8192 )
-     return http_issue_error( clientsocket, ws, CODE_HTTPERROR_500 );
+  if( array_bytes( &cookie->data.request ) > 8192 )
+     return http_issue_error( sock, ws, CODE_HTTPERROR_500 );
 
-  if( !memchr( array_start( &h->data.request ), '\n', array_bytes( &h->data.request ) ) )
+  if( !memchr( array_start( &cookie->data.request ), '\n', array_bytes( &cookie->data.request ) ) )
     return 0;
 
-  ws->request      = array_start( &h->data.request );
-  ws->request_size = array_bytes( &h->data.request );
-  return http_handle_request( clientsocket, ws );
+  ws->request      = array_start( &cookie->data.request );
+  ws->request_size = array_bytes( &cookie->data.request );
+  return http_handle_request( sock, ws );
 }
 
-static void handle_write( const int64 clientsocket ) {
-  struct http_data* h=io_getcookie( clientsocket );
-  if( !h || ( iob_send( clientsocket, &h->data.batch ) <= 0 ) )
-    handle_dead( clientsocket );
+static void handle_write( const int64 sock ) {
+  struct http_data* cookie=io_getcookie( sock );
+  if( !cookie || ( iob_send( sock, &cookie->data.batch ) <= 0 ) )
+    handle_dead( sock );
 }
 
 static void handle_accept( const int64 serversocket ) {
-  struct http_data *h;
+  struct http_data *cookie;
+  int64 sock;
   ot_ip6 ip;
   uint16 port;
   tai6464 t;
-  int64 i;
 
-  while( ( i = socket_accept6( serversocket, ip, &port, NULL ) ) != -1 ) {
+  while( ( sock = socket_accept6( serversocket, ip, &port, NULL ) ) != -1 ) {
 
     /* Put fd into a non-blocking mode */
-    io_nonblock( i );
+    io_nonblock( sock );
 
-    if( !io_fd( i ) ||
-        !( h = (struct http_data*)malloc( sizeof(struct http_data) ) ) ) {
-      io_close( i );
+    if( !io_fd( sock ) ||
+        !( cookie = (struct http_data*)malloc( sizeof(struct http_data) ) ) ) {
+      io_close( sock );
       continue;
     }
-    io_setcookie( i, h );
-    io_wantread( i );
+    io_setcookie( sock, cookie );
+    io_wantread( sock );
 
-    memset(h, 0, sizeof( struct http_data ) );
-    memcpy(h->ip,ip,sizeof(ot_ip6));
+    memset(cookie, 0, sizeof( struct http_data ) );
+    memcpy(cookie->ip,ip,sizeof(ot_ip6));
 
     stats_issue_event( EVENT_ACCEPT, FLAG_TCP, (uintptr_t)ip);
 
@@ -179,7 +183,7 @@ static void handle_accept( const int64 serversocket ) {
        time this often in FreeBSD and libowfat does not allow to set unix time */
     taia_uint( &t, 0 ); /* Clear t */
     tai_unix( &(t.sec), (g_now_seconds + OT_CLIENT_TIMEOUT) );
-    io_timeout( i, t );
+    io_timeout( sock, t );
   }
 
   if( errno == EAGAIN )
@@ -202,29 +206,29 @@ static void server_mainloop( ) {
     panic( "Initializing worker failed" );
 
   for( ; ; ) {
-    int64 i;
+    int64 sock;
 
     io_wait();
 
-    while( ( i = io_canread( ) ) != -1 ) {
-      const void *cookie = io_getcookie( i );
+    while( ( sock = io_canread( ) ) != -1 ) {
+      const void *cookie = io_getcookie( sock );
       if( (intptr_t)cookie == FLAG_TCP )
-        handle_accept( i );
+        handle_accept( sock );
       else if( (intptr_t)cookie == FLAG_UDP )
-        handle_udp6( i, &ws );
+        handle_udp6( sock, &ws );
       else
-        handle_read( i, &ws );
+        handle_read( sock, &ws );
     }
 
-    while( ( i = mutex_workqueue_popresult( &iovec_entries, &iovector ) ) != -1 )
-      http_sendiovecdata( i, &ws, iovec_entries, iovector );
+    while( ( sock = mutex_workqueue_popresult( &iovec_entries, &iovector ) ) != -1 )
+      http_sendiovecdata( sock, &ws, iovec_entries, iovector );
 
-    while( ( i = io_canwrite( ) ) != -1 )
-      handle_write( i );
+    while( ( sock = io_canwrite( ) ) != -1 )
+      handle_write( sock );
 
     if( g_now_seconds > next_timeout_check ) {
-      while( ( i = io_timeouted() ) != -1 )
-        handle_dead( i );
+      while( ( sock = io_timeouted() ) != -1 )
+        handle_dead( sock );
       next_timeout_check = g_now_seconds + OT_CLIENT_TIMEOUT_CHECKINTERVAL;
     }
 
@@ -236,7 +240,7 @@ static void server_mainloop( ) {
 }
 
 static int64_t ot_try_bind( ot_ip6 ip, uint16_t port, PROTO_FLAG proto ) {
-  int64 s = proto == FLAG_TCP ? socket_tcp6( ) : socket_udp6( );
+  int64 sock = proto == FLAG_TCP ? socket_tcp6( ) : socket_udp6( );
 
 #ifndef WANT_V6
   if( !ip6_isv4mapped(ip) ) {
@@ -257,24 +261,24 @@ static int64_t ot_try_bind( ot_ip6 ip, uint16_t port, PROTO_FLAG proto ) {
   fputs( _debug, stderr );
 #endif
   
-  if( socket_bind6_reuse( s, ip, port, 0 ) == -1 )
+  if( socket_bind6_reuse( sock, ip, port, 0 ) == -1 )
     panic( "socket_bind6_reuse" );
 
-  if( ( proto == FLAG_TCP ) && ( socket_listen( s, SOMAXCONN) == -1 ) )
+  if( ( proto == FLAG_TCP ) && ( socket_listen( sock, SOMAXCONN) == -1 ) )
     panic( "socket_listen" );
 
-  if( !io_fd( s ) )
+  if( !io_fd( sock ) )
     panic( "io_fd" );
 
-  io_setcookie( s, (void*)proto );
+  io_setcookie( sock, (void*)proto );
 
-  io_wantread( s );
+  io_wantread( sock );
 
 #ifdef _DEBUG
   fputs( " success.\n", stderr);
 #endif
 
-  return s;
+  return sock;
 }
 
 char * set_config_option( char **option, char *value ) {

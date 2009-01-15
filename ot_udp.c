@@ -44,15 +44,15 @@ void handle_udp6( int64 serversocket, struct ot_workstruct *ws ) {
   uint32_t   *outpacket = (uint32_t*)ws->outbuf;
   uint32_t    numwant, left, event, scopeid;
   uint16_t    port, remoteport;
-  size_t      r, r_out;
+  size_t      byte_count, scrape_count;
 
-  r = socket_recv6( serversocket, ws->inbuf, G_INBUF_SIZE, remoteip, &remoteport, &scopeid );
+  byte_count = socket_recv6( serversocket, ws->inbuf, G_INBUF_SIZE, remoteip, &remoteport, &scopeid );
 
   stats_issue_event( EVENT_ACCEPT, FLAG_UDP, (uintptr_t)remoteip );
-  stats_issue_event( EVENT_READ, FLAG_UDP, r );
+  stats_issue_event( EVENT_READ, FLAG_UDP, byte_count );
 
   /* Minimum udp tracker packet size, also catches error */
-  if( r < 16 )
+  if( byte_count < 16 )
     return;
 
   switch( ntohl( inpacket[2] ) ) {
@@ -70,7 +70,7 @@ void handle_udp6( int64 serversocket, struct ot_workstruct *ws ) {
       break;
     case 1: /* This is an announce action */
       /* Minimum udp announce packet size */
-      if( r < 98 )
+      if( byte_count < 98 )
         return;
 
       if( !udp_test_connectionid( inpacket, remoteip ))
@@ -103,12 +103,12 @@ void handle_udp6( int64 serversocket, struct ot_workstruct *ws ) {
       outpacket[1] = inpacket[12/4];
 
       if( OT_PEERFLAG( &peer ) & PEER_FLAG_STOPPED ) /* Peer is gone. */
-        r = remove_peer_from_torrent( *hash, &peer, ws->outbuf, FLAG_UDP );
+        byte_count = remove_peer_from_torrent( *hash, &peer, ws->outbuf, FLAG_UDP );
       else
-        r = 8 + add_peer_to_torrent_and_return_peers( *hash, &peer, FLAG_UDP, numwant, ((char*)outpacket) + 8 );
+        byte_count = 8 + add_peer_to_torrent_and_return_peers( *hash, &peer, FLAG_UDP, numwant, ((char*)outpacket) + 8 );
 
-      socket_send6( serversocket, ws->outbuf, r, remoteip, remoteport, 0 );
-      stats_issue_event( EVENT_ANNOUNCE, FLAG_UDP, r );
+      socket_send6( serversocket, ws->outbuf, byte_count, remoteip, remoteport, 0 );
+      stats_issue_event( EVENT_ANNOUNCE, FLAG_UDP, byte_count );
       break;
 
     case 2: /* This is a scrape action */
@@ -118,11 +118,11 @@ void handle_udp6( int64 serversocket, struct ot_workstruct *ws ) {
       outpacket[0] = htonl( 2 );    /* scrape action */
       outpacket[1] = inpacket[12/4];
 
-      for( r_out = 0; ( r_out * 20 < r - 16) && ( r_out <= 74 ); r_out++ )
-        return_udp_scrape_for_torrent( *(ot_hash*)( ((char*)inpacket) + 16 + 20 * r_out ), ((char*)outpacket) + 8 + 12 * r_out );
+      for( scrape_count = 0; ( scrape_count * 20 < byte_count - 16) && ( scrape_count <= 74 ); scrape_count++ )
+        return_udp_scrape_for_torrent( *(ot_hash*)( ((char*)inpacket) + 16 + 20 * scrape_count ), ((char*)outpacket) + 8 + 12 * scrape_count );
 
-      socket_send6( serversocket, ws->outbuf, 8 + 12 * r_out, remoteip, remoteport, 0 );
-      stats_issue_event( EVENT_SCRAPE, FLAG_UDP, r );
+      socket_send6( serversocket, ws->outbuf, 8 + 12 * scrape_count, remoteip, remoteport, 0 );
+      stats_issue_event( EVENT_SCRAPE, FLAG_UDP, scrape_count );
       break;
   }
 }

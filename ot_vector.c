@@ -23,8 +23,6 @@ static int vector_compare_peer(const void *peer1, const void *peer2 ) {
 /* This function gives us a binary search that returns a pointer, even if
    no exact match is found. In that case it sets exactmatch 0 and gives
    calling functions the chance to insert data
-
-   NOTE: Minimal compare_size is 4, member_size must be a multiple of 4
 */
 void *binary_search( const void * const key, const void * base, const size_t member_count, const size_t member_size,
                      size_t compare_size, int *exactmatch ) {

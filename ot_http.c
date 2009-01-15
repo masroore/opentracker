@@ -35,50 +35,50 @@ enum {
   SUCCESS_HTTP_HEADER_LENGTH_CONTENT_ENCODING = 32,
   SUCCESS_HTTP_SIZE_OFF = 17 };
 
-static void http_senddata( const int64 client_socket, struct ot_workstruct *ws ) {
-  struct http_data *h = io_getcookie( client_socket );
+static void http_senddata( const int64 sock, struct ot_workstruct *ws ) {
+  struct http_data *cookie = io_getcookie( sock );
   ssize_t written_size;
 
   /* whoever sends data is not interested in its input-array */
-  if( h && ( h->flag & STRUCT_HTTP_FLAG_ARRAY_USED ) ) {
-    h->flag &= ~STRUCT_HTTP_FLAG_ARRAY_USED;
-    array_reset( &h->data.request );
+  if( cookie && ( cookie->flag & STRUCT_HTTP_FLAG_ARRAY_USED ) ) {
+    cookie->flag &= ~STRUCT_HTTP_FLAG_ARRAY_USED;
+    array_reset( &cookie->data.request );
   }
 
-  written_size = write( client_socket, ws->reply, ws->reply_size );
+  written_size = write( sock, ws->reply, ws->reply_size );
   if( ( written_size < 0 ) || ( written_size == ws->reply_size ) ) {
-    free( h ); io_close( client_socket );
+    free( cookie ); io_close( sock );
   } else {
     char * outbuf;
     tai6464 t;
 
-    if( !h ) return;
+    if( !cookie ) return;
     if( !( outbuf =  malloc( ws->reply_size - written_size ) ) ) {
-      free(h); io_close( client_socket );
+      free(cookie); io_close( sock );
       return;
     }
 
-    iob_reset( &h->data.batch );
+    iob_reset( &cookie->data.batch );
     memcpy( outbuf, ws->reply + written_size, ws->reply_size - written_size );
-    iob_addbuf_free( &h->data.batch, outbuf, ws->reply_size - written_size );
-    h->flag |= STRUCT_HTTP_FLAG_IOB_USED;
+    iob_addbuf_free( &cookie->data.batch, outbuf, ws->reply_size - written_size );
+    cookie->flag |= STRUCT_HTTP_FLAG_IOB_USED;
 
     /* writeable short data sockets just have a tcp timeout */
-    taia_uint( &t, 0 ); io_timeout( client_socket, t );
-    io_dontwantread( client_socket );
-    io_wantwrite( client_socket );
+    taia_uint( &t, 0 ); io_timeout( sock, t );
+    io_dontwantread( sock );
+    io_wantwrite( sock );
   }
 }
 
-#define HTTPERROR_302            return http_issue_error( client_socket, ws, CODE_HTTPERROR_302 )
-#define HTTPERROR_400            return http_issue_error( client_socket, ws, CODE_HTTPERROR_400 )
-#define HTTPERROR_400_PARAM      return http_issue_error( client_socket, ws, CODE_HTTPERROR_400_PARAM )
-#define HTTPERROR_400_COMPACT    return http_issue_error( client_socket, ws, CODE_HTTPERROR_400_COMPACT )
-#define HTTPERROR_400_DOUBLEHASH return http_issue_error( client_socket, ws, CODE_HTTPERROR_400_PARAM )
-#define HTTPERROR_403_IP         return http_issue_error( client_socket, ws, CODE_HTTPERROR_403_IP )
-#define HTTPERROR_404            return http_issue_error( client_socket, ws, CODE_HTTPERROR_404 )
-#define HTTPERROR_500            return http_issue_error( client_socket, ws, CODE_HTTPERROR_500 )
-ssize_t http_issue_error( const int64 client_socket, struct ot_workstruct *ws, int code ) {
+#define HTTPERROR_302            return http_issue_error( sock, ws, CODE_HTTPERROR_302 )
+#define HTTPERROR_400            return http_issue_error( sock, ws, CODE_HTTPERROR_400 )
+#define HTTPERROR_400_PARAM      return http_issue_error( sock, ws, CODE_HTTPERROR_400_PARAM )
+#define HTTPERROR_400_COMPACT    return http_issue_error( sock, ws, CODE_HTTPERROR_400_COMPACT )
+#define HTTPERROR_400_DOUBLEHASH return http_issue_error( sock, ws, CODE_HTTPERROR_400_PARAM )
+#define HTTPERROR_403_IP         return http_issue_error( sock, ws, CODE_HTTPERROR_403_IP )
+#define HTTPERROR_404            return http_issue_error( sock, ws, CODE_HTTPERROR_404 )
+#define HTTPERROR_500            return http_issue_error( sock, ws, CODE_HTTPERROR_500 )
+ssize_t http_issue_error( const int64 sock, struct ot_workstruct *ws, int code ) {
   char *error_code[] = { "302 Found", "400 Invalid Request", "400 Invalid Request", "400 Invalid Request",
                          "403 Access Denied", "404 Not Found", "500 Internal Server Error" };
   char *title = error_code[code];
@@ -93,32 +93,32 @@ ssize_t http_issue_error( const int64 client_socket, struct ot_workstruct *ws, i
   fprintf( stderr, "DEBUG: invalid request was: %s\n", ws->debugbuf );
 #endif
   stats_issue_event( EVENT_FAILED, FLAG_TCP, code );
-  http_senddata( client_socket, ws );
+  http_senddata( sock, ws );
   return ws->reply_size = -2;
 }
 
-ssize_t http_sendiovecdata( const int64 client_socket, struct ot_workstruct *ws, int iovec_entries, struct iovec *iovector ) {
-  struct http_data *h = io_getcookie( client_socket );
+ssize_t http_sendiovecdata( const int64 sock, struct ot_workstruct *ws, int iovec_entries, struct iovec *iovector ) {
+  struct http_data *cookie = io_getcookie( sock );
   char *header;
   int i;
   size_t header_size, size = iovec_length( &iovec_entries, &iovector );
   tai6464 t;
 
   /* No cookie? Bad socket. Leave. */
-  if( !h ) {
+  if( !cookie ) {
     iovec_free( &iovec_entries, &iovector );
     HTTPERROR_500;
   }
 
   /* If this socket collected request in a buffer,
      free it now */
-  if( h->flag & STRUCT_HTTP_FLAG_ARRAY_USED ) {
-    h->flag &= ~STRUCT_HTTP_FLAG_ARRAY_USED;
-    array_reset( &h->data.request );
+  if( cookie->flag & STRUCT_HTTP_FLAG_ARRAY_USED ) {
+    cookie->flag &= ~STRUCT_HTTP_FLAG_ARRAY_USED;
+    array_reset( &cookie->data.request );
   }
 
   /* If we came here, wait for the answer is over */
-  h->flag &= ~STRUCT_HTTP_FLAG_WAITINGFORTASK;
+  cookie->flag &= ~STRUCT_HTTP_FLAG_WAITINGFORTASK;
 
   /* Our answers never are 0 vectors. Return an error. */
   if( !iovec_entries ) {
@@ -132,32 +132,32 @@ ssize_t http_sendiovecdata( const int64 client_socket, struct ot_workstruct *ws,
     HTTPERROR_500;
   }
 
-  if( h->flag & STRUCT_HTTP_FLAG_GZIP )
+  if( cookie->flag & STRUCT_HTTP_FLAG_GZIP )
     header_size = sprintf( header, "HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nContent-Encoding: gzip\r\nContent-Length: %zd\r\n\r\n", size );
-  else if( h->flag & STRUCT_HTTP_FLAG_BZIP2 )
+  else if( cookie->flag & STRUCT_HTTP_FLAG_BZIP2 )
     header_size = sprintf( header, "HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nContent-Encoding: bzip2\r\nContent-Length: %zd\r\n\r\n", size );
   else
     header_size = sprintf( header, "HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %zd\r\n\r\n", size );
 
-  iob_reset( &h->data.batch );
-  iob_addbuf_free( &h->data.batch, header, header_size );
+  iob_reset( &cookie->data.batch );
+  iob_addbuf_free( &cookie->data.batch, header, header_size );
 
   /* Will move to ot_iovec.c */
   for( i=0; i<iovec_entries; ++i )
-    iob_addbuf_munmap( &h->data.batch, iovector[i].iov_base, iovector[i].iov_len );
+    iob_addbuf_munmap( &cookie->data.batch, iovector[i].iov_base, iovector[i].iov_len );
   free( iovector );
 
-  h->flag |= STRUCT_HTTP_FLAG_IOB_USED;
+  cookie->flag |= STRUCT_HTTP_FLAG_IOB_USED;
 
   /* writeable sockets timeout after 10 minutes */
   taia_now( &t ); taia_addsec( &t, &t, OT_CLIENT_TIMEOUT_SEND );
-  io_timeout( client_socket, t );
-  io_dontwantread( client_socket );
-  io_wantwrite( client_socket );
+  io_timeout( sock, t );
+  io_dontwantread( sock );
+  io_wantwrite( sock );
   return 0;
 }
 
-static ssize_t http_handle_stats( const int64 client_socket, struct ot_workstruct *ws, char *read_ptr ) {
+static ssize_t http_handle_stats( const int64 sock, struct ot_workstruct *ws, char *read_ptr ) {
 static const ot_keywords keywords_main[] =
   { { "mode", 1 }, {"format", 2 }, { NULL, -3 } };
 static const ot_keywords keywords_mode[] =
@@ -173,9 +173,9 @@ static const ot_keywords keywords_format[] =
   int mode = TASK_STATS_PEERS, scanon = 1, format = 0;
 
 #ifdef WANT_RESTRICT_STATS
-  struct http_data *h = io_getcookie( client_socket );
+  struct http_data *cookie = io_getcookie( sock );
 
-  if( !h || !accesslist_isblessed( h->ip, OT_PERMISSION_MAY_STAT ) )
+  if( !cookie || !accesslist_isblessed( cookie->ip, OT_PERMISSION_MAY_STAT ) )
     HTTPERROR_403_IP;
 #endif
 
@@ -195,22 +195,22 @@ static const ot_keywords keywords_format[] =
 
 #ifdef WANT_FULLSCRAPE
   if( mode == TASK_STATS_TPB ) {
-    struct http_data* h = io_getcookie( client_socket );
+    struct http_data* cookie = io_getcookie( sock );
     tai6464 t;
 #ifdef WANT_COMPRESSION_GZIP
     ws->request[ws->request_size] = 0;
     if( strstr( read_ptr - 1, "gzip" ) ) {
-      h->flag |= STRUCT_HTTP_FLAG_GZIP;
+      cookie->flag |= STRUCT_HTTP_FLAG_GZIP;
       format |= TASK_FLAG_GZIP;
     }
 #endif
     /* Pass this task to the worker thread */
-    h->flag |= STRUCT_HTTP_FLAG_WAITINGFORTASK;
+    cookie->flag |= STRUCT_HTTP_FLAG_WAITINGFORTASK;
 
     /* Clients waiting for us should not easily timeout */
-    taia_uint( &t, 0 ); io_timeout( client_socket, t );
-    fullscrape_deliver( client_socket, format );
-    io_dontwantread( client_socket );
+    taia_uint( &t, 0 ); io_timeout( sock, t );
+    fullscrape_deliver( sock, format );
+    io_dontwantread( sock );
     return ws->reply_size = -2;
   }
 #endif
@@ -219,8 +219,8 @@ static const ot_keywords keywords_format[] =
   if( ( mode & TASK_CLASS_MASK ) == TASK_STATS ) {
     tai6464 t;
     /* Complex stats also include expensive memory debugging tools */
-    taia_uint( &t, 0 ); io_timeout( client_socket, t );
-    stats_deliver( client_socket, mode );
+    taia_uint( &t, 0 ); io_timeout( sock, t );
+    stats_deliver( sock, mode );
     return ws->reply_size = -2;
   }
 
@@ -231,36 +231,36 @@ static const ot_keywords keywords_format[] =
 }
 
 #ifdef WANT_FULLSCRAPE
-static ssize_t http_handle_fullscrape( const int64 client_socket, struct ot_workstruct *ws ) {
-  struct http_data* h = io_getcookie( client_socket );
+static ssize_t http_handle_fullscrape( const int64 sock, struct ot_workstruct *ws ) {
+  struct http_data* cookie = io_getcookie( sock );
   int format = 0;
   tai6464 t;
 
 #ifdef WANT_COMPRESSION_GZIP
   ws->request[ws->request_size-1] = 0;
   if( strstr( ws->request, "gzip" ) ) {
-    h->flag |= STRUCT_HTTP_FLAG_GZIP;
+    cookie->flag |= STRUCT_HTTP_FLAG_GZIP;
     format = TASK_FLAG_GZIP;
-    stats_issue_event( EVENT_FULLSCRAPE_REQUEST_GZIP, 0, (uintptr_t)h->ip );
+    stats_issue_event( EVENT_FULLSCRAPE_REQUEST_GZIP, 0, (uintptr_t)cookie->ip );
   } else
 #endif
-    stats_issue_event( EVENT_FULLSCRAPE_REQUEST, 0, (uintptr_t)h->ip );
+    stats_issue_event( EVENT_FULLSCRAPE_REQUEST, 0, (uintptr_t)cookie->ip );
 
 #ifdef _DEBUG_HTTPERROR
 write( 2, ws->debugbuf, G_DEBUGBUF_SIZE );
 #endif
 
   /* Pass this task to the worker thread */
-  h->flag |= STRUCT_HTTP_FLAG_WAITINGFORTASK;
+  cookie->flag |= STRUCT_HTTP_FLAG_WAITINGFORTASK;
   /* Clients waiting for us should not easily timeout */
-  taia_uint( &t, 0 ); io_timeout( client_socket, t );
-  fullscrape_deliver( client_socket, TASK_FULLSCRAPE | format );
-  io_dontwantread( client_socket );
+  taia_uint( &t, 0 ); io_timeout( sock, t );
+  fullscrape_deliver( sock, TASK_FULLSCRAPE | format );
+  io_dontwantread( sock );
   return ws->reply_size = -2;
 }
 #endif
 
-static ssize_t http_handle_scrape( const int64 client_socket, struct ot_workstruct *ws, char *read_ptr ) {
+static ssize_t http_handle_scrape( const int64 sock, struct ot_workstruct *ws, char *read_ptr ) {
   static const ot_keywords keywords_scrape[] = { { "info_hash", 1 }, { NULL, -3 } };
 
   ot_hash * multiscrape_buf = (ot_hash*)ws->request;
@@ -305,7 +305,7 @@ static ot_keywords keywords_announce[] = { { "port", 1 }, { "left", 2 }, { "even
 #endif
 { NULL, -3 } };
 static ot_keywords keywords_announce_event[] = { { "completed", 1 }, { "stopped", 2 }, { NULL, -3 } };
-static ssize_t http_handle_announce( const int64 client_socket, struct ot_workstruct *ws, char *read_ptr ) {
+static ssize_t http_handle_announce( const int64 sock, struct ot_workstruct *ws, char *read_ptr ) {
   int            numwant, tmp, scanon;
   ot_peer        peer;
   ot_hash       *hash = NULL;
@@ -320,7 +320,7 @@ static ssize_t http_handle_announce( const int64 client_socket, struct ot_workst
     ++read_ptr;
   }
 
-  OT_SETIP( &peer, ((struct http_data*)io_getcookie( client_socket ) )->ip );
+  OT_SETIP( &peer, ((struct http_data*)io_getcookie( sock ) )->ip );
   OT_SETPORT( &peer, &port );
   OT_PEERFLAG( &peer ) = 0;
   numwant = 50;
@@ -400,7 +400,7 @@ static ssize_t http_handle_announce( const int64 client_socket, struct ot_workst
   return ws->reply_size;
 }
 
-ssize_t http_handle_request( const int64 client_socket, struct ot_workstruct *ws ) {
+ssize_t http_handle_request( const int64 sock, struct ot_workstruct *ws ) {
   ssize_t reply_off, len;
   char   *read_ptr = ws->request, *write_ptr;
 
@@ -433,17 +433,17 @@ ssize_t http_handle_request( const int64 client_socket, struct ot_workstruct *ws
 
   /* This is the hardcore match for announce*/
   if( ( *write_ptr == 'a' ) || ( *write_ptr == '?' ) )
-    http_handle_announce( client_socket, ws, read_ptr );
+    http_handle_announce( sock, ws, read_ptr );
 #ifdef WANT_FULLSCRAPE
   else if( !memcmp( write_ptr, "scrape HTTP/", 12 ) )
-    http_handle_fullscrape( client_socket, ws );
+    http_handle_fullscrape( sock, ws );
 #endif
   /* This is the hardcore match for scrape */
   else if( !memcmp( write_ptr, "sc", 2 ) )
-    http_handle_scrape( client_socket, ws, read_ptr );
+    http_handle_scrape( sock, ws, read_ptr );
   /* All the rest is matched the standard way */
   else if( !memcmp( write_ptr, "stats", 5) )
-    http_handle_stats( client_socket, ws, read_ptr );
+    http_handle_stats( sock, ws, read_ptr );
   else
     HTTPERROR_404;
 
@@ -469,7 +469,7 @@ ssize_t http_handle_request( const int64 client_socket, struct ot_workstruct *ws
   /* 3. Finally we join both blocks neatly */
   ws->outbuf[ SUCCESS_HTTP_HEADER_LENGTH - 1 ] = '\n';
   
-  http_senddata( client_socket, ws );
+  http_senddata( sock, ws );
   return ws->reply_size;
 }
 

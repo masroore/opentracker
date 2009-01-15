@@ -10,7 +10,7 @@
 
 void fullscrape_init( );
 void fullscrape_deinit( );
-void fullscrape_deliver( int64 socket, ot_tasktype tasktype );
+void fullscrape_deliver( int64 sock, ot_tasktype tasktype );
 
 #else
 

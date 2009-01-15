@@ -59,8 +59,8 @@ typedef enum {
 
 typedef unsigned long ot_taskid;
 
-int       mutex_workqueue_pushtask( int64 socket, ot_tasktype tasktype );
-void      mutex_workqueue_canceltask( int64 socket );
+int       mutex_workqueue_pushtask( int64 sock, ot_tasktype tasktype );
+void      mutex_workqueue_canceltask( int64 sock );
 void      mutex_workqueue_pushsuccess( ot_taskid taskid );
 ot_taskid mutex_workqueue_poptask( ot_tasktype *tasktype );
 int       mutex_workqueue_pushresult( ot_taskid taskid, int iovec_entries, struct iovec *iovector );
