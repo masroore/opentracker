@@ -238,6 +238,16 @@ static void server_mainloop( ) {
 static int64_t ot_try_bind( ot_ip6 ip, uint16_t port, PROTO_FLAG proto ) {
   int64 s = proto == FLAG_TCP ? socket_tcp6( ) : socket_udp6( );
 
+#ifndef WANT_V6
+  if( !ip6_isv4mapped(ip) ) {
+    exerr( "V4 Tracker is V4 only!" );
+  }
+#else
+  if( ip6_isv4mapped(ip) ) {
+    exerr( "V6 Tracker is V6 only!" );
+  }  
+#endif
+
 #ifdef _DEBUG
   char *protos[] = {"TCP","UDP","UDP mcast"};
   char _debug[512];
@@ -420,6 +430,9 @@ int main( int argc, char **argv ) {
   uint16_t tmpport;
 
   memset( serverip, 0, sizeof(ot_ip6) );
+#ifndef WANT_V6
+  serverip[10]=serverip[11]=0xff;
+#endif
 
 while( scanon ) {
     switch( getopt( argc, argv, ":i:p:A:P:d:r:s:f:v"
