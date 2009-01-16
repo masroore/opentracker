@@ -217,8 +217,8 @@ static void server_mainloop( ) {
         handle_accept( sock );
       else if( (intptr_t)cookie == FLAG_UDP )
         handle_udp6( sock, &ws );
-      else if( (intptr_t)cookie == FLAG_SELFPIPE ) { printf( "woke up\n" );
-      io_tryread( sock, ws.inbuf, G_INBUF_SIZE ); }
+      else if( (intptr_t)cookie == FLAG_SELFPIPE )
+        io_tryread( sock, ws.inbuf, G_INBUF_SIZE );
       else
         handle_read( sock, &ws );
     }
