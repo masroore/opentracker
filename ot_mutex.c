@@ -32,6 +32,9 @@ static int bucket_locklist_count = 0;
 static pthread_mutex_t bucket_mutex;
 static pthread_cond_t bucket_being_unlocked;
 
+/* Self pipe from opentracker.c */
+extern int g_self_pipe[2];
+
 static int bucket_check( int bucket ) {
   /* C should come with auto-i ;) */
   int i;
@@ -255,6 +258,8 @@ void mutex_workqueue_pushsuccess( ot_taskid taskid ) {
 
 int mutex_workqueue_pushresult( ot_taskid taskid, int iovec_entries, struct iovec *iovec ) {
   struct ot_task * task;
+  const char byte = 'o';
+
   /* Want exclusive access to tasklist */
   MTX_DBG( "pushresult locks.\n" );
   pthread_mutex_lock( &tasklist_mutex );
@@ -274,6 +279,8 @@ int mutex_workqueue_pushresult( ot_taskid taskid, int iovec_entries, struct iove
   MTX_DBG( "pushresult unlocks.\n" );
   pthread_mutex_unlock( &tasklist_mutex );
   MTX_DBG( "pushresult unlocked.\n" );
+
+  io_trywrite( g_self_pipe[1], &byte, 1 );
 
   /* Indicate whether the worker has to throw away results */
   return task ? 0 : -1;

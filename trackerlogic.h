@@ -56,7 +56,7 @@ extern volatile int g_opentracker_running;
 #define       g_now_minutes (g_now_seconds/60)
 
 extern uint32_t g_tracker_id;
-typedef enum { FLAG_TCP, FLAG_UDP, FLAG_MCA } PROTO_FLAG;
+typedef enum { FLAG_TCP, FLAG_UDP, FLAG_MCA, FLAG_SELFPIPE } PROTO_FLAG;
 
 typedef struct {
   uint8_t data[OT_IP_SIZE+2+2];
