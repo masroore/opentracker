@@ -129,7 +129,7 @@ size_t add_peer_to_torrent_and_return_peers( ot_hash hash, ot_peer *peer, PROTO_
       OT_PEERFLAG( peer ) |= PEER_FLAG_COMPLETED;
   }
 
-  *peer_dest = *peer;
+  memcpy( peer_dest, peer, sizeof(ot_peer) );
 #ifdef WANT_SYNC
   if( proto == FLAG_MCA ) {
     mutex_bucket_unlock_by_hash( hash, delta_torrentcount );
@@ -156,8 +156,7 @@ static size_t return_peers_all( ot_peerlist *peer_list, char *reply ) {
     ot_peer * peers = (ot_peer*)bucket_list[bucket].data;
     size_t    peer_count = bucket_list[bucket].size;
     while( peer_count-- ) {
-      memcpy(r,peers,OT_PEER_COMPARE_SIZE);
-      peers+=sizeof(ot_peer);
+      memcpy(r,peers++,OT_PEER_COMPARE_SIZE);
       r+=OT_PEER_COMPARE_SIZE;
     }
   }

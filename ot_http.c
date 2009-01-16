@@ -247,7 +247,7 @@ static ssize_t http_handle_fullscrape( const int64 sock, struct ot_workstruct *w
     stats_issue_event( EVENT_FULLSCRAPE_REQUEST, 0, (uintptr_t)cookie->ip );
 
 #ifdef _DEBUG_HTTPERROR
-write( 2, ws->debugbuf, G_DEBUGBUF_SIZE );
+  fprintf( stderr, "%s", ws->debugbuf );
 #endif
 
   /* Pass this task to the worker thread */
@@ -299,7 +299,7 @@ static ssize_t http_handle_scrape( const int64 sock, struct ot_workstruct *ws, c
   return ws->reply_size;
 }
 
-static ot_keywords keywords_announce[] = { { "port", 1 }, { "left", 2 }, { "event", 3 }, { "numwant", 4 }, { "compact", 5 }, { "info_hash", 6 },
+static ot_keywords keywords_announce[] = { { "port", 1 }, { "left", 2 }, { "event", 3 }, { "numwant", 4 }, { "compact", 5 }, { "compact6", 5 }, { "info_hash", 6 },
 #ifdef WANT_IP_FROM_QUERY_STRING
 { "ip", 7 },
 #endif

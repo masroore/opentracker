@@ -201,7 +201,7 @@ static void server_mainloop( ) {
   ws.inbuf   = malloc( G_INBUF_SIZE );
   ws.outbuf  = malloc( G_OUTBUF_SIZE );
 #ifdef _DEBUG_HTTPERROR
-  ws.debugbuf= malloc( G_INBUF_SIZE );
+  ws.debugbuf= malloc( G_DEBUGBUF_SIZE );
 #endif
   if( !ws.inbuf || !ws.outbuf )
     panic( "Initializing worker failed" );
