@@ -75,7 +75,7 @@ int scan_find_keywords( const ot_keywords * keywords, char **string, SCAN_SEARCH
   if( match_length == 0 ) return -3;
 
   while( keywords->key ) {
-    if( !strncmp( keywords->key, deststring, match_length ) )
+    if( !strncmp( keywords->key, deststring, match_length ) && !keywords->key[match_length] )
       return keywords->value;
     keywords++;
   }
