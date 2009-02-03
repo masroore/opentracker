@@ -30,7 +30,7 @@ char groupip_1[4] = { 224,0,23,5 };
 
 #define LIVESYNC_INCOMING_BUFFSIZE          (256*256)
 
-#define LIVESYNC_OUTGOING_BUFFSIZE_PEERS     1504
+#define LIVESYNC_OUTGOING_BUFFSIZE_PEERS     1480
 #define LIVESYNC_OUTGOING_WATERMARK_PEERS   (sizeof(ot_peer)+sizeof(ot_hash))
 
 #ifdef WANT_SYNC_SCRAPE
