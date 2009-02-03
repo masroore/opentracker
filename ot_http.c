@@ -161,7 +161,7 @@ static ssize_t http_handle_stats( const int64 sock, struct ot_workstruct *ws, ch
 static const ot_keywords keywords_main[] =
   { { "mode", 1 }, {"format", 2 }, { NULL, -3 } };
 static const ot_keywords keywords_mode[] =
-  { { "peer", TASK_STATS_PEERS }, { "conn", TASK_STATS_CONNS }, { "scrp", TASK_STATS_SCRAPE }, { "udp4", TASK_STATS_UDP },
+  { { "peer", TASK_STATS_PEERS }, { "conn", TASK_STATS_CONNS }, { "scrp", TASK_STATS_SCRAPE }, { "udp4", TASK_STATS_UDP }, { "tcp4", TASK_STATS_TCP },
     { "busy", TASK_STATS_BUSY_NETWORKS }, { "torr", TASK_STATS_TORRENTS }, { "fscr", TASK_STATS_FULLSCRAPE },
     { "s24s", TASK_STATS_SLASH24S }, { "tpbs", TASK_STATS_TPB }, { "herr", TASK_STATS_HTTPERRORS },
     { "top10", TASK_STATS_TOP10 }, { "renew", TASK_STATS_RENEW }, { "syncs", TASK_STATS_SYNCS }, { "version", TASK_STATS_VERSION },
