@@ -377,7 +377,7 @@ static ssize_t http_handle_announce( const int64 sock, struct ot_workstruct *ws,
         char *tmp_buf1 = ws->reply, *tmp_buf2 = ws->reply+16;
         len = scan_urlencoded_query( &read_ptr, tmp_buf2, SCAN_SEARCHPATH_VALUE );
         tmp_buf2[len] = 0;
-        if( ( len <= 0 ) || scan_ip6( tmp_buf2, tmp_buf1 ) ) HTTPERROR_400_PARAM;
+        if( ( len <= 0 ) || !scan_ip6( tmp_buf2, tmp_buf1 ) ) HTTPERROR_400_PARAM;
         OT_SETIP( &peer, tmp_buf1 );
       }
       break;
