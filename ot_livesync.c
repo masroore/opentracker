@@ -375,8 +375,10 @@ static void * livesync_worker( void * args ) {
 
   (void)args;
 
+  memcpy( in_ip, V4mappedprefix, sizeof( V4mappedprefix ) );
+
   while( 1 ) {
-    datalen = socket_recv4(g_socket_in, (char*)g_inbuffer, LIVESYNC_INCOMING_BUFFSIZE, (char*)in_ip, &in_port);
+    datalen = socket_recv4(g_socket_in, (char*)g_inbuffer, LIVESYNC_INCOMING_BUFFSIZE, 12+(char*)in_ip, &in_port);
 
     /* Expect at least tracker id and packet type */
     if( datalen <= (ssize_t)(sizeof( g_tracker_id ) + sizeof( uint32_t )) )
