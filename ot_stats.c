@@ -550,7 +550,7 @@ void stats_issue_event( ot_status_event event, PROTO_FLAG proto, uintptr_t event
     case EVENT_ANNOUNCE:
       if( proto == FLAG_TCP ) ot_overall_tcp_successfulannounces++; else ot_overall_udp_successfulannounces++;
       break;
-   case EVENT_CONNECT:
+    case EVENT_CONNECT:
       if( proto == FLAG_TCP ) ot_overall_tcp_connects++; else ot_overall_udp_connects++;
       break;
     case EVENT_SCRAPE:
@@ -584,12 +584,12 @@ void stats_issue_event( ot_status_event event, PROTO_FLAG proto, uintptr_t event
     case EVENT_FAILED:
       ot_failed_request_counts[event_data]++;
       break;
-	case EVENT_RENEW:
+	  case EVENT_RENEW:
       ot_renewed[event_data]++;
       break;
     case EVENT_SYNC:
       ot_overall_sync_count+=event_data;
-	  break;
+	    break;
     default:
       break;
   }
