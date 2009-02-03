@@ -95,9 +95,9 @@ size_t add_peer_to_torrent_and_return_peers( ot_hash hash, ot_peer *peer, PROTO_
 
 #ifdef WANT_SYNC_LIVE
     if( proto == FLAG_MCA )
-      livesync_tell( hash, peer );
-    else
       OT_PEERFLAG( peer ) |= PEER_FLAG_FROM_SYNC;
+    else
+      livesync_tell( hash, peer );
 #endif
 
     torrent->peer_list->peer_count++;
