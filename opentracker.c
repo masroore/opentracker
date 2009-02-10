@@ -440,6 +440,9 @@ int main( int argc, char **argv ) {
 #ifndef WANT_V6
   serverip[10]=serverip[11]=0xff;
 #endif
+#ifdef WANT_BROKEN_OPENBSD_V6_API
+  noipv6=1;
+#endif
 
 while( scanon ) {
     switch( getopt( argc, argv, ":i:p:A:P:d:r:s:f:v"
