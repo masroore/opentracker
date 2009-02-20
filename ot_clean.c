@@ -112,8 +112,8 @@ static void * clean_worker( void * args ) {
         ot_torrent *torrent = ((ot_torrent*)(torrents_list->data)) + toffs;
         if( clean_single_torrent( torrent ) ) {
           vector_remove_torrent( torrents_list, torrent );
-          delta_torrentcount -= 1;
-          --toffs; continue;
+          --delta_torrentcount;
+          --toffs;
         }
       }
       mutex_bucket_unlock( bucket, delta_torrentcount );
