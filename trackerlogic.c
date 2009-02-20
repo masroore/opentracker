@@ -261,7 +261,7 @@ size_t return_udp_scrape_for_torrent( ot_hash hash, char *reply ) {
       r[2] = htonl( torrent->peer_list->peer_count-torrent->peer_list->seed_count );
     }
   }
-  mutex_bucket_unlock_by_hash( hash, 0 );
+  mutex_bucket_unlock_by_hash( hash, delta_torrentcount );
   return 12;
 }
 
