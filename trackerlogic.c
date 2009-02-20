@@ -269,11 +269,11 @@ size_t return_udp_scrape_for_torrent( ot_hash hash, char *reply ) {
 size_t return_tcp_scrape_for_torrent( ot_hash *hash_list, int amount, char *reply ) {
   char *r = reply;
   int   exactmatch, i;
-  int   delta_torrentcount = 0;
 
   r += sprintf( r, "d5:filesd" );
 
   for( i=0; i<amount; ++i ) {
+    int          delta_torrentcount = 0;
     ot_hash     *hash = hash_list + i;
     ot_vector   *torrents_list = mutex_bucket_lock_by_hash( *hash );
     ot_torrent  *torrent = binary_search( hash, torrents_list->data, torrents_list->size, sizeof( ot_torrent ), OT_HASH_COMPARE_SIZE, &exactmatch );
