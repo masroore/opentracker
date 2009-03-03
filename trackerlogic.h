@@ -98,7 +98,7 @@ struct ot_peerlist {
 */
   ot_vector      peers;
 };
-#define OT_PEERLIST_HASBUCKETS(peer_list) ((peer_list) && ((peer_list)->peers.size > (peer_list)->peers.space))
+#define OT_PEERLIST_HASBUCKETS(peer_list) ((peer_list)->peers.size > (peer_list)->peers.space)
 
 struct ot_workstruct {
   /* Thread specific, static */
