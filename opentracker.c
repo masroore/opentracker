@@ -260,7 +260,7 @@ static int64_t ot_try_bind( ot_ip6 ip, uint16_t port, PROTO_FLAG proto ) {
   char _debug[512];
   int off = snprintf( _debug, sizeof(_debug), "Binding socket type %s to address [", protos[proto] );
   off += fmt_ip6( _debug+off, ip);
-  off += snprintf( _debug + off, sizeof(_debug)-off, "]:%d...", port);
+  snprintf( _debug + off, sizeof(_debug)-off, "]:%d...", port);
   fputs( _debug, stderr );
 #endif
   
