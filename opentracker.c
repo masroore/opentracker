@@ -135,11 +135,9 @@ static ssize_t handle_read( const int64 sock, struct ot_workstruct *ws ) {
 
   array_catb( &cookie->data.request, ws->inbuf, byte_count );
 
-  if( array_failed( &cookie->data.request ) )
+  if( array_failed( &cookie->data.request ) ||
+      array_bytes( &cookie->data.request ) > 8192 )
     return http_issue_error( sock, ws, CODE_HTTPERROR_500 );
-
-  if( array_bytes( &cookie->data.request ) > 8192 )
-     return http_issue_error( sock, ws, CODE_HTTPERROR_500 );
 
   if( !memchr( array_start( &cookie->data.request ), '\n', array_bytes( &cookie->data.request ) ) )
     return 0;
@@ -369,6 +367,11 @@ int parse_configfile( char * config_filename ) {
     } else if(!byte_diff(p, 12, "access.stats" ) && isspace(p[12])) {
       if( !scan_ip6( p+13, tmpip )) goto parse_error;
       accesslist_blessip( tmpip, OT_PERMISSION_MAY_STAT );
+#endif
+#ifdef WANT_IP_FROM_PROXY
+    } else if(!byte_diff(p, 12, "access.proxy" ) && isspace(p[12])) {
+      if( !scan_ip6( p+13, tmpip )) goto parse_error;
+      accesslist_blessip( tmpip, OT_PERMISSION_MAY_PROXY );
 #endif
     } else if(!byte_diff(p, 20, "tracker.redirect_url" ) && isspace(p[20])) {
       set_config_option( &g_redirecturl, p+21 );

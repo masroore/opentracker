@@ -306,13 +306,14 @@ static ot_keywords keywords_announce[] = { { "port", 1 }, { "left", 2 }, { "even
 { NULL, -3 } };
 static ot_keywords keywords_announce_event[] = { { "completed", 1 }, { "stopped", 2 }, { NULL, -3 } };
 static ssize_t http_handle_announce( const int64 sock, struct ot_workstruct *ws, char *read_ptr ) {
-  int            numwant, tmp, scanon;
-  ot_peer        peer;
-  ot_hash       *hash = NULL;
-  unsigned short port = htons(6881);
-  char          *write_ptr;
-  ssize_t        len;
-  
+  int               numwant, tmp, scanon;
+  ot_peer           peer;
+  ot_hash          *hash = NULL;
+  unsigned short    port = htons(6881);
+  char             *write_ptr;
+  ssize_t           len;
+  struct http_data *cookie = io_getcookie( sock );    
+
   /* This is to hack around stupid clients that send "announce ?info_hash" */
   if( read_ptr[-1] != '?' ) {
     while( ( *read_ptr != '?' ) && ( *read_ptr != '\n' ) ) ++read_ptr;
@@ -320,7 +321,33 @@ static ssize_t http_handle_announce( const int64 sock, struct ot_workstruct *ws,
     ++read_ptr;
   }
 
-  OT_SETIP( &peer, ((struct http_data*)io_getcookie( sock ) )->ip );
+#ifdef WANT_IP_FROM_PROXY
+  if( accesslist_isblessed( cookie->ip, OT_PERMISSION_MAY_PROXY ) ) {
+    ot_ip6 proxied_ip;
+    char *fwd, *fwd_new = ws->request;
+
+    /* Zero terminate for string routines. Normally we'd only overwrite bollocks */
+    ws->request[ws->request_size-1] = 0;
+
+    /* Find last occurence of the forwarded header */
+    do {
+      fwd = fwd_new;
+      fwd_new = strcasestr( fwd_new, "\nX-Forwarded-For:" );
+    } while( fwd_new );
+
+    /* Skip spaces between : and the ip address */
+    if( fwd ) {
+      fwd += 18; /* sizeof( "\nX-Forwarded-For:" ) */
+      while( *fwd == ' ' ) ++fwd;
+    }
+
+    if( fwd && scan_ip6( fwd, proxied_ip ) )
+      OT_SETIP( &peer, proxied_ip );
+    else
+      OT_SETIP( &peer, cookie->ip );
+  }
+#endif
+  OT_SETIP( &peer, cookie->ip );
   OT_SETPORT( &peer, &port );
   OT_PEERFLAG( &peer ) = 0;
   numwant = 50;

@@ -27,7 +27,8 @@ extern char *g_accesslist_filename;
 typedef enum {
   OT_PERMISSION_MAY_FULLSCRAPE = 0x1,
   OT_PERMISSION_MAY_STAT       = 0x2,
-  OT_PERMISSION_MAY_LIVESYNC   = 0x4
+  OT_PERMISSION_MAY_LIVESYNC   = 0x4,
+  OT_PERMISSION_MAY_PROXY      = 0x8
 } ot_permissions;
 
 int  accesslist_blessip( ot_ip6 ip, ot_permissions permissions );

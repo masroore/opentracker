@@ -148,6 +148,9 @@ size_t  remove_peer_from_torrent( ot_hash hash, ot_peer *peer, char *reply, PROT
 size_t  return_tcp_scrape_for_torrent( ot_hash *hash, int amount, char *reply );
 size_t  return_udp_scrape_for_torrent( ot_hash hash, char *reply );
 
+/* torrent iterator */
+void iterate_all_torrents( int (*for_each)( ot_torrent* torrent, uintptr_t data ), uintptr_t data );
+
 /* Helper, before it moves to its own object */
 void free_peerlist( ot_peerlist *peer_list );
 

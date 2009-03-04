@@ -337,6 +337,23 @@ size_t remove_peer_from_torrent( ot_hash hash, ot_peer *peer, char *reply, PROTO
   return reply_size;
 }
 
+void iterate_all_torrents( int (*for_each)( ot_torrent* torrent, uintptr_t data ), uintptr_t data ) {
+  int bucket;
+  size_t j;
+
+  for( bucket=0; bucket<OT_BUCKET_COUNT; ++bucket ) {
+    ot_vector  *torrents_list = mutex_bucket_lock( bucket );
+    ot_torrent *torrents = (ot_torrent*)(torrents_list->data);
+
+    for( j=0; j<torrents_list->size; ++j )
+      if( for_each( torrents + j, data ) )
+        break;
+
+    mutex_bucket_unlock( bucket, 0 );
+    if( !g_opentracker_running ) return;
+  }
+}
+
 void exerr( char * message ) {
   fprintf( stderr, "%s\n", message );
   exit( 111 );
@@ -358,7 +375,7 @@ void trackerlogic_init( ) {
 void trackerlogic_deinit( void ) {
   int bucket, delta_torrentcount = 0;
   size_t j;
-
+  
   /* Free all torrents... */
   for(bucket=0; bucket<OT_BUCKET_COUNT; ++bucket ) {
     ot_vector *torrents_list = mutex_bucket_lock( bucket );
