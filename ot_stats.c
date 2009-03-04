@@ -48,6 +48,7 @@ static unsigned long long ot_full_scrape_count = 0;
 static unsigned long long ot_full_scrape_request_count = 0;
 static unsigned long long ot_full_scrape_size = 0;
 static unsigned long long ot_failed_request_counts[CODE_HTTPERROR_COUNT];
+static char *             ot_failed_request_names[] = { "302 Redirect", "400 Parse Error", "400 Invalid Parameter", "400 Invalid Parameter (compact=0)", "403 Access Denied", "404 Not found", "500 Internal Server Error" };
 static unsigned long long ot_renewed[OT_PEER_TIMEOUT];
 static unsigned long long ot_overall_sync_count;
 static unsigned long long ot_overall_stall_count;
@@ -314,14 +315,6 @@ static size_t stats_slash24s_txt( char * reply, size_t amount, uint32_t thresh )
   return 0;
 }
 
-/*
- struct {
- size_t size
- size_t space
- size_t count
- }
- */
-
 static unsigned long events_per_time( unsigned long long events, time_t t ) {
   return events / ( (unsigned int)t ? (unsigned int)t : 1 );
 }
@@ -402,42 +395,6 @@ static size_t stats_peers_mrtg( char * reply ) {
                  );
 }
 
-static size_t stats_startstop_mrtg( char * reply )
-{
-  size_t    torrent_count = mutex_get_torrent_count();
-  
-  return sprintf( reply, "%zd\n%zd\nopentracker handling %zd torrents\nopentracker",
-                 (size_t)0,
-                 (size_t)0,
-                 torrent_count
-                 );
-}
-
-static size_t stats_toraddrem_mrtg( char * reply )
-{
-  size_t    peer_count = 0, j;
-  int bucket;
-  
-  for( bucket=0; bucket<OT_BUCKET_COUNT; ++bucket )
-  {
-    ot_vector *torrents_list = mutex_bucket_lock( bucket );
-    for( j=0; j<torrents_list->size; ++j )
-    {
-      ot_peerlist *peer_list = ( ((ot_torrent*)(torrents_list->data))[j] ).peer_list;
-      peer_count += peer_list->peer_count;
-    }
-    mutex_bucket_unlock( bucket, 0 );
-    if( !g_opentracker_running )
-      return 0;
-  }
-  
-  return sprintf( reply, "%zd\n%zd\nopentracker handling %zd peers\nopentracker",
-                 (size_t)0,
-                 (size_t)0,
-                 peer_count
-                 );
-}
-
 static size_t stats_torrents_mrtg( char * reply )
 {
   size_t torrent_count = mutex_get_torrent_count();
@@ -479,13 +436,38 @@ static size_t stats_return_sync_mrtg( char * reply ) {
 }
 
 static size_t stats_return_everything( char * reply ) {
+  torrent_stats stats = {0,0,0};
+  int i;
   char * r = reply;
+
+  iterate_all_torrents( torrent_statter, (uintptr_t)&stats );
+
+  r += sprintf( r, "<version>\n" ); r += stats_return_tracker_version( r );  r += sprintf( r, "</version>\n" );
   r += sprintf( r, "<stats>\n" );
   r += sprintf( r, "  <uptime>%llu</uptime>\n", (unsigned long long)(time( NULL ) - ot_start_time) );
-  r += sprintf( r, "  <torrents>%zd</torrents>\n", mutex_get_torrent_count() );
-  /*  r += sprintf( r, "  <peers>%llu</peers>\n",  ); */
-  
-  r += sprintf( reply, "</stats>" );
+  r += sprintf( r, "  <torrents>\n" );
+  r += sprintf( r, "    <count_mutex>%zd</count_mutex>\n", mutex_get_torrent_count() );
+  r += sprintf( r, "    <count_iterator>%llu</count_iterator>\n", stats.torrent_count );
+  r += sprintf( r, "  </torrents>\n" );
+  r += sprintf( r, "  <peers>\n    <count>%llu</count>\n  </peers>\n", stats.peer_count );
+  r += sprintf( r, "  <seeds>\n    <count>%llu</count>\n  </seeds>\n", stats.seed_count );
+  r += sprintf( r, "  <connections>\n" );
+  r += sprintf( r, "    <tcp>\n      <accept>%llu</accept>\n      <announce>%llu</announce>\n      <scrape>%llu</scrape>\n    </tcp>\n", ot_overall_tcp_connections, ot_overall_tcp_successfulannounces, ot_overall_udp_successfulscrapes );
+  r += sprintf( r, "    <udp>\n      <overall>%llu</overall>\n      <connect>%llu</connect>\n      <announce>%llu</announce>\n      <scrape>%llu</scrape>\n    </tcp>\n", ot_overall_udp_connections, ot_overall_udp_connects, ot_overall_udp_successfulannounces, ot_overall_udp_successfulscrapes );
+  r += sprintf( r, "    <livesync>\n      <count>%llu</count>\n    </livesync>\n", ot_overall_sync_count );
+  r += sprintf( r, "  </connections>\n" );
+  r += sprintf( r, "  <debug>\n" );
+  r += sprintf( r, "    <renew>\n" );
+  for( i=0; i<OT_PEER_TIMEOUT; ++i )
+    r += sprintf( r, "      <count interval=\"%02i\">%llu</count>\n", i, ot_renewed[i] );
+  r += sprintf( r, "    </renew>\n" );
+  r += sprintf( r, "    <http_error>\n" );
+  for( i=0; i<CODE_HTTPERROR_COUNT; ++i )
+    r += sprintf( r, "      <count code=\"%s\">%llu</count>\n", ot_failed_request_names[i], ot_failed_request_counts[i] );
+  r += sprintf( r, "    </http_error>\n" );
+  r += sprintf( r, "    <mutex_stall>\n      <count>%llu</count>\n    </mutex_stall>\n", ot_overall_stall_count );
+  r += sprintf( r, "  </debug>\n" );
+  r += sprintf( r, "</stats>" );
   return r - reply;
 }
 
@@ -512,10 +494,6 @@ size_t return_stats_for_tracker( char *reply, int mode, int format ) {
       return stats_udpconnections_mrtg( reply );
     case TASK_STATS_TCP:
       return stats_tcpconnections_mrtg( reply );
-    case TASK_STATS_TORADDREM:
-      return stats_toraddrem_mrtg( reply );
-    case TASK_STATS_STARTSTOP:
-      return stats_startstop_mrtg( reply );
     case TASK_STATS_FULLSCRAPE:
       return stats_fullscrapes_mrtg( reply );
     case TASK_STATS_HTTPERRORS:
@@ -548,6 +526,7 @@ static void stats_make( int *iovec_entries, struct iovec **iovector, ot_tasktype
     case TASK_STATS_PEERS:       r += stats_peers_mrtg( r );                break;
     case TASK_STATS_SLASH24S:    r += stats_slash24s_txt( r, 25, 16 );      break;
     case TASK_STATS_TOP10:       r += stats_top10_txt( r );                 break;
+    case TASK_STATS_EVERYTHING:  r += stats_return_everything( r );         break;
     default:
       iovec_free(iovec_entries, iovector);
       return;
