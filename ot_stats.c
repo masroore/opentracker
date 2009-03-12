@@ -57,10 +57,14 @@ static time_t ot_start_time;
 
 #ifdef WANT_LOG_NETWORKS
 #define STATS_NETWORK_NODE_BITWIDTH  8
-#define STATS_NETWORK_NODE_MAXDEPTH  16
-
-#define STATS_NETWORK_NODE_BITMASK ((1<<STATS_NETWORK_NODE_BITWIDTH)-1)
 #define STATS_NETWORK_NODE_COUNT    (1<<STATS_NETWORK_NODE_BITWIDTH)
+
+#ifdef WANT_V6
+#define STATS_NETWORK_NODE_MAXDEPTH  (48/8-1)
+#else
+#define STATS_NETWORK_NODE_MAXDEPTH  (12+24/8-1)
+#endif
+
 
 typedef union stats_network_node stats_network_node;
 union stats_network_node {
@@ -71,9 +75,9 @@ union stats_network_node {
 static stats_network_node *stats_network_counters_root = NULL;
 
 static int stat_increase_network_count( stats_network_node **node, int depth, uintptr_t ip ) {
-  ot_ip6 *_ip = (ot_ip6*)ip;
-  int foo = (*_ip)[depth];
-  
+  uint8_t *_ip = (uint8_t*)ip;
+  int foo = _ip[++depth];
+
   if( !*node ) {
     *node = malloc( sizeof( stats_network_node ) );
     if( !*node )
@@ -91,31 +95,32 @@ static int stat_increase_network_count( stats_network_node **node, int depth, ui
 static int stats_shift_down_network_count( stats_network_node **node, int depth, int shift ) {
   int i, rest = 0;
   if( !*node ) return 0;
-  
+
   if( ++depth == STATS_NETWORK_NODE_MAXDEPTH )
     for( i=0; i<STATS_NETWORK_NODE_COUNT; ++i ) {
       rest += ((*node)->counters[i]>>=shift);
       return rest;
     }
-  
+
   for( i=0; i<STATS_NETWORK_NODE_COUNT; ++i ) {
     stats_network_node **childnode = &(*node)->children[i];
     int rest_val;
-    
+
     if( !*childnode ) continue;
-    
+
     rest += rest_val = stats_shift_down_network_count( childnode, depth, shift );
-    
+
     if( rest_val ) continue;
-    
+
     free( (*node)->children[i] );
     (*node)->children[i] = NULL;
   }
-  
+
   return rest;
 }
 
-static void stats_get_highscore_networks( stats_network_node *node, int depth, uint32_t node_value, int *scores, uint32_t *networks, int network_count ) {
+static void stats_get_highscore_networks( stats_network_node *node, int depth, ot_ip6 node_value, int *scores, ot_ip6 *networks, int network_count ) {
+  uint8_t *_node_value = (uint8_t*)node_value;
   int i;
   
   if( !node ) return;
@@ -127,34 +132,41 @@ static void stats_get_highscore_networks( stats_network_node *node, int depth, u
   
   if( depth < STATS_NETWORK_NODE_MAXDEPTH ) {
     for( i=0; i<STATS_NETWORK_NODE_COUNT; ++i )
-      if( node->children[i] )
-        stats_get_highscore_networks( node->children[i], depth, node_value | ( i << ( 32 - depth * STATS_NETWORK_NODE_BITWIDTH ) ), scores, networks, network_count );
+      if( node->children[i] ) {
+        _node_value[depth] = i;
+        stats_get_highscore_networks( node->children[i], depth, node_value, scores, networks, network_count );
+      }
   } else
     for( i=0; i<STATS_NETWORK_NODE_COUNT; ++i ) {
       int j=1;
       if( node->counters[i] <= scores[0] ) continue;
-      
+
+      _node_value[depth] = i;
       while( (j<network_count) && (node->counters[i]>scores[j] ) ) ++j;
       --j;
       
       memcpy( scores, scores + 1, j * sizeof( *scores ) );
       memcpy( networks, networks + 1, j * sizeof( *networks ) );
       scores[ j ] = node->counters[ i ];
-      networks[ j ] = node_value | ( i << ( 32 - depth * STATS_NETWORK_NODE_BITWIDTH ) );
+      memcpy( networks + j, _node_value, sizeof( *networks ) );
     }
 }
 
 static size_t stats_return_busy_networks( char * reply ) {
-  uint32_t networks[16];
-  int      scores[16];
+  ot_ip6   networks[256];
+  ot_ip6   node_value;
+  int      scores[256];
   int      i;
   char   * r = reply;
+
+  stats_get_highscore_networks( stats_network_counters_root, 0, node_value, scores, networks, 256 );
   
-  stats_get_highscore_networks( stats_network_counters_root, 0, 0, scores, networks, 16 );
-  
-  for( i=15; i>=0; --i)
-    r += sprintf( r, "%08i: %d.%d.%d.0/24\n", scores[i], (networks[i]>>24)&0xff, (networks[i]>>16)&0xff, (networks[i]>>8)&0xff );
-  
+  for( i=255; i>=0; --i) {
+    r += sprintf( r, "%08i: ", scores[i] );
+    r += fmt_ip6c( r, networks[i] );
+    *r++ = '\n';
+  }
+
   return r - reply;
 }
 
@@ -442,6 +454,7 @@ static size_t stats_return_everything( char * reply ) {
 
   iterate_all_torrents( torrent_statter, (uintptr_t)&stats );
 
+  r += sprintf( r, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" );
   r += sprintf( r, "<version>\n" ); r += stats_return_tracker_version( r );  r += sprintf( r, "</version>\n" );
   r += sprintf( r, "<stats>\n" );
   r += sprintf( r, "  <uptime>%llu</uptime>\n", (unsigned long long)(time( NULL ) - ot_start_time) );
