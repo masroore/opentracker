@@ -76,7 +76,7 @@ static stats_network_node *stats_network_counters_root = NULL;
 
 static int stat_increase_network_count( stats_network_node **node, int depth, uintptr_t ip ) {
   uint8_t *_ip = (uint8_t*)ip;
-  int foo = _ip[++depth];
+  int foo = _ip[depth];
 
   if( !*node ) {
     *node = malloc( sizeof( stats_network_node ) );
@@ -86,7 +86,7 @@ static int stat_increase_network_count( stats_network_node **node, int depth, ui
   }
   
   if( depth < STATS_NETWORK_NODE_MAXDEPTH )
-    return stat_increase_network_count( &(*node)->children[ foo ], depth, ip );
+    return stat_increase_network_count( &(*node)->children[ foo ], depth+1, ip );
   
   (*node)->counters[ foo ]++;
   return 0;
@@ -125,16 +125,11 @@ static void stats_get_highscore_networks( stats_network_node *node, int depth, o
   
   if( !node ) return;
   
-  if( !depth++ ) {
-    memset( scores, 0, sizeof( *scores ) * network_count );
-    memset( networks, 0, sizeof( *networks ) * network_count );
-  }
-  
   if( depth < STATS_NETWORK_NODE_MAXDEPTH ) {
     for( i=0; i<STATS_NETWORK_NODE_COUNT; ++i )
       if( node->children[i] ) {
         _node_value[depth] = i;
-        stats_get_highscore_networks( node->children[i], depth, node_value, scores, networks, network_count );
+        stats_get_highscore_networks( node->children[i], depth+1, node_value, scores, networks, network_count );
       }
   } else
     for( i=0; i<STATS_NETWORK_NODE_COUNT; ++i ) {
@@ -158,6 +153,9 @@ static size_t stats_return_busy_networks( char * reply ) {
   int      scores[256];
   int      i;
   char   * r = reply;
+
+  memset( scores, 0, sizeof( *scores ) * 256 );
+  memset( networks, 0, sizeof( *networks ) * 256 );
 
   stats_get_highscore_networks( stats_network_counters_root, 0, node_value, scores, networks, 256 );
   
