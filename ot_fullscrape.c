@@ -184,10 +184,8 @@ static void fullscrape_make( int *iovec_entries, struct iovec **iovector, ot_tas
         r += sprintf( r, ":%zd:%zd\n", peer_list->seed_count, peer_list->peer_count-peer_list->seed_count );
         break;
       case TASK_FULLSCRAPE_TRACKERSTATE:
-        memcpy( r, *hash, sizeof(ot_hash) ); r += sizeof(ot_hash);
-        uint64_pack_big( r,     (uint64_t)peer_list->down_count );
-        uint64_pack_big( r + 8, (uint64_t)peer_list->base );
-        r += 16;
+        to_hex( r, *hash ); r+= 2 * sizeof(ot_hash);
+        r += sprintf( r, ":%zd:%zd\n", peer_list->base, peer_list->down_count );
         break;
       }
 

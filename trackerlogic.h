@@ -147,6 +147,7 @@ size_t  add_peer_to_torrent_and_return_peers( ot_hash hash, ot_peer *peer, PROTO
 size_t  remove_peer_from_torrent( ot_hash hash, ot_peer *peer, char *reply, PROTO_FLAG proto );
 size_t  return_tcp_scrape_for_torrent( ot_hash *hash, int amount, char *reply );
 size_t  return_udp_scrape_for_torrent( ot_hash hash, char *reply );
+void    add_torrent_from_saved_state( ot_hash hash, ot_time base, size_t down_count );
 
 /* torrent iterator */
 void iterate_all_torrents( int (*for_each)( ot_torrent* torrent, uintptr_t data ), uintptr_t data );

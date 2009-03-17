@@ -288,7 +288,7 @@ static ssize_t http_handle_scrape( const int64 sock, struct ot_workstruct *ws, c
 
   /* No info_hash found? Inform user */
   if( !numwant ) HTTPERROR_400_PARAM;
-  
+
   /* Limit number of hashes to process */
   if( numwant > OT_MAXMULTISCRAPE_COUNT )
     numwant = OT_MAXMULTISCRAPE_COUNT;
@@ -312,7 +312,7 @@ static ssize_t http_handle_announce( const int64 sock, struct ot_workstruct *ws,
   unsigned short    port = htons(6881);
   char             *write_ptr;
   ssize_t           len;
-  struct http_data *cookie = io_getcookie( sock );    
+  struct http_data *cookie = io_getcookie( sock );
 
   /* This is to hack around stupid clients that send "announce ?info_hash" */
   if( read_ptr[-1] != '?' ) {
@@ -412,6 +412,9 @@ static ssize_t http_handle_announce( const int64 sock, struct ot_workstruct *ws,
     }
   }
 
+  /* XXX DEBUG */
+  stats_issue_event( EVENT_ACCEPT, FLAG_TCP, (uintptr_t)ws->reply );
+
   /* Scanned whole query string */
   if( !hash )
     return ws->reply_size = sprintf( ws->reply, "d14:failure reason80:Your client forgot to send your torrent's info_hash. Please upgrade your client.e" );
@@ -488,14 +491,14 @@ ssize_t http_handle_request( const int64 sock, struct ot_workstruct *ws ) {
   */
   reply_off = SUCCESS_HTTP_SIZE_OFF - snprintf( ws->outbuf, 0, "%zd", ws->reply_size );
   ws->reply = ws->outbuf + reply_off;
-  
+
   /* 2. Now we sprintf our header so that sprintf writes its terminating '\0' exactly one byte before content starts. Complete
      packet size is increased by size of header plus one byte '\n', we  will copy over '\0' in next step */
   ws->reply_size += 1 + sprintf( ws->reply, "HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %zd\r\n\r", ws->reply_size );
 
   /* 3. Finally we join both blocks neatly */
   ws->outbuf[ SUCCESS_HTTP_HEADER_LENGTH - 1 ] = '\n';
-  
+
   http_senddata( sock, ws );
   return ws->reply_size;
 }

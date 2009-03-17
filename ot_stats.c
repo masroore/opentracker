@@ -1,6 +1,6 @@
 /* This software was written by Dirk Engling <erdgeist@erdgeist.org>
  It is considered beerware. Prost. Skol. Cheers or whatever.
- 
+
  $id$ */
 
 /* System */
@@ -84,10 +84,10 @@ static int stat_increase_network_count( stats_network_node **node, int depth, ui
       return -1;
     memset( *node, 0, sizeof( stats_network_node ) );
   }
-  
+
   if( depth < STATS_NETWORK_NODE_MAXDEPTH )
     return stat_increase_network_count( &(*node)->children[ foo ], depth+1, ip );
-  
+
   (*node)->counters[ foo ]++;
   return 0;
 }
@@ -122,9 +122,9 @@ static int stats_shift_down_network_count( stats_network_node **node, int depth,
 static void stats_get_highscore_networks( stats_network_node *node, int depth, ot_ip6 node_value, int *scores, ot_ip6 *networks, int network_count ) {
   uint8_t *_node_value = (uint8_t*)node_value;
   int i;
-  
+
   if( !node ) return;
-  
+
   if( depth < STATS_NETWORK_NODE_MAXDEPTH ) {
     for( i=0; i<STATS_NETWORK_NODE_COUNT; ++i )
       if( node->children[i] ) {
@@ -139,7 +139,7 @@ static void stats_get_highscore_networks( stats_network_node *node, int depth, o
       _node_value[depth] = i;
       while( (j<network_count) && (node->counters[i]>scores[j] ) ) ++j;
       --j;
-      
+
       memcpy( scores, scores + 1, j * sizeof( *scores ) );
       memcpy( networks, networks + 1, j * sizeof( *networks ) );
       scores[ j ] = node->counters[ i ];
@@ -158,7 +158,7 @@ static size_t stats_return_busy_networks( char * reply ) {
   memset( networks, 0, sizeof( *networks ) * 256 );
 
   stats_get_highscore_networks( stats_network_counters_root, 0, node_value, scores, networks, 256 );
-  
+
   for( i=255; i>=0; --i) {
     r += sprintf( r, "%08i: ", scores[i] );
     r += fmt_ip6c( r, networks[i] );
@@ -195,10 +195,10 @@ size_t stats_top10_txt( char * reply ) {
   ot_record top10s[10], top10c[10];
   char     *r  = reply, hex_out[42];
   int       idx, bucket;
-  
+
   byte_zero( top10s, sizeof( top10s ) );
   byte_zero( top10c, sizeof( top10c ) );
-  
+
   for( bucket=0; bucket<OT_BUCKET_COUNT; ++bucket ) {
     ot_vector *torrents_list = mutex_bucket_lock( bucket );
     for( j=0; j<torrents_list->size; ++j ) {
@@ -220,7 +220,7 @@ size_t stats_top10_txt( char * reply ) {
     if( !g_opentracker_running )
       return 0;
   }
-  
+
   r += sprintf( r, "Top 10 torrents by peers:\n" );
   for( idx=0; idx<10; ++idx )
     if( top10c[idx].torrent )
@@ -229,7 +229,7 @@ size_t stats_top10_txt( char * reply ) {
   for( idx=0; idx<10; ++idx )
     if( top10s[idx].torrent )
       r += sprintf( r, "\t%zd\t%s\n", top10s[idx].val, to_hex( hex_out, top10s[idx].torrent->hash) );
-  
+
   return r - reply;
 }
 
@@ -237,23 +237,23 @@ size_t stats_top10_txt( char * reply ) {
  malloc blocks
  */
 static size_t stats_slash24s_txt( char * reply, size_t amount, uint32_t thresh ) {
-  
+
 #define NUM_TOPBITS 12
 #define NUM_LOWBITS (24-NUM_TOPBITS)
 #define NUM_BUFS    (1<<NUM_TOPBITS)
 #define NUM_S24S    (1<<NUM_LOWBITS)
 #define MSK_S24S    (NUM_S24S-1)
-  
+
   uint32_t *counts[ NUM_BUFS ];
   uint32_t  slash24s[amount*2];  /* first dword amount, second dword subnet */
   size_t    i, j, k, l;
   char     *r  = reply;
-  
+
   byte_zero( counts, sizeof( counts ) );
   byte_zero( slash24s, amount * 2 * sizeof(uint32_t) );
-  
+
   r += sprintf( r, "Stats for all /24s with more than %u announced torrents:\n\n", thresh );
-  
+
 #if 0
   /* XXX: TOOD: Doesn't work yet with new peer storage model */
   for( bucket=0; bucket<OT_BUCKET_COUNT; ++bucket ) {
@@ -284,7 +284,7 @@ static size_t stats_slash24s_txt( char * reply, size_t amount, uint32_t thresh )
       goto bailout_cleanup;
   }
 #endif
-  
+
   k = l = 0; /* Debug: count allocated bufs */
   for( i=0; i < NUM_BUFS; ++i ) {
     uint32_t *count = counts[i];
@@ -308,20 +308,20 @@ static size_t stats_slash24s_txt( char * reply, size_t amount, uint32_t thresh )
     }
     free( count );
   }
-  
+
   r += sprintf( r, "Allocated bufs: %zd, used s24s: %zd\n", k, l );
-  
+
   for( i=0; i < amount; ++i )
     if( slash24s[ 2*i ] >= thresh ) {
       uint32_t ip = slash24s[ 2*i +1 ];
       r += sprintf( r, "% 10ld %d.%d.%d.0/24\n", (long)slash24s[ 2*i ], (int)(ip >> 16), (int)(255 & ( ip >> 8 )), (int)(ip & 255) );
     }
-  
+
   return r - reply;
-  
+
   for( i=0; i < NUM_BUFS; ++i )
     free( counts[i] );
-  
+
   return 0;
 }
 
@@ -395,9 +395,9 @@ static size_t stats_fullscrapes_mrtg( char * reply ) {
 
 static size_t stats_peers_mrtg( char * reply ) {
   torrent_stats stats = {0,0,0};
-  
+
   iterate_all_torrents( torrent_statter, (uintptr_t)&stats );
-  
+
   return sprintf( reply, "%llu\n%llu\nopentracker serving %llu torrents\nopentracker",
                  stats.peer_count,
                  stats.seed_count,
@@ -408,7 +408,7 @@ static size_t stats_peers_mrtg( char * reply ) {
 static size_t stats_torrents_mrtg( char * reply )
 {
   size_t torrent_count = mutex_get_torrent_count();
-  
+
   return sprintf( reply, "%zd\n%zd\nopentracker serving %zd torrents\nopentracker",
                  torrent_count,
                  (size_t)0,
@@ -426,7 +426,7 @@ static size_t stats_httperrors_txt ( char * reply ) {
 static size_t stats_return_renew_bucket( char * reply ) {
   char *r = reply;
   int i;
-  
+
   for( i=0; i<OT_PEER_TIMEOUT; ++i )
     r+=sprintf(r,"%02i %llu\n", i, ot_renewed[i] );
   return r - reply;
@@ -526,12 +526,12 @@ size_t return_stats_for_tracker( char *reply, int mode, int format ) {
 
 static void stats_make( int *iovec_entries, struct iovec **iovector, ot_tasktype mode ) {
   char *r;
-  
+
   *iovec_entries = 0;
   *iovector      = NULL;
   if( !( r = iovec_increase( iovec_entries, iovector, OT_STATS_TMPSIZE ) ) )
     return;
-  
+
   switch( mode & TASK_TASK_MASK ) {
     case TASK_STATS_TORRENTS:    r += stats_torrents_mrtg( r );             break;
     case TASK_STATS_PEERS:       r += stats_peers_mrtg( r );                break;
@@ -607,9 +607,9 @@ void stats_issue_event( ot_status_event event, PROTO_FLAG proto, uintptr_t event
 static void * stats_worker( void * args ) {
   int iovec_entries;
   struct iovec *iovector;
-  
+
   args = args;
-  
+
   while( 1 ) {
     ot_tasktype tasktype = TASK_STATS;
     ot_taskid   taskid   = mutex_workqueue_poptask( &tasktype );
