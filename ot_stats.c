@@ -452,9 +452,9 @@ static size_t stats_return_everything( char * reply ) {
 
   iterate_all_torrents( torrent_statter, (uintptr_t)&stats );
 
-  r += sprintf( r, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" );
-  r += sprintf( r, "<version>\n" ); r += stats_return_tracker_version( r );  r += sprintf( r, "</version>\n" );
+  r += sprintf( r, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" );
   r += sprintf( r, "<stats>\n" );
+  r += sprintf( r, "  <version>\n" ); r += stats_return_tracker_version( r );  r += sprintf( r, "  </version>\n" );
   r += sprintf( r, "  <uptime>%llu</uptime>\n", (unsigned long long)(time( NULL ) - ot_start_time) );
   r += sprintf( r, "  <torrents>\n" );
   r += sprintf( r, "    <count_mutex>%zd</count_mutex>\n", mutex_get_torrent_count() );
@@ -464,7 +464,7 @@ static size_t stats_return_everything( char * reply ) {
   r += sprintf( r, "  <seeds>\n    <count>%llu</count>\n  </seeds>\n", stats.seed_count );
   r += sprintf( r, "  <connections>\n" );
   r += sprintf( r, "    <tcp>\n      <accept>%llu</accept>\n      <announce>%llu</announce>\n      <scrape>%llu</scrape>\n    </tcp>\n", ot_overall_tcp_connections, ot_overall_tcp_successfulannounces, ot_overall_udp_successfulscrapes );
-  r += sprintf( r, "    <udp>\n      <overall>%llu</overall>\n      <connect>%llu</connect>\n      <announce>%llu</announce>\n      <scrape>%llu</scrape>\n    </tcp>\n", ot_overall_udp_connections, ot_overall_udp_connects, ot_overall_udp_successfulannounces, ot_overall_udp_successfulscrapes );
+  r += sprintf( r, "    <udp>\n      <overall>%llu</overall>\n      <connect>%llu</connect>\n      <announce>%llu</announce>\n      <scrape>%llu</scrape>\n    </udp>\n", ot_overall_udp_connections, ot_overall_udp_connects, ot_overall_udp_successfulannounces, ot_overall_udp_successfulscrapes );
   r += sprintf( r, "    <livesync>\n      <count>%llu</count>\n    </livesync>\n", ot_overall_sync_count );
   r += sprintf( r, "  </connections>\n" );
   r += sprintf( r, "  <debug>\n" );
