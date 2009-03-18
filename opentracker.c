@@ -478,8 +478,6 @@ int main( int argc, char **argv ) {
   memset( serverip, 0, sizeof(ot_ip6) );
 #ifndef WANT_V6
   serverip[10]=serverip[11]=0xff;
-#endif
-#ifdef WANT_BROKEN_OPENBSD_V6_API
   noipv6=1;
 #endif
 
