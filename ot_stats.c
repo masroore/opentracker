@@ -44,6 +44,7 @@ static unsigned long long ot_overall_tcp_successfulscrapes = 0;
 static unsigned long long ot_overall_udp_successfulscrapes = 0;
 static unsigned long long ot_overall_tcp_connects = 0;
 static unsigned long long ot_overall_udp_connects = 0;
+static unsigned long long ot_overall_completed = 0;
 static unsigned long long ot_full_scrape_count = 0;
 static unsigned long long ot_full_scrape_request_count = 0;
 static unsigned long long ot_full_scrape_size = 0;
@@ -445,6 +446,19 @@ static size_t stats_return_sync_mrtg( char * reply ) {
                  );
 }
 
+static size_t stats_return_completed_mrtg( char * reply ) {
+  ot_time t = time( NULL ) - ot_start_time;
+
+  return sprintf( reply,
+                 "%llu\n%llu\n%i seconds (%i hours)\nopentracker, %lu completed/h.",
+                 ot_overall_completed,
+                 0LL,
+                 (int)t,
+                 (int)(t / 3600),
+                 events_per_time( ot_overall_completed, t / 3600 )
+                 );
+}
+
 static size_t stats_return_everything( char * reply ) {
   torrent_stats stats = {0,0,0};
   int i;
@@ -462,6 +476,7 @@ static size_t stats_return_everything( char * reply ) {
   r += sprintf( r, "  </torrents>\n" );
   r += sprintf( r, "  <peers>\n    <count>%llu</count>\n  </peers>\n", stats.peer_count );
   r += sprintf( r, "  <seeds>\n    <count>%llu</count>\n  </seeds>\n", stats.seed_count );
+  r += sprintf( r, "  <completed>\n    <count>%llu</count>\n  </completed", ot_overall_completed );
   r += sprintf( r, "  <connections>\n" );
   r += sprintf( r, "    <tcp>\n      <accept>%llu</accept>\n      <announce>%llu</announce>\n      <scrape>%llu</scrape>\n    </tcp>\n", ot_overall_tcp_connections, ot_overall_tcp_successfulannounces, ot_overall_udp_successfulscrapes );
   r += sprintf( r, "    <udp>\n      <overall>%llu</overall>\n      <connect>%llu</connect>\n      <announce>%llu</announce>\n      <scrape>%llu</scrape>\n    </udp>\n", ot_overall_udp_connections, ot_overall_udp_connects, ot_overall_udp_successfulannounces, ot_overall_udp_successfulscrapes );
@@ -507,6 +522,8 @@ size_t return_stats_for_tracker( char *reply, int mode, int format ) {
       return stats_tcpconnections_mrtg( reply );
     case TASK_STATS_FULLSCRAPE:
       return stats_fullscrapes_mrtg( reply );
+    case TASK_STATS_COMPLETED:
+      return stats_return_completed_mrtg( reply );
     case TASK_STATS_HTTPERRORS:
       return stats_httperrors_txt( reply );
     case TASK_STATS_VERSION:
@@ -558,6 +575,9 @@ void stats_issue_event( ot_status_event event, PROTO_FLAG proto, uintptr_t event
       break;
     case EVENT_CONNECT:
       if( proto == FLAG_TCP ) ot_overall_tcp_connects++; else ot_overall_udp_connects++;
+      break;
+    case EVENT_COMPLETED:
+      ot_overall_completed++;
       break;
     case EVENT_SCRAPE:
       if( proto == FLAG_TCP ) ot_overall_tcp_successfulscrapes++; else ot_overall_udp_successfulscrapes++;

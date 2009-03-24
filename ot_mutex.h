@@ -31,6 +31,7 @@ typedef enum {
   TASK_STATS_BUSY_NETWORKS         = 0x0009,
   TASK_STATS_RENEW                 = 0x000a,
   TASK_STATS_SYNCS                 = 0x000b,
+  TASK_STATS_COMPLETED             = 0x000c,
 
   TASK_STATS                       = 0x0100, /* Mask */
   TASK_STATS_TORRENTS              = 0x0101,

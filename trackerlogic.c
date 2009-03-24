@@ -128,8 +128,10 @@ size_t add_peer_to_torrent_and_return_peers( ot_hash hash, ot_peer *peer, PROTO_
 #endif
 
     torrent->peer_list->peer_count++;
-    if( OT_PEERFLAG(peer) & PEER_FLAG_COMPLETED )
+    if( OT_PEERFLAG(peer) & PEER_FLAG_COMPLETED ) {
       torrent->peer_list->down_count++;
+      stats_issue_event( EVENT_COMPLETED, 0, 0 );
+    }
     if( OT_PEERFLAG(peer) & PEER_FLAG_SEEDING )
       torrent->peer_list->seed_count++;
 
@@ -150,8 +152,10 @@ size_t add_peer_to_torrent_and_return_peers( ot_hash hash, ot_peer *peer, PROTO_
       torrent->peer_list->seed_count--;
     if( !(OT_PEERFLAG(peer_dest) & PEER_FLAG_SEEDING )   &&  (OT_PEERFLAG(peer) & PEER_FLAG_SEEDING ) )
       torrent->peer_list->seed_count++;
-    if( !(OT_PEERFLAG(peer_dest) & PEER_FLAG_COMPLETED ) &&  (OT_PEERFLAG(peer) & PEER_FLAG_COMPLETED ) )
+    if( !(OT_PEERFLAG(peer_dest) & PEER_FLAG_COMPLETED ) &&  (OT_PEERFLAG(peer) & PEER_FLAG_COMPLETED ) ) {
       torrent->peer_list->down_count++;
+      stats_issue_event( EVENT_COMPLETED, 0, 0 );
+    }
     if(   OT_PEERFLAG(peer_dest) & PEER_FLAG_COMPLETED )
       OT_PEERFLAG( peer ) |= PEER_FLAG_COMPLETED;
   }
