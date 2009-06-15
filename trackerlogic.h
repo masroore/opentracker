@@ -132,8 +132,8 @@ struct ot_workstruct {
 #define WANT_SYNC_PARAM( param )
 #endif
 
-#if defined WANT_V6 && defined WANT_LOG_NETWORKS
-#undef WANT_LOG_NETWORKS
+#ifdef WANT_LOG_NETWORKS
+#error Live logging networks disabled at the moment.
 #endif
 
 void trackerlogic_init( );
