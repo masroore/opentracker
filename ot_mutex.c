@@ -123,7 +123,7 @@ struct ot_task {
 };
 
 static ot_taskid next_free_taskid = 1;
-static struct ot_task *tasklist = NULL;
+static struct ot_task *tasklist;
 static pthread_mutex_t tasklist_mutex;
 static pthread_cond_t tasklist_being_filled;
 

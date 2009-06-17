@@ -22,7 +22,7 @@
 
 /* GLOBAL VARIABLES */
 #ifdef WANT_ACCESSLIST
-char *g_accesslist_filename = NULL;
+char *g_accesslist_filename;
 static ot_vector accesslist;
 
 static void accesslist_reset( void ) {

@@ -82,7 +82,7 @@ union stats_network_node {
 };
 
 #ifdef WANT_LOG_NETWORKS
-static stats_network_node *stats_network_counters_root = NULL;
+static stats_network_node *stats_network_counters_root;
 #endif
 
 static int stat_increase_network_count( stats_network_node **node, int depth, uintptr_t ip ) {
