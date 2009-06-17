@@ -41,6 +41,11 @@
 #
 # access.stats 192.168.0.23
 #
+#      There is another way of hiding your stats. You can obfuscate the path
+#      to them. Normally it is located at /stats but you can configure it to
+#      appear anywhere on your tracker.
+#
+# access.stats_path stats
 
 # III) Live sync uses udp multicast packets to keep a cluster of opentrackers
 #      synchronized. This option tells opentracker which port to listen for

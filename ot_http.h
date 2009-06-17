@@ -27,4 +27,7 @@ ssize_t http_handle_request( const int64 s, struct ot_workstruct *ws );
 ssize_t http_sendiovecdata( const int64 s, struct ot_workstruct *ws, int iovec_entries, struct iovec *iovector );
 ssize_t http_issue_error( const int64 s, struct ot_workstruct *ws, int code );
 
+extern char   *g_stats_path;
+extern ssize_t g_stats_path_len;
+
 #endif

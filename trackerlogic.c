@@ -15,12 +15,15 @@
 /* Libowfat */
 #include "byte.h"
 #include "io.h"
+#include "iob.h"
+#include "array.h"
 
 /* Opentracker */
 #include "trackerlogic.h"
 #include "ot_mutex.h"
 #include "ot_stats.h"
 #include "ot_clean.h"
+#include "ot_http.h"
 #include "ot_accesslist.h"
 #include "ot_fullscrape.h"
 #include "ot_livesync.h"
@@ -394,6 +397,10 @@ void trackerlogic_init( ) {
   srandom( time(NULL) );
   g_tracker_id = random();
 
+  if( !g_stats_path )
+    g_stats_path = "stats";
+  g_stats_path_len = strlen( g_stats_path );
+  
   /* Initialise background worker threads */
   mutex_init( );
   clean_init( );

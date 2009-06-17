@@ -30,6 +30,9 @@
 #define OT_MAXMULTISCRAPE_COUNT 64
 extern char *g_redirecturl;
 
+char   *g_stats_path;
+ssize_t g_stats_path_len;
+
 enum {
   SUCCESS_HTTP_HEADER_LENGTH = 80,
   SUCCESS_HTTP_HEADER_LENGTH_CONTENT_ENCODING = 32,
@@ -472,7 +475,7 @@ ssize_t http_handle_request( const int64 sock, struct ot_workstruct *ws ) {
   else if( !memcmp( write_ptr, "sc", 2 ) )
     http_handle_scrape( sock, ws, read_ptr );
   /* All the rest is matched the standard way */
-  else if( !memcmp( write_ptr, "stats", 5) )
+  else if( len == g_stats_path_len && !memcmp( write_ptr, g_stats_path, len ) )
     http_handle_stats( sock, ws, read_ptr );
   else
     HTTPERROR_404;
