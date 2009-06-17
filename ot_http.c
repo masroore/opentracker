@@ -165,7 +165,7 @@ static const ot_keywords keywords_mode[] =
     { "busy", TASK_STATS_BUSY_NETWORKS }, { "torr", TASK_STATS_TORRENTS }, { "fscr", TASK_STATS_FULLSCRAPE },
     { "s24s", TASK_STATS_SLASH24S }, { "tpbs", TASK_STATS_TPB }, { "herr", TASK_STATS_HTTPERRORS }, { "completed", TASK_STATS_COMPLETED },
     { "top10", TASK_STATS_TOP10 }, { "renew", TASK_STATS_RENEW }, { "syncs", TASK_STATS_SYNCS }, { "version", TASK_STATS_VERSION },
-    { "everything", TASK_STATS_EVERYTHING }, { "statedump", TASK_FULLSCRAPE_TPB_URLENCODED }, { NULL, -3 } };
+    { "everything", TASK_STATS_EVERYTHING }, { "statedump", TASK_FULLSCRAPE_TRACKERSTATE }, { NULL, -3 } };
 static const ot_keywords keywords_format[] =
   { { "bin", TASK_FULLSCRAPE_TPB_BINARY }, { "ben", TASK_FULLSCRAPE }, { "url", TASK_FULLSCRAPE_TPB_URLENCODED },
     { "txt", TASK_FULLSCRAPE_TPB_ASCII }, { NULL, -3 } };
