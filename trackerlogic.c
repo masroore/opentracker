@@ -256,7 +256,7 @@ size_t return_peers_for_torrent( ot_torrent *torrent, size_t amount, char *reply
     r += sprintf( r, "d8:completei%zde10:downloadedi%zde10:incompletei%zde8:intervali%ie12:min intervali%ie" PEERS_BENCODED "%zd:", peer_list->seed_count, peer_list->down_count, peer_list->peer_count-peer_list->seed_count, erval, erval/2, OT_PEER_COMPARE_SIZE*amount );
   } else {
     *(uint32_t*)(r+0) = htonl( OT_CLIENT_REQUEST_INTERVAL_RANDOM );
-    *(uint32_t*)(r+4) = htonl( peer_list->peer_count );
+    *(uint32_t*)(r+4) = htonl( peer_list->peer_count - peer_list->seed_count );
     *(uint32_t*)(r+8) = htonl( peer_list->seed_count );
     r += 12;
   }
