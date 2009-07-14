@@ -312,7 +312,7 @@ static ssize_t http_handle_announce( const int64 sock, struct ot_workstruct *ws,
   int               numwant, tmp, scanon;
   ot_peer           peer;
   ot_hash          *hash = NULL;
-  unsigned short    port = htons(6881);
+  unsigned short    port = 0;
   char             *write_ptr;
   ssize_t           len;
   struct http_data *cookie = io_getcookie( sock );
