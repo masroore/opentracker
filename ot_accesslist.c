@@ -14,6 +14,7 @@
 #include "byte.h"
 #include "scan.h"
 #include "ip6.h"
+#include "mmap.h"
 
 /* Opentracker */
 #include "trackerlogic.h"
@@ -48,17 +49,15 @@ static int accesslist_addentry( ot_vector *al, ot_hash infohash ) {
 
 /* Read initial access list */
 static void accesslist_readfile( int sig ) {
-  FILE *    accesslist_filehandle;
   ot_hash   infohash;
   ot_vector accesslist_tmp;
   void     *olddata;
-  char      inbuf[512];
+  char     *map, *map_end, *read_offs;
+  size_t    maplen;
 
   if( sig != SIGHUP ) return;
-  
-  accesslist_filehandle = fopen( g_accesslist_filename, "r" );
 
-  if( accesslist_filehandle == NULL ) {
+  if( ( map = mmap_read( g_accesslist_filename, &maplen ) ) == NULL ) {
     char *wd = getcwd( NULL, 0 );
     fprintf( stderr, "Warning: Can't open accesslist file: %s (but will try to create it later, if necessary and possible).\nPWD: %s\n", g_accesslist_filename, wd );
     free( wd );
@@ -68,26 +67,34 @@ static void accesslist_readfile( int sig ) {
   /* Initialise an empty accesslist vector */
   memset( &accesslist_tmp, 0, sizeof(accesslist_tmp));
 
+  /* No use */
+  map_end = map + maplen - 41;
+  read_offs = map;
+
   /* We do ignore anything that is not of the form "^[:xdigit:]{40}[^:xdigit:].*" */
-  while( fgets( inbuf, sizeof(inbuf), accesslist_filehandle ) ) {
+  while( read_offs < map_end ) {
     int i;
     for( i=0; i<(int)sizeof(ot_hash); ++i ) {
-      int eger = 16 * scan_fromhex( inbuf[ 2*i ] ) + scan_fromhex( inbuf[ 1 + 2*i ] );
+      int eger = 16 * scan_fromhex( read_offs[ 2*i ] ) + scan_fromhex( read_offs[ 1 + 2*i ] );
       if( eger < 0 )
         continue;
       infohash[i] = eger;
     }
-    if( scan_fromhex( inbuf[ 40 ] ) >= 0 )
-      continue;
+
+    read_offs += 40;
 
     /* Append accesslist to accesslist vector */
-    accesslist_addentry( &accesslist_tmp, infohash );
+    if( scan_fromhex( *read_offs ) < 0 )
+      accesslist_addentry( &accesslist_tmp, infohash );
+
+    /* Find start of next line */
+    while( read_offs < map_end && *(read_offs++) != '\n' );
   }
 #ifdef _DEBUG
   fprintf( stderr, "Added %zd info_hashes to accesslist\n", accesslist_tmp.size );
 #endif
 
-  fclose( accesslist_filehandle );
+  mmap_unmap( map, maplen);
 
   /* Now exchange the accesslist vector in the least race condition prone way */
   accesslist.size = 0;
