@@ -34,9 +34,9 @@ void accesslist_deinit( void ) {
   accesslist_reset( );
 }
 
-static int accesslist_addentry( ot_hash infohash ) {
+static int accesslist_addentry( ot_vector *al, ot_hash infohash ) {
   int eger;
-  void *insert = vector_find_or_insert( &accesslist, infohash, OT_HASH_COMPARE_SIZE, OT_HASH_COMPARE_SIZE, &eger );
+  void *insert = vector_find_or_insert( al, infohash, OT_HASH_COMPARE_SIZE, OT_HASH_COMPARE_SIZE, &eger );
 
   if( !insert )
     return -1;
@@ -48,21 +48,23 @@ static int accesslist_addentry( ot_hash infohash ) {
 
 /* Read initial access list */
 static void accesslist_readfile( int sig ) {
-  FILE *  accesslist_filehandle;
-  ot_hash infohash;
-  char    inbuf[512];
+  FILE *    accesslist_filehandle;
+  ot_hash   infohash;
+  ot_vector accesslist_tmp;
+  void     *olddata = accesslist.data;
+  char      inbuf[512];
 
   if( sig != SIGHUP ) return;
   
   accesslist_filehandle = fopen( g_accesslist_filename, "r" );
 
-  /* Free accesslist vector in trackerlogic.c*/
-  accesslist_reset();
-
   if( accesslist_filehandle == NULL ) {
     fprintf( stderr, "Warning: Can't open accesslist file: %s (but will try to create it later, if necessary and possible).", g_accesslist_filename );
     return;
   }
+
+  /* Initialise an empty accesslist vector */
+  memset( &accesslist_tmp, 0, sizeof(accesslist_tmp));
 
   /* We do ignore anything that is not of the form "^[:xdigit:]{40}[^:xdigit:].*" */
   while( fgets( inbuf, sizeof(inbuf), accesslist_filehandle ) ) {
@@ -77,10 +79,18 @@ static void accesslist_readfile( int sig ) {
       continue;
 
     /* Append accesslist to accesslist vector */
-    accesslist_addentry( infohash );
+    accesslist_addentry( &accesslist_tmp, infohash );
   }
+#ifdef _DEBUG
+  fprintf( stderr, "Added %zd info_hashes to accesslist\n", accesslist_tmp.size );
+#endif
 
   fclose( accesslist_filehandle );
+
+  /* Now exchange the accesslist vector in the least race condition prone way */
+  accesslist.size = 0;
+  memcpy( &accesslist, &accesslist_tmp, sizeof( &accesslist_tmp ));
+  free( olddata );  
 }
 
 int accesslist_hashisvalid( ot_hash hash ) {
