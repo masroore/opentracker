@@ -183,8 +183,9 @@ size_t add_peer_to_torrent_and_return_peers( ot_hash hash, ot_peer *peer, PROTO_
 
 static size_t return_peers_all( ot_peerlist *peer_list, char *reply ) {
   unsigned int bucket, num_buckets = 1;
-  ot_vector * bucket_list = &peer_list->peers;
-  char      * r = reply;
+  ot_vector  * bucket_list = &peer_list->peers;
+  size_t       result = OT_PEER_COMPARE_SIZE * peer_list->peer_count;
+  char       * r_end = reply + result;
 
   if( OT_PEERLIST_HASBUCKETS(peer_list) ) {
     num_buckets = bucket_list->size;
@@ -195,12 +196,16 @@ static size_t return_peers_all( ot_peerlist *peer_list, char *reply ) {
     ot_peer * peers = (ot_peer*)bucket_list[bucket].data;
     size_t    peer_count = bucket_list[bucket].size;
     while( peer_count-- ) {
-      memcpy(r,peers++,OT_PEER_COMPARE_SIZE);
-      r+=OT_PEER_COMPARE_SIZE;
+      if( OT_PEERFLAG(peers) & PEER_FLAG_SEEDING ) {
+        r_end-=OT_PEER_COMPARE_SIZE;
+        memcpy(r_end,peers++,OT_PEER_COMPARE_SIZE);      
+      } else {
+        memcpy(reply,peers++,OT_PEER_COMPARE_SIZE);
+        reply+=OT_PEER_COMPARE_SIZE;
+      }
     }
   }
-
-  return r - reply;
+  return result;
 }
 
 static size_t return_peers_selection( ot_peerlist *peer_list, size_t amount, char *reply ) {
@@ -209,8 +214,9 @@ static size_t return_peers_selection( ot_peerlist *peer_list, size_t amount, cha
   unsigned int shifted_pc = peer_list->peer_count;
   unsigned int shifted_step = 0;
   unsigned int shift = 0;
-  char       * r = reply;
-
+  size_t       result = OT_PEER_COMPARE_SIZE * amount;
+  char       * r_end = reply + result;
+  
   if( OT_PEERLIST_HASBUCKETS(peer_list) ) {
     num_buckets = bucket_list->size;
     bucket_list = (ot_vector *)bucket_list->data;
@@ -239,10 +245,15 @@ static size_t return_peers_selection( ot_peerlist *peer_list, size_t amount, cha
       bucket_index = ( bucket_index + 1 ) % num_buckets;
     }
     peer = ((ot_peer*)bucket_list[bucket_index].data) + bucket_offset;
-    memcpy(r,peer,OT_PEER_COMPARE_SIZE);
-    r+=OT_PEER_COMPARE_SIZE;
+    if( OT_PEERFLAG(peer) & PEER_FLAG_SEEDING ) {
+      r_end-=OT_PEER_COMPARE_SIZE;
+      memcpy(r_end,peer,OT_PEER_COMPARE_SIZE);      
+    } else {
+      memcpy(reply,peer,OT_PEER_COMPARE_SIZE);
+      reply+=OT_PEER_COMPARE_SIZE;
+    }
   }
-  return r - reply;
+  return result;
 }
 
 /* Compiles a list of random peers for a torrent
