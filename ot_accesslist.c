@@ -51,7 +51,7 @@ static void accesslist_readfile( int sig ) {
   FILE *    accesslist_filehandle;
   ot_hash   infohash;
   ot_vector accesslist_tmp;
-  void     *olddata = accesslist.data;
+  void     *olddata;
   char      inbuf[512];
 
   if( sig != SIGHUP ) return;
@@ -89,6 +89,7 @@ static void accesslist_readfile( int sig ) {
 
   /* Now exchange the accesslist vector in the least race condition prone way */
   accesslist.size = 0;
+  olddata = accesslist.data;
   memcpy( &accesslist, &accesslist_tmp, sizeof( &accesslist_tmp ));
   free( olddata );  
 }
