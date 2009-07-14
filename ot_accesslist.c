@@ -59,7 +59,9 @@ static void accesslist_readfile( int sig ) {
   accesslist_filehandle = fopen( g_accesslist_filename, "r" );
 
   if( accesslist_filehandle == NULL ) {
-    fprintf( stderr, "Warning: Can't open accesslist file: %s (but will try to create it later, if necessary and possible).", g_accesslist_filename );
+    char *wd = getcwd( NULL, 0 );
+    fprintf( stderr, "Warning: Can't open accesslist file: %s (but will try to create it later, if necessary and possible).\nPWD: %s\n", g_accesslist_filename, wd );
+    free( wd );
     return;
   }
 
