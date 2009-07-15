@@ -68,7 +68,7 @@ static void accesslist_readfile( int sig ) {
   memset( &accesslist_tmp, 0, sizeof(accesslist_tmp));
 
   /* No use */
-  map_end = map + maplen - 41;
+  map_end = map + maplen - 40;
   read_offs = map;
 
   /* We do ignore anything that is not of the form "^[:xdigit:]{40}[^:xdigit:].*" */
