@@ -13,6 +13,7 @@
 #include <string.h>
 #include <pthread.h>
 #include <unistd.h>
+#include <inttypes.h>
 
 /* Libowfat */
 #include "byte.h"
@@ -485,6 +486,7 @@ static size_t stats_return_everything( char * reply ) {
 
   r += sprintf( r, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" );
   r += sprintf( r, "<stats>\n" );
+  r += sprintf( r, "  <tracker_id>%" PRIu32 "</tracker_id>\n", g_tracker_id );
   r += sprintf( r, "  <version>\n" ); r += stats_return_tracker_version( r );  r += sprintf( r, "  </version>\n" );
   r += sprintf( r, "  <uptime>%llu</uptime>\n", (unsigned long long)(time( NULL ) - ot_start_time) );
   r += sprintf( r, "  <torrents>\n" );
