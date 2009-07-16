@@ -182,7 +182,6 @@ int usage( char *self ) {
   return 0;
 }
 
-static ot_vector all_torrents[1024];
 static uint32_t peer_counts[1024];
 #ifdef WANT_SCROOOOOOOLL
 static char*to_hex(char*d,uint8_t*s){char*m="0123456789ABCDEF";char *t=d;char*e=d+40;while(d<e){*d++=m[*s>>4];*d++=m[*s++&15];}*d=0;return t;}
