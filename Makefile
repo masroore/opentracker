@@ -60,6 +60,8 @@ $(BINARY): $(OBJECTS) $(HEADERS)
 	strip $@
 $(BINARY).debug: $(OBJECTS_debug) $(HEADERS)
 	$(CC) -o $@ $(OBJECTS_debug) $(LDFLAGS)
+proxy: proxy.o ot_vector.o $(HEADERS)
+	$(CC) -o $@ proxy.o ot_vector.o $(LDFLAGS)
 
 .c.debug.o : $(HEADERS)
 	$(CC) -c -o $@ $(CFLAGS_debug) $(<:.debug.o=.c)
