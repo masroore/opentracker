@@ -23,37 +23,25 @@
 
 /* GLOBAL VARIABLES */
 #ifdef WANT_ACCESSLIST
-char *g_accesslist_filename;
-static ot_vector accesslist;
+       char    *g_accesslist_filename;
+static ot_hash *g_accesslist;
+static size_t   g_accesslist_size;
 
-static void accesslist_reset( void ) {
-  free( accesslist.data );
-  byte_zero( &accesslist, sizeof( accesslist ) );
+static int vector_compare_hash(const void *hash1, const void *hash2 ) {
+  return memcmp( hash1, hash2, OT_HASH_COMPARE_SIZE );
 }
 
 void accesslist_deinit( void ) {
-  accesslist_reset( );
-}
-
-static int accesslist_addentry( ot_vector *al, ot_hash infohash ) {
-  int eger;
-  void *insert = vector_find_or_insert( al, infohash, OT_HASH_COMPARE_SIZE, OT_HASH_COMPARE_SIZE, &eger );
-
-  if( !insert )
-    return -1;
-
-  memcpy( insert, infohash, OT_HASH_COMPARE_SIZE );
-
-  return 0;
+  free( g_accesslist );
+  g_accesslist = 0;
+  g_accesslist_size = 0;
 }
 
 /* Read initial access list */
 static void accesslist_readfile( int sig ) {
-  ot_hash   infohash;
-  ot_vector accesslist_tmp;
-  void     *olddata;
-  char     *map, *map_end, *read_offs;
-  size_t    maplen;
+  ot_hash *info_hash, *accesslist_new = NULL, *accesslist_old;
+  char    *map, *map_end, *read_offs;
+  size_t   maplen;
 
   if( sig != SIGHUP ) return;
 
@@ -64,10 +52,15 @@ static void accesslist_readfile( int sig ) {
     return;
   }
 
-  /* Initialise an empty accesslist vector */
-  memset( &accesslist_tmp, 0, sizeof(accesslist_tmp));
-
-  /* No use */
+  /* You need at least 41 bytes to pass an info_hash, make enough room
+     for the maximum amount of them */
+  info_hash = accesslist_new = malloc( ( maplen / 41 ) * 20 );
+  if( !accesslist_new ) {
+    fprintf( stderr, "Warning: Not enough memory to allocate %zd bytes for accesslist buffer. May succeed later.\n", ( maplen / 41 ) * 20 );
+    return;
+  }
+  
+  /* No use to scan if there's not enough room for another full info_hash */
   map_end = map + maplen - 40;
   read_offs = map;
 
@@ -78,45 +71,45 @@ static void accesslist_readfile( int sig ) {
       int eger = 16 * scan_fromhex( read_offs[ 2*i ] ) + scan_fromhex( read_offs[ 1 + 2*i ] );
       if( eger < 0 )
         continue;
-      infohash[i] = eger;
+      (*info_hash)[i] = eger;
     }
 
     read_offs += 40;
 
     /* Append accesslist to accesslist vector */
     if( scan_fromhex( *read_offs ) < 0 )
-      accesslist_addentry( &accesslist_tmp, infohash );
+      ++info_hash;
 
     /* Find start of next line */
     while( read_offs < map_end && *(read_offs++) != '\n' );
   }
-#ifdef _DEBUG
-  fprintf( stderr, "Added %zd info_hashes to accesslist\n", accesslist_tmp.size );
-#endif
+//#ifdef _DEBUG
+  fprintf( stderr, "Added %d info_hashes to accesslist\n", info_hash - accesslist_new );
+//#endif
 
   mmap_unmap( map, maplen);
 
+  qsort( accesslist_new, info_hash - accesslist_new, sizeof( *info_hash ), vector_compare_hash );
+
   /* Now exchange the accesslist vector in the least race condition prone way */
-  accesslist.size = 0;
-  olddata = accesslist.data;
-  memcpy( &accesslist, &accesslist_tmp, sizeof( &accesslist_tmp ));
-  free( olddata );  
+  g_accesslist_size = 0;
+  accesslist_old    = g_accesslist;
+  g_accesslist      = accesslist_new;
+  g_accesslist_size = info_hash - accesslist_new;
+  free( accesslist_old );  
 }
 
 int accesslist_hashisvalid( ot_hash hash ) {
-  int exactmatch;
-  binary_search( hash, accesslist.data, accesslist.size, OT_HASH_COMPARE_SIZE, OT_HASH_COMPARE_SIZE, &exactmatch );
+  void *exactmatch = bsearch( hash, g_accesslist, g_accesslist_size, OT_HASH_COMPARE_SIZE, vector_compare_hash );
 
 #ifdef WANT_ACCESSLIST_BLACK
-  exactmatch = !exactmatch;
+  return exactmatch == NULL;
+#else
+  return exactmatch != NULL;
 #endif
-
-  return exactmatch;
 }
 
 void accesslist_init( ) {
-  byte_zero( &accesslist, sizeof( accesslist ) );
-
   /* Passing "0" since read_blacklist_file also is SIGHUP handler */
   if( g_accesslist_filename ) {
     accesslist_readfile( SIGHUP );
