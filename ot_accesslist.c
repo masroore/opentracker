@@ -83,9 +83,9 @@ static void accesslist_readfile( int sig ) {
     /* Find start of next line */
     while( read_offs < map_end && *(read_offs++) != '\n' );
   }
-//#ifdef _DEBUG
+#ifdef _DEBUG
   fprintf( stderr, "Added %d info_hashes to accesslist\n", info_hash - accesslist_new );
-//#endif
+#endif
 
   mmap_unmap( map, maplen);
 
