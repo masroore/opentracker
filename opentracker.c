@@ -65,6 +65,32 @@ static void signal_handler( int s ) {
   }
 }
 
+static void defaul_signal_handlers( void ) {
+  sigset_t signal_mask;
+  sigemptyset(&signal_mask);
+  sigaddset (&signal_mask, SIGPIPE);
+  sigaddset (&signal_mask, SIGHUP);
+  sigaddset (&signal_mask, SIGINT);
+  sigaddset (&signal_mask, SIGALRM);
+  pthread_sigmask (SIG_BLOCK, &signal_mask, NULL);  
+}
+
+static void install_signal_handlers( void ) {
+  struct   sigaction sa;
+  sigset_t signal_mask;
+  sigemptyset(&signal_mask);
+
+  sa.sa_handler = signal_handler;
+  sigemptyset(&sa.sa_mask);
+  sa.sa_flags = SA_RESTART;
+  if ((sigaction(SIGINT, &sa, NULL) == -1) || (sigaction(SIGALRM, &sa, NULL) == -1) )
+    panic( "install_signal_handlers" );
+
+  sigaddset (&signal_mask, SIGINT);
+  sigaddset (&signal_mask, SIGALRM);
+  pthread_sigmask (SIG_UNBLOCK, &signal_mask, NULL);  
+}
+
 static void usage( char *name ) {
   fprintf( stderr, "Usage: %s [-i ip] [-p port] [-P port] [-r redirect] [-d dir] [-A ip] [-f config] [-s livesyncport]"
 #ifdef WANT_ACCESSLIST_BLACK
@@ -254,12 +280,14 @@ static int64_t ot_try_bind( ot_ip6 ip, uint16_t port, PROTO_FLAG proto ) {
 #endif
 
 #ifdef _DEBUG
+  {
   char *protos[] = {"TCP","UDP","UDP mcast"};
   char _debug[512];
   int off = snprintf( _debug, sizeof(_debug), "Binding socket type %s to address [", protos[proto] );
   off += fmt_ip6c( _debug+off, ip);
   snprintf( _debug + off, sizeof(_debug)-off, "]:%d...", port);
   fputs( _debug, stderr );
+  }
 #endif
 
   if( socket_bind6_reuse( sock, ip, port, 0 ) == -1 )
@@ -483,7 +511,7 @@ int main( int argc, char **argv ) {
   noipv6=1;
 #endif
 
-while( scanon ) {
+  while( scanon ) {
     switch( getopt( argc, argv, ":i:p:A:P:d:r:s:f:l:v"
 #ifdef WANT_ACCESSLIST_BLACK
 "b:"
@@ -540,10 +568,6 @@ while( scanon ) {
   if( drop_privileges( g_serverdir ? g_serverdir : "." ) == -1 )
     panic( "drop_privileges failed, exiting. Last error");
 
-  signal( SIGPIPE, SIG_IGN );
-  signal( SIGINT,  signal_handler );
-  signal( SIGALRM, signal_handler );
-
   g_now_seconds = time( NULL );
 
   /* Create our self pipe which allows us to interrupt mainloops
@@ -555,8 +579,10 @@ while( scanon ) {
   io_setcookie( g_self_pipe[0], (void*)FLAG_SELFPIPE );
   io_wantread( g_self_pipe[0] );
 
+  defaul_signal_handlers( );
   /* Init all sub systems. This call may fail with an exit() */
   trackerlogic_init( );
+  install_signal_handlers( );
 
   /* Kick off our initial clock setting alarm */
   alarm(5);

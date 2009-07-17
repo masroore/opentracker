@@ -4,6 +4,7 @@
    $id$ */
 
 /* System */
+#include <pthread.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -26,24 +27,17 @@
        char    *g_accesslist_filename;
 static ot_hash *g_accesslist;
 static size_t   g_accesslist_size;
+static pthread_mutex_t g_accesslist_mutex;
 
 static int vector_compare_hash(const void *hash1, const void *hash2 ) {
   return memcmp( hash1, hash2, OT_HASH_COMPARE_SIZE );
 }
 
-void accesslist_deinit( void ) {
-  free( g_accesslist );
-  g_accesslist = 0;
-  g_accesslist_size = 0;
-}
-
 /* Read initial access list */
-static void accesslist_readfile( int sig ) {
-  ot_hash *info_hash, *accesslist_new = NULL, *accesslist_old;
+static void accesslist_readfile( void ) {
+  ot_hash *info_hash, *accesslist_new = NULL;
   char    *map, *map_end, *read_offs;
   size_t   maplen;
-
-  if( sig != SIGHUP ) return;
 
   if( ( map = mmap_read( g_accesslist_filename, &maplen ) ) == NULL ) {
     char *wd = getcwd( NULL, 0 );
@@ -84,7 +78,7 @@ static void accesslist_readfile( int sig ) {
     while( read_offs < map_end && *(read_offs++) != '\n' );
   }
 #ifdef _DEBUG
-  fprintf( stderr, "Added %d info_hashes to accesslist\n", info_hash - accesslist_new );
+  fprintf( stderr, "Added %zd info_hashes to accesslist\n", (size_t)(info_hash - accesslist_new) );
 #endif
 
   mmap_unmap( map, maplen);
@@ -92,15 +86,20 @@ static void accesslist_readfile( int sig ) {
   qsort( accesslist_new, info_hash - accesslist_new, sizeof( *info_hash ), vector_compare_hash );
 
   /* Now exchange the accesslist vector in the least race condition prone way */
-  g_accesslist_size = 0;
-  accesslist_old    = g_accesslist;
+  pthread_mutex_lock(&g_accesslist_mutex);
+  free( g_accesslist );
   g_accesslist      = accesslist_new;
   g_accesslist_size = info_hash - accesslist_new;
-  free( accesslist_old );  
+  pthread_mutex_unlock(&g_accesslist_mutex);
 }
 
 int accesslist_hashisvalid( ot_hash hash ) {
-  void *exactmatch = bsearch( hash, g_accesslist, g_accesslist_size, OT_HASH_COMPARE_SIZE, vector_compare_hash );
+  void *exactmatch;
+
+  /* Lock should hardly ever be contended */
+  pthread_mutex_lock(&g_accesslist_mutex);
+  exactmatch = bsearch( hash, g_accesslist, g_accesslist_size, OT_HASH_COMPARE_SIZE, vector_compare_hash );
+  pthread_mutex_unlock(&g_accesslist_mutex);
 
 #ifdef WANT_ACCESSLIST_BLACK
   return exactmatch == NULL;
@@ -109,12 +108,38 @@ int accesslist_hashisvalid( ot_hash hash ) {
 #endif
 }
 
-void accesslist_init( ) {
-  /* Passing "0" since read_blacklist_file also is SIGHUP handler */
-  if( g_accesslist_filename ) {
-    accesslist_readfile( SIGHUP );
-    signal( SIGHUP, accesslist_readfile );
+static void * accesslist_worker( void * args ) {
+  int sig;
+  sigset_t   signal_mask;
+
+  sigemptyset(&signal_mask);
+  sigaddset(&signal_mask, SIGHUP);
+
+  (void)args;
+
+  while( 1 ) {
+    
+    /* Initial attempt to read accesslist */
+    accesslist_readfile( );
+
+    /* Wait for signals */
+    while( sigwait (&signal_mask, &sig) != 0 && sig != SIGHUP );
   }
+  return NULL;
+}
+
+static pthread_t thread_id;
+void accesslist_init( ) {
+  pthread_mutex_init(&g_accesslist_mutex, NULL);
+  pthread_create( &thread_id, NULL, accesslist_worker, NULL );
+}
+
+void accesslist_deinit( void ) {
+  pthread_cancel( thread_id );
+  pthread_mutex_destroy(&g_accesslist_mutex);
+  free( g_accesslist );
+  g_accesslist = 0;
+  g_accesslist_size = 0;
 }
 #endif
 
