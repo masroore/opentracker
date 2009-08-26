@@ -507,7 +507,7 @@ int main( int argc, char **argv ) {
 
   memset( serverip, 0, sizeof(ot_ip6) );
 #ifndef WANT_V6
-  serverip[10]=serverip[11]=0xff;
+  serverip[10]=serverip[11]=-1;
   noipv6=1;
 #endif
 
