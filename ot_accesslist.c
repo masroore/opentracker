@@ -143,6 +143,132 @@ void accesslist_deinit( void ) {
 }
 #endif
 
+int address_in_net( const ot_ip6 address, const ot_net *net ) {
+  int bits = net->bits;
+  int result = memcmp( address, &net->address, bits >> 3 );
+  if( !result && ( bits & 7 ) )
+    result = ( ( 0x7f00 >> ( bits & 7 ) ) & address[bits>>3] ) - net->address[bits>>3];
+  return result == 0;
+}
+
+void *set_value_for_net( const ot_net *net, ot_vector *vector, const void *value, const size_t member_size ) {
+  size_t i;
+  int exactmatch;
+
+  /* Caller must have a concept of ot_net in it's member */
+  if( member_size < sizeof(ot_net) )
+    return 0;
+
+  /* Check each net in vector for overlap */
+  uint8_t *member = ((uint8_t*)vector->data);
+  for( i=0; i<vector->size; ++i ) {
+    if( address_in_net( *(ot_ip6*)member, net ) ||
+        address_in_net( net->address, (ot_net*)member ) )
+      return 0;
+    member += member_size;
+  }
+
+  member = vector_find_or_insert( vector, (void*)net, member_size, sizeof(ot_net), &exactmatch );
+  if( member ) {
+    memcpy( member, net, sizeof(ot_net));
+    memcpy( member + sizeof(ot_net), value, member_size - sizeof(ot_net));
+  }
+
+  return member;
+}
+
+/* Takes a vector filled with { ot_net net, uint8_t[x] value };
+   Returns value associated with the net, or NULL if not found */
+void *get_value_for_net( const ot_ip6 address, const ot_vector *vector, const size_t member_size ) {
+  int exactmatch;
+  /* This binary search will return a pointer to the first non-containing network... */
+  ot_net *net = binary_search( address, vector->data, vector->size, member_size, sizeof(ot_ip6), &exactmatch );
+  if( !net )
+    return NULL;
+  /* ... so we'll need to move back one step unless we've exactly hit the first address in network */
+  if( !exactmatch && ( (void*)net > vector->data ) )
+    --net;
+  if( !address_in_net( address, net ) )
+    return NULL;
+  return (void*)net;
+}
+
+#ifdef WANT_FULLLOG_NETWORKS
+static ot_vector g_lognets_list;
+ot_log *g_logchain_first, *g_logchain_last;
+
+static pthread_mutex_t g_lognets_list_mutex = PTHREAD_MUTEX_INITIALIZER;
+void loglist_add_network( const ot_net *net ) {
+  pthread_mutex_lock(&g_lognets_list_mutex);
+  set_value_for_net( net, &g_lognets_list, NULL, sizeof(ot_net));
+  pthread_mutex_unlock(&g_lognets_list_mutex);
+}
+
+void loglist_reset( ) {
+  pthread_mutex_lock(&g_lognets_list_mutex);
+  free( g_lognets_list.data );
+  g_lognets_list.data = 0;
+  g_lognets_list.size = g_lognets_list.space = 0;
+  pthread_mutex_unlock(&g_lognets_list_mutex);    
+}
+
+int loglist_check_address( const ot_ip6 address ) {
+  int result;
+  pthread_mutex_lock(&g_lognets_list_mutex);
+  result = ( NULL != get_value_for_net( address, &g_lognets_list, sizeof(ot_net)) );
+  pthread_mutex_unlock(&g_lognets_list_mutex);
+  return result;
+}
+#endif
+
+#ifdef WANT_IP_FROM_PROXY
+typedef struct {
+  ot_net    *proxy;
+  ot_vector  networks;
+} ot_proxymap;
+
+static ot_vector g_proxies_list;
+static pthread_mutex_t g_proxies_list_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+int proxylist_add_network( const ot_net *proxy, const ot_net *net ) {
+  ot_proxymap *map;
+  int exactmatch, result = 1;
+  pthread_mutex_lock(&g_proxies_list_mutex);
+
+  /* If we have a direct hit, use and extend the vector there */
+  map = binary_search( proxy, g_proxies_list.data, g_proxies_list.size, sizeof(ot_proxymap), sizeof(ot_net), &exactmatch );
+
+  if( !map || !exactmatch ) {
+    /* else see, if we've got overlapping networks
+       and get a new empty vector if not */
+    ot_vector empty;
+    memset( &empty, 0, sizeof( ot_vector ) );
+    map = set_value_for_net( proxy, &g_proxies_list, &empty, sizeof(ot_proxymap));
+  }
+
+  if( map && set_value_for_net( net, &map->networks, NULL, sizeof(ot_net) ) )
+       result = 1;
+
+  pthread_mutex_unlock(&g_proxies_list_mutex);
+  return result;
+}
+
+int proxylist_check_proxy( const ot_ip6 proxy, const ot_ip6 address ) {
+  int result = 0;
+  ot_proxymap *map;
+
+  pthread_mutex_lock(&g_proxies_list_mutex);
+
+  if( ( map = get_value_for_net( proxy, &g_proxies_list, sizeof(ot_proxymap) ) ) )
+    if( !address || get_value_for_net( address, &map->networks, sizeof(ot_net) ) ) 
+      result = 1;
+
+  pthread_mutex_unlock(&g_proxies_list_mutex);
+  return result;
+}
+
+#endif
+
 static ot_ip6         g_adminip_addresses[OT_ADMINIP_MAX];
 static ot_permissions g_adminip_permissions[OT_ADMINIP_MAX];
 static unsigned int   g_adminip_count = 0;
