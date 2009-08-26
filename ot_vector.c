@@ -38,7 +38,7 @@ void *binary_search( const void * const key, const void * base, const size_t mem
     }
     if(cmp < 0) {
       base = lookat + member_size;
-      interval --;
+      interval--;
     }
     interval /= 2;
   }
