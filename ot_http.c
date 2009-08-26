@@ -16,6 +16,7 @@
 #include "array.h"
 #include "iob.h"
 #include "ip6.h"
+#include "scan.h"
 
 /* Opentracker */
 #include "trackerlogic.h"
@@ -168,7 +169,7 @@ static const ot_keywords keywords_mode[] =
     { "busy", TASK_STATS_BUSY_NETWORKS }, { "torr", TASK_STATS_TORRENTS }, { "fscr", TASK_STATS_FULLSCRAPE },
     { "s24s", TASK_STATS_SLASH24S }, { "tpbs", TASK_STATS_TPB }, { "herr", TASK_STATS_HTTPERRORS }, { "completed", TASK_STATS_COMPLETED },
     { "top10", TASK_STATS_TOP10 }, { "renew", TASK_STATS_RENEW }, { "syncs", TASK_STATS_SYNCS }, { "version", TASK_STATS_VERSION },
-    { "everything", TASK_STATS_EVERYTHING }, { "statedump", TASK_FULLSCRAPE_TRACKERSTATE }, { NULL, -3 } };
+    { "everything", TASK_STATS_EVERYTHING }, { "statedump", TASK_FULLSCRAPE_TRACKERSTATE }, { "fulllog", TASK_STATS_FULLLOG }, { NULL, -3 } };
 static const ot_keywords keywords_format[] =
   { { "bin", TASK_FULLSCRAPE_TPB_BINARY }, { "ben", TASK_FULLSCRAPE }, { "url", TASK_FULLSCRAPE_TPB_URLENCODED },
     { "txt", TASK_FULLSCRAPE_TPB_ASCII }, { NULL, -3 } };
@@ -306,6 +307,9 @@ static ot_keywords keywords_announce[] = { { "port", 1 }, { "left", 2 }, { "even
 #ifdef WANT_IP_FROM_QUERY_STRING
 { "ip", 7 },
 #endif
+#ifdef WANT_FULLLOG_NETWORKS
+{ "lognet", 8 },
+#endif
 { NULL, -3 } };
 static ot_keywords keywords_announce_event[] = { { "completed", 1 }, { "stopped", 2 }, { NULL, -3 } };
 static ssize_t http_handle_announce( const int64 sock, struct ot_workstruct *ws, char *read_ptr ) {
@@ -412,6 +416,37 @@ static ssize_t http_handle_announce( const int64 sock, struct ot_workstruct *ws,
       }
       break;
 #endif
+#ifdef WANT_FULLLOG_NETWORKS
+      case 8: /* matched "lognet" */
+      {
+        //if( accesslist_isblessed( cookie->ip, OT_PERMISSION_MAY_STAT ) ) {
+          char *tmp_buf = ws->reply;
+          ot_net net;
+          signed short parsed, bits;
+
+          len = scan_urlencoded_query( &read_ptr, tmp_buf, SCAN_SEARCHPATH_VALUE );
+          tmp_buf[len] = 0;
+          if( len <= 0 ) HTTPERROR_400_PARAM;
+          if( *tmp_buf == '-' ) {
+            loglist_reset( );
+            return ws->reply_size = sprintf( ws->reply, "Successfully removed.\n" );
+          }
+          parsed = scan_ip6( tmp_buf, net.address );
+          if( !parsed ) HTTPERROR_400_PARAM;
+          if( tmp_buf[parsed++] != '/' )
+            bits = 128;
+          else {
+            parsed = scan_short( tmp_buf + parsed, &bits );
+            if( !parsed ) HTTPERROR_400_PARAM; 
+            if( ip6_isv4mapped( net.address ) )
+              bits += 96;
+          }
+          net.bits = bits;
+          loglist_add_network( &net );
+          return ws->reply_size = sprintf( ws->reply, "Successfully added.\n" );
+        //}
+      }
+#endif
     }
   }
 
@@ -437,6 +472,31 @@ ssize_t http_handle_request( const int64 sock, struct ot_workstruct *ws ) {
   ssize_t reply_off, len;
   char   *read_ptr = ws->request, *write_ptr;
 
+#ifdef WANT_FULLLOG_NETWORKS
+  struct http_data *cookie = io_getcookie( sock );
+  if( loglist_check_address( cookie->ip ) ) {
+    ot_log *log = malloc( sizeof( ot_log ) );
+    printf( "Hello World\n" );
+    if( log ) {
+      log->size = ws->request_size;
+      log->data = malloc( ws->request_size );
+      log->next = 0;
+      log->time = g_now_seconds;
+      memcpy( log->ip, cookie->ip, sizeof(ot_ip6));
+      if( log->data ) {
+        memcpy( log->data, ws->request, ws->request_size );
+        if( !g_logchain_first )
+          g_logchain_first = g_logchain_last = log;
+        else {
+          g_logchain_last->next = log;
+          g_logchain_last = log;  
+        }        
+      } else
+        free( log );
+    }
+  }
+#endif
+
 #ifdef _DEBUG_HTTPERROR
   reply_off = ws->request_size;
   if( ws->request_size >= G_DEBUGBUF_SIZE )
@@ -444,7 +504,7 @@ ssize_t http_handle_request( const int64 sock, struct ot_workstruct *ws ) {
   memcpy( ws->debugbuf, ws->request, reply_off );
   ws->debugbuf[ reply_off ] = 0;
 #endif
-
+  
   /* Tell subroutines where to put reply data */
   ws->reply = ws->outbuf + SUCCESS_HTTP_HEADER_LENGTH;
 

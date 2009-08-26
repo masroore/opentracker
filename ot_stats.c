@@ -26,6 +26,7 @@
 #include "ot_mutex.h"
 #include "ot_iovec.h"
 #include "ot_stats.h"
+#include "ot_accesslist.h"
 
 #ifndef NO_FULLSCRAPE_LOGGING
 #define LOG_TO_STDERR( ... ) fprintf( stderr, __VA_ARGS__ )
@@ -477,6 +478,38 @@ static size_t stats_return_completed_mrtg( char * reply ) {
                  );
 }
 
+#ifdef WANT_FULLLOG_NETWORKS
+static void stats_return_fulllog( int *iovec_entries, struct iovec **iovector, char *r ) {
+  ot_log *loglist = g_logchain_first, *llnext;
+  char * re = r + OT_STATS_TMPSIZE;
+
+  g_logchain_first = g_logchain_last = 0;
+  
+  while( loglist ) {
+    if( r + ( loglist->size + 64 ) >= re ) {
+      r = iovec_fix_increase_or_free( iovec_entries, iovector, r, 32 * OT_STATS_TMPSIZE );
+      if( !r ) return;
+      re = r + 32 * OT_STATS_TMPSIZE;
+    }
+    r += sprintf( r, "%08ld: ", loglist->time );
+    r += fmt_ip6c( r, loglist->ip );
+    *r++ = '\n';
+    memcpy( r, loglist->data, loglist->size );
+    r += loglist->size;
+    *r++ = '\n';
+    *r++ = '*';
+    *r++ = '\n';
+    *r++ = '\n';
+
+    llnext = loglist->next;
+    free( loglist->data );
+    free( loglist );
+    loglist = llnext;
+  }
+  iovec_fixlast( iovec_entries, iovector, r );
+}
+#endif
+
 static size_t stats_return_everything( char * reply ) {
   torrent_stats stats = {0,0,0};
   int i;
@@ -570,6 +603,10 @@ static void stats_make( int *iovec_entries, struct iovec **iovector, ot_tasktype
     case TASK_STATS_SLASH24S:    r += stats_slash24s_txt( r, 128 );         break;
     case TASK_STATS_TOP10:       r += stats_top10_txt( r );                 break;
     case TASK_STATS_EVERYTHING:  r += stats_return_everything( r );         break;
+#ifdef WANT_FULLLOG_NETWORKS
+    case TASK_STATS_FULLLOG:      stats_return_fulllog( iovec_entries, iovector, r );
+                                                                            return;
+#endif
     default:
       iovec_free(iovec_entries, iovector);
       return;
