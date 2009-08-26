@@ -11,9 +11,11 @@
 #include <time.h>
 #include <stdint.h>
 
-typedef uint8_t        ot_hash[20];
-typedef time_t         ot_time;
-typedef char           ot_ip6[16];
+typedef uint8_t ot_hash[20];
+typedef time_t  ot_time;
+typedef char    ot_ip6[16];
+typedef struct { ot_ip6 address; int bits; }
+                ot_net;
 #ifdef WANT_V6
 #define OT_IP_SIZE 16
 #define PEERS_BENCODED "6:peers6"
