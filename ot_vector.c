@@ -6,6 +6,7 @@
 /* System */
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <stdint.h>
 
 /* Opentracker */
@@ -26,50 +27,25 @@ static int vector_compare_peer(const void *peer1, const void *peer2 ) {
 */
 void *binary_search( const void * const key, const void * base, const size_t member_count, const size_t member_size,
                      size_t compare_size, int *exactmatch ) {
-  size_t mc = member_count;
-  int8_t *lookat = ((int8_t*)base) + member_size * (mc >> 1);
-  *exactmatch = 1;
+  size_t interval = member_count * member_size;
 
-  while( mc ) {
-    int32_t cmp = memcmp( lookat, key, compare_size );
-    if( cmp == 0 )
-      return (void *)lookat;
-
-    if (cmp < 0) {
-      base = (void*)(lookat + member_size);
-      --mc;
+  while( interval ) {
+    uint8_t *lookat = ((uint8_t*)base) + interval / 2;
+    int cmp = memcmp( lookat, key, compare_size );
+    if(cmp == 0 ) {
+      base = lookat;
+      break;
     }
-
-    mc >>= 1;
-    lookat = ((int8_t*)base) + member_size * (mc >> 1);
+    if(cmp < 0) {
+      base = lookat + member_size;
+      interval -= member_size;
+    }
+    interval /= 2;
   }
 
-  *exactmatch = 0;
-  return (void*)lookat;
+  *exactmatch = interval;
+  return (void*)base;
 }
-
-ot_peer *binary_search_peer( const ot_peer * const peer, const ot_peer * base, const size_t member_count, int *exactmatch ) {
-  size_t   mc = member_count;
-  const ot_peer *lookat = base + (mc >> 1);
-  *exactmatch = 1;
-
-  while( mc ) {
-    int32_t cmp = memcmp(lookat,peer,OT_PEER_COMPARE_SIZE );
-    if(cmp == 0) return (ot_peer*)lookat;
-
-    if (cmp < 0) {
-      base = lookat + 1;
-      --mc;
-    }
-
-    mc >>= 1;
-    lookat = base + (mc >> 1);
-  }
-
-  *exactmatch = 0;
-  return (ot_peer*)lookat;
-}
-
 
 static uint8_t vector_hash_peer( ot_peer *peer, int bucket_count ) {
   unsigned int hash = 5381, i = OT_PEER_COMPARE_SIZE;
@@ -112,7 +88,7 @@ ot_peer *vector_find_or_insert_peer( ot_vector *vector, ot_peer *peer, int *exac
   /* If space is zero but size is set, we're dealing with a list of vector->size buckets */
   if( vector->space < vector->size )
     vector = ((ot_vector*)vector->data) + vector_hash_peer(peer, vector->size );
-  match = binary_search_peer( peer, vector->data, vector->size, exactmatch );
+  match = (ot_peer*)binary_search( peer, vector->data, vector->size, sizeof(ot_peer), OT_PEER_COMPARE_SIZE, exactmatch );
 
   if( *exactmatch ) return match;
 
@@ -148,7 +124,7 @@ int vector_remove_peer( ot_vector *vector, ot_peer *peer ) {
     vector = ((ot_vector*)vector->data) + vector_hash_peer(peer, vector->size );
 
   end = ((ot_peer*)vector->data) + vector->size;
-  match = binary_search_peer( peer, vector->data, vector->size,  &exactmatch );
+  match = (ot_peer*)binary_search( peer, vector->data, vector->size, sizeof(ot_peer), OT_PEER_COMPARE_SIZE, &exactmatch );
   if( !exactmatch ) return 0;
 
   exactmatch = ( OT_PEERFLAG( match ) & PEER_FLAG_SEEDING ) ? 2 : 1;
