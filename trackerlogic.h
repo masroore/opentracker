@@ -36,6 +36,10 @@ typedef struct { ot_ip6 address; int bits; }
 
 #define OT_CLIENT_REQUEST_INTERVAL_RANDOM ( OT_CLIENT_REQUEST_INTERVAL - OT_CLIENT_REQUEST_VARIATION/2 + (int)( random( ) % OT_CLIENT_REQUEST_VARIATION ) )
 
+/* If WANT_MODEST_FULLSCRAPES is on, ip addresses may not
+   fullscrape more frequently than this amount in seconds */
+#define OT_MODEST_PEER_TIMEOUT (60*5)
+
 /* If peers come back before 10 minutes, don't live sync them */
 #define OT_CLIENT_SYNC_RENEW_BOUNDARY 10
 

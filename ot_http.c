@@ -10,6 +10,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+#include <pthread.h>
 
 /* Libowfat */
 #include "byte.h"
@@ -79,11 +80,12 @@ static void http_senddata( const int64 sock, struct ot_workstruct *ws ) {
 #define HTTPERROR_400_PARAM      return http_issue_error( sock, ws, CODE_HTTPERROR_400_PARAM )
 #define HTTPERROR_400_COMPACT    return http_issue_error( sock, ws, CODE_HTTPERROR_400_COMPACT )
 #define HTTPERROR_400_DOUBLEHASH return http_issue_error( sock, ws, CODE_HTTPERROR_400_PARAM )
+#define HTTPERROR_402_NOTMODEST  return http_issue_error( sock, ws, CODE_HTTPERROR_402_NOTMODEST )
 #define HTTPERROR_403_IP         return http_issue_error( sock, ws, CODE_HTTPERROR_403_IP )
 #define HTTPERROR_404            return http_issue_error( sock, ws, CODE_HTTPERROR_404 )
 #define HTTPERROR_500            return http_issue_error( sock, ws, CODE_HTTPERROR_500 )
 ssize_t http_issue_error( const int64 sock, struct ot_workstruct *ws, int code ) {
-  char *error_code[] = { "302 Found", "400 Invalid Request", "400 Invalid Request", "400 Invalid Request",
+  char *error_code[] = { "302 Found", "400 Invalid Request", "400 Invalid Request", "400 Invalid Request", "402 Payment Required",
                          "403 Access Denied", "404 Not Found", "500 Internal Server Error" };
   char *title = error_code[code];
 
@@ -234,11 +236,38 @@ static const ot_keywords keywords_format[] =
   return ws->reply_size;
 }
 
+#ifdef WANT_MODEST_FULLSCRAPES
+static pthread_mutex_t g_modest_fullscrape_mutex = PTHREAD_MUTEX_INITIALIZER; 
+static ot_vector g_modest_fullscrape_timeouts;
+typedef struct { ot_ip6 ip; ot_time last_fullscrape; } ot_scrape_log;
+#endif
+
 #ifdef WANT_FULLSCRAPE
 static ssize_t http_handle_fullscrape( const int64 sock, struct ot_workstruct *ws ) {
   struct http_data* cookie = io_getcookie( sock );
   int format = 0;
   tai6464 t;
+
+#ifdef WANT_MODEST_FULLSCRAPES
+  {
+    ot_scrape_log this_peer, *new_peer;
+    int exactmatch;
+    memcpy( this_peer.ip, cookie->ip, sizeof(ot_ip6));
+    this_peer.last_fullscrape = g_now_seconds;
+    pthread_mutex_lock(&g_modest_fullscrape_mutex);
+    new_peer = vector_find_or_insert( &g_modest_fullscrape_timeouts, &this_peer, sizeof(ot_scrape_log), sizeof(ot_ip6), &exactmatch );
+    if( !new_peer ) {
+      pthread_mutex_unlock(&g_modest_fullscrape_mutex);
+      HTTPERROR_500;
+    }
+    if( exactmatch && ( this_peer.last_fullscrape - new_peer->last_fullscrape ) < OT_MODEST_PEER_TIMEOUT ) {
+      pthread_mutex_unlock(&g_modest_fullscrape_mutex);
+      HTTPERROR_402_NOTMODEST;
+    }
+    memcpy( new_peer, &this_peer, sizeof(ot_scrape_log));
+    pthread_mutex_unlock(&g_modest_fullscrape_mutex);
+  }
+#endif
 
 #ifdef WANT_COMPRESSION_GZIP
   ws->request[ws->request_size-1] = 0;
@@ -476,7 +505,6 @@ ssize_t http_handle_request( const int64 sock, struct ot_workstruct *ws ) {
   struct http_data *cookie = io_getcookie( sock );
   if( loglist_check_address( cookie->ip ) ) {
     ot_log *log = malloc( sizeof( ot_log ) );
-    printf( "Hello World\n" );
     if( log ) {
       log->size = ws->request_size;
       log->data = malloc( ws->request_size );
