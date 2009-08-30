@@ -171,7 +171,11 @@ static const ot_keywords keywords_mode[] =
     { "busy", TASK_STATS_BUSY_NETWORKS }, { "torr", TASK_STATS_TORRENTS }, { "fscr", TASK_STATS_FULLSCRAPE },
     { "s24s", TASK_STATS_SLASH24S }, { "tpbs", TASK_STATS_TPB }, { "herr", TASK_STATS_HTTPERRORS }, { "completed", TASK_STATS_COMPLETED },
     { "top10", TASK_STATS_TOP10 }, { "renew", TASK_STATS_RENEW }, { "syncs", TASK_STATS_SYNCS }, { "version", TASK_STATS_VERSION },
-    { "everything", TASK_STATS_EVERYTHING }, { "statedump", TASK_FULLSCRAPE_TRACKERSTATE }, { "fulllog", TASK_STATS_FULLLOG }, { NULL, -3 } };
+    { "everything", TASK_STATS_EVERYTHING }, { "statedump", TASK_FULLSCRAPE_TRACKERSTATE }, { "fulllog", TASK_STATS_FULLLOG },
+#ifdef WANT_LOG_NUMWANT
+    { "numwants", TASK_STATS_NUMWANTS},
+#endif
+    { NULL, -3 } };
 static const ot_keywords keywords_format[] =
   { { "bin", TASK_FULLSCRAPE_TPB_BINARY }, { "ben", TASK_FULLSCRAPE }, { "url", TASK_FULLSCRAPE_TPB_URLENCODED },
     { "txt", TASK_FULLSCRAPE_TPB_ASCII }, { NULL, -3 } };
@@ -332,6 +336,10 @@ static ssize_t http_handle_scrape( const int64 sock, struct ot_workstruct *ws, c
   return ws->reply_size;
 }
 
+#ifdef WANT_LOG_NUMWANT
+  unsigned long long numwants[201];
+#endif
+
 static ot_keywords keywords_announce[] = { { "port", 1 }, { "left", 2 }, { "event", 3 }, { "numwant", 4 }, { "compact", 5 }, { "compact6", 5 }, { "info_hash", 6 },
 #ifdef WANT_IP_FROM_QUERY_STRING
 { "ip", 7 },
@@ -478,6 +486,10 @@ static ssize_t http_handle_announce( const int64 sock, struct ot_workstruct *ws,
 #endif
     }
   }
+
+#ifdef WANT_LOG_NUMWANT
+  numwants[numwant]++;
+#endif
 
   /* XXX DEBUG */
   stats_issue_event( EVENT_ACCEPT, FLAG_TCP, (uintptr_t)ws->reply );

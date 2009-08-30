@@ -135,7 +135,7 @@ static int stats_shift_down_network_count( stats_network_node **node, int depth,
 static size_t stats_get_highscore_networks( stats_network_node *node, int depth, ot_ip6 node_value, size_t *scores, ot_ip6 *networks, int network_count, int limit ) {
   size_t score = 0;
   int i;
-
+  malloc(100);
   if( !node ) return 0;
 
   if( depth < limit ) {
@@ -478,6 +478,17 @@ static size_t stats_return_completed_mrtg( char * reply ) {
                  );
 }
 
+#ifdef WANT_LOG_NUMWANT
+extern unsigned long long numwants[201];
+static size_t stats_return_numwants( char * reply ) {
+  char * r = reply;
+  int i;
+  for( i=0; i<=200; ++i )
+    r += sprintf( r, "%03d => %lld\n", i, numwants[i] );
+  return r-reply;
+}
+#endif
+
 #ifdef WANT_FULLLOG_NETWORKS
 static void stats_return_fulllog( int *iovec_entries, struct iovec **iovector, char *r ) {
   ot_log *loglist = g_logchain_first, *llnext;
@@ -584,6 +595,10 @@ size_t return_stats_for_tracker( char *reply, int mode, int format ) {
       return stats_return_renew_bucket( reply );
     case TASK_STATS_SYNCS:
       return stats_return_sync_mrtg( reply );
+#ifdef WANT_LOG_NUMWANT
+    case TASK_STATS_NUMWANTS:
+      return stats_return_numwants( reply );
+#endif
     default:
       return 0;
   }
