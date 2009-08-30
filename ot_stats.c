@@ -111,7 +111,7 @@ static int stats_shift_down_network_count( stats_network_node **node, int depth,
   depth += STATS_NETWORK_NODE_BITWIDTH;
   if( depth == STATS_NETWORK_NODE_MAXDEPTH ) {
     for( i=0; i<STATS_NETWORK_NODE_COUNT; ++i )
-      rest += ((*node)->counters[i]>>=shift);
+      rest += (*node)->counters[i] >>= shift;
     return rest;
   }
 
@@ -276,7 +276,7 @@ bailout_unlock:
 bailout_error:
   r = reply;
 success:
-  stats_shift_down_network_count( &slash24s_network_counters_root, 0, STATS_NETWORK_NODE_MAXDEPTH*STATS_NETWORK_NODE_BITWIDTH );
+  stats_shift_down_network_count( &slash24s_network_counters_root, 0, sizeof(int)*8-1 );
   if( slash24s_network_counters_root )
     free( slash24s_network_counters_root );
   return r-reply;
