@@ -79,7 +79,7 @@ static time_t ot_start_time;
 
 typedef union stats_network_node stats_network_node;
 union stats_network_node {
-  int                 counters[STATS_NETWORK_NODE_COUNT];
+  size_t              counters[STATS_NETWORK_NODE_COUNT];
   stats_network_node *children[STATS_NETWORK_NODE_COUNT];
 };
 
@@ -87,63 +87,57 @@ union stats_network_node {
 static stats_network_node *stats_network_counters_root;
 #endif
 
-static int stat_increase_network_count( stats_network_node **node, int depth, uintptr_t ip ) {
+static int stat_increase_network_count( stats_network_node **pnode, int depth, uintptr_t ip ) {
   int foo = __LDR(ip,depth);
-
-  if( !*node ) {
-    *node = malloc( sizeof( stats_network_node ) );
-    if( !*node )
+  stats_network_node *node;
+  
+  if( !*pnode ) {
+    *pnode = malloc( sizeof( stats_network_node ) );
+    if( !*pnode )
       return -1;
-    memset( *node, 0, sizeof( stats_network_node ) );
+    memset( *pnode, 0, sizeof( stats_network_node ) );
   }
+  node = *pnode;
 
   if( depth < STATS_NETWORK_NODE_MAXDEPTH )
-    return stat_increase_network_count( &(*node)->children[ foo ], depth+STATS_NETWORK_NODE_BITWIDTH, ip );
+    return stat_increase_network_count( node->children + foo, depth+STATS_NETWORK_NODE_BITWIDTH, ip );
 
-  (*node)->counters[ foo ]++;
+  node->counters[ foo ]++;
   return 0;
 }
 
 static int stats_shift_down_network_count( stats_network_node **node, int depth, int shift ) {
   int i, rest = 0;
-  if( !*node ) return 0;
 
-  depth += STATS_NETWORK_NODE_BITWIDTH;
-  if( depth == STATS_NETWORK_NODE_MAXDEPTH ) {
-    for( i=0; i<STATS_NETWORK_NODE_COUNT; ++i )
+  if( !*node )
+    return 0;
+
+  for( i=0; i<STATS_NETWORK_NODE_COUNT; ++i )
+    if( depth < STATS_NETWORK_NODE_MAXDEPTH )
+      rest += stats_shift_down_network_count( (*node)->children + i, depth+STATS_NETWORK_NODE_BITWIDTH, shift );
+    else
       rest += (*node)->counters[i] >>= shift;
-    return rest;
+
+  if( !rest ) {
+    free( *node );
+    *node = NULL;
   }
-
-  for( i=0; i<STATS_NETWORK_NODE_COUNT; ++i ) {
-    stats_network_node **childnode = &(*node)->children[i];
-    int rest_val;
-
-    if( !*childnode ) continue;
-
-    rest += rest_val = stats_shift_down_network_count( childnode, depth, shift );
-
-    if( rest_val ) continue;
-
-    free( (*node)->children[i] );
-    (*node)->children[i] = NULL;
-  }
-
+  
   return rest;
 }
 
 static size_t stats_get_highscore_networks( stats_network_node *node, int depth, ot_ip6 node_value, size_t *scores, ot_ip6 *networks, int network_count, int limit ) {
   size_t score = 0;
   int i;
-  malloc(100);
+
   if( !node ) return 0;
 
   if( depth < limit ) {
     for( i=0; i<STATS_NETWORK_NODE_COUNT; ++i )
-    if( node->children[i] ) {
-      __STR(node_value,depth,i);
-      score += stats_get_highscore_networks( node->children[i], depth+STATS_NETWORK_NODE_BITWIDTH, node_value, scores, networks, network_count, limit );
-    }
+      if( node->children[i] ) {
+        __STR(node_value,depth,i);
+        score += stats_get_highscore_networks( node->children[i], depth+STATS_NETWORK_NODE_BITWIDTH, node_value, scores, networks, network_count, limit );
+      }
     return score;
   }
 
@@ -277,8 +271,7 @@ bailout_error:
   r = reply;
 success:
   stats_shift_down_network_count( &slash24s_network_counters_root, 0, sizeof(int)*8-1 );
-  if( slash24s_network_counters_root )
-    free( slash24s_network_counters_root );
+
   return r-reply;
 }
 
