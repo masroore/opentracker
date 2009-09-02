@@ -181,7 +181,7 @@ static size_t stats_get_highscore_networks( stats_network_node *node, int depth,
   return score;
 }
 
-static size_t stats_return_busy_networks( char * reply, stats_network_node *tree, int amount ) {
+static size_t stats_return_busy_networks( char * reply, stats_network_node *tree, int amount, int limit ) {
   ot_ip6   networks[amount];
   ot_ip6   node_value;
   size_t   scores[amount];
@@ -192,9 +192,9 @@ static size_t stats_return_busy_networks( char * reply, stats_network_node *tree
   memset( networks, 0, sizeof( networks ) );
   memset( node_value, 0, sizeof( node_value ) );
 
-  stats_get_highscore_networks( tree, 0, node_value, scores, networks, amount, STATS_NETWORK_NODE_MAXDEPTH );
+  stats_get_highscore_networks( tree, 0, node_value, scores, networks, amount, limit );
 
-  r += sprintf( r, "Networks, limit /%d:\n", STATS_NETWORK_NODE_MAXDEPTH+STATS_NETWORK_NODE_BITWIDTH );
+  r += sprintf( r, "Networks, limit /%d:\n", limit+STATS_NETWORK_NODE_BITWIDTH );
   for( i=amount-1; i>=0; --i) {
     if( scores[i] ) {
       r += sprintf( r, "%08zd: ", scores[i] );
@@ -206,25 +206,7 @@ static size_t stats_return_busy_networks( char * reply, stats_network_node *tree
       *r++ = '\n';
     }
   }
-
-  memset( scores, 0, sizeof( scores ) );
-  memset( networks, 0, sizeof( networks ) );
-  memset( node_value, 0, sizeof( node_value ) );
-  
-  stats_get_highscore_networks( tree, 0, node_value, scores, networks, amount, STATS_NETWORK_NODE_LIMIT );
-
-  r += sprintf( r, "\nNetworks, limit /%d:\n", STATS_NETWORK_NODE_LIMIT+STATS_NETWORK_NODE_BITWIDTH );
-  for( i=amount-1; i>=0; --i) {
-    if( scores[i] ) {
-      r += sprintf( r, "%08zd: ", scores[i] );
-#ifdef WANT_V6
-      r += fmt_ip6c( r, networks[i] );
-#else
-      r += fmt_ip4( r, networks[i] );
-#endif
-      *r++ = '\n';
-    }
-  }  
+  *r++ = '\n';
 
   return r - reply;
 }
@@ -262,7 +244,8 @@ static size_t stats_slash24s_txt( char *reply, size_t amount ) {
   }
 
   /* The tree is built. Now analyze */
-  r += stats_return_busy_networks( r, slash24s_network_counters_root, amount );
+  r += stats_return_busy_networks( r, slash24s_network_counters_root, amount, STATS_NETWORK_NODE_MAXDEPTH );
+  r += stats_return_busy_networks( r, slash24s_network_counters_root, amount, STATS_NETWORK_NODE_LIMIT );
   goto success;
 
 bailout_unlock:
@@ -275,11 +258,25 @@ success:
   return r-reply;
 }
 
+#ifdef WANT_SPOT_WOODPECKER
+static stats_network_node *stats_woodpeckers_tree;
+static pthread_mutex_t g_woodpeckers_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+static size_t stats_return_woodpeckers( char * reply, int amount ) {
+  char * r = reply;
+
+  pthread_mutex_lock( &g_woodpeckers_mutex );
+  r += stats_return_busy_networks( r, stats_woodpeckers_tree, amount, STATS_NETWORK_NODE_MAXDEPTH );
+  pthread_mutex_unlock( &g_woodpeckers_mutex );
+  return r-reply;
+}
+
 typedef struct {
   unsigned long long torrent_count;
   unsigned long long peer_count;
   unsigned long long seed_count;
 } torrent_stats;
+#endif
 
 static int torrent_statter( ot_torrent *torrent, uintptr_t data ) {
   torrent_stats *stats = (torrent_stats*)data;
@@ -611,6 +608,9 @@ static void stats_make( int *iovec_entries, struct iovec **iovector, ot_tasktype
     case TASK_STATS_SLASH24S:    r += stats_slash24s_txt( r, 128 );         break;
     case TASK_STATS_TOP10:       r += stats_top10_txt( r );                 break;
     case TASK_STATS_EVERYTHING:  r += stats_return_everything( r );         break;
+#ifdef WANT_SPOT_WOODPECKER
+    case TASK_STATS_WOODPECKERS: r += stats_return_woodpeckers( r, 128 );   break;
+#endif
 #ifdef WANT_FULLLOG_NETWORKS
     case TASK_STATS_FULLLOG:      stats_return_fulllog( iovec_entries, iovector, r );
                                                                             return;
@@ -670,7 +670,7 @@ void stats_issue_event( ot_status_event event, PROTO_FLAG proto, uintptr_t event
     case EVENT_FAILED:
       ot_failed_request_counts[event_data]++;
       break;
-	  case EVENT_RENEW:
+    case EVENT_RENEW:
       ot_renewed[event_data]++;
       break;
     case EVENT_SYNC:
@@ -679,6 +679,13 @@ void stats_issue_event( ot_status_event event, PROTO_FLAG proto, uintptr_t event
     case EVENT_BUCKET_LOCKED:
       ot_overall_stall_count++;
       break;
+#ifdef WANT_SPOT_WOODPECKER
+    case EVENT_WOODPECKER:
+      pthread_mutex_lock( &g_woodpeckers_mutex );
+      stat_increase_network_count( &stats_woodpeckers_tree, 0, event_data );
+      pthread_mutex_unlock( &g_woodpeckers_mutex );
+      break;
+#endif
     default:
       break;
   }

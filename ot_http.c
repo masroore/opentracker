@@ -172,6 +172,7 @@ static const ot_keywords keywords_mode[] =
     { "s24s", TASK_STATS_SLASH24S }, { "tpbs", TASK_STATS_TPB }, { "herr", TASK_STATS_HTTPERRORS }, { "completed", TASK_STATS_COMPLETED },
     { "top10", TASK_STATS_TOP10 }, { "renew", TASK_STATS_RENEW }, { "syncs", TASK_STATS_SYNCS }, { "version", TASK_STATS_VERSION },
     { "everything", TASK_STATS_EVERYTHING }, { "statedump", TASK_FULLSCRAPE_TRACKERSTATE }, { "fulllog", TASK_STATS_FULLLOG },
+    { "woodpeckers", TASK_STATS_WOODPECKERS},
 #ifdef WANT_LOG_NUMWANT
     { "numwants", TASK_STATS_NUMWANTS},
 #endif

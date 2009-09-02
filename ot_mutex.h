@@ -41,7 +41,8 @@ typedef enum {
   TASK_STATS_TOP10                 = 0x0104,
   TASK_STATS_EVERYTHING            = 0x0105,
   TASK_STATS_FULLLOG               = 0x0106,
-
+  TASK_STATS_WOODPECKERS           = 0x0107,
+  
   TASK_FULLSCRAPE                  = 0x0200, /* Default mode */
   TASK_FULLSCRAPE_TPB_BINARY       = 0x0201,
   TASK_FULLSCRAPE_TPB_ASCII        = 0x0202,

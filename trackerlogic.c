@@ -145,7 +145,10 @@ size_t add_peer_to_torrent_and_return_peers( ot_hash hash, ot_peer *peer, PROTO_
 
   } else {
     stats_issue_event( EVENT_RENEW, 0, OT_PEERTIME( peer_dest ) );
-
+#ifdef WANT_SPOT_WOODPECKER
+    if( ( OT_PEERTIME(peer_dest) > 0 ) && ( OT_PEERTIME(peer_dest) < 20 ) )
+      stats_issue_event( EVENT_WOODPECKER, 0, (uintptr_t)peer );
+#endif
 #ifdef WANT_SYNC_LIVE
     /* Won't live sync peers that come back too fast. Only exception:
        fresh "completed" reports */
