@@ -270,13 +270,13 @@ static size_t stats_return_woodpeckers( char * reply, int amount ) {
   pthread_mutex_unlock( &g_woodpeckers_mutex );
   return r-reply;
 }
+#endif
 
 typedef struct {
   unsigned long long torrent_count;
   unsigned long long peer_count;
   unsigned long long seed_count;
 } torrent_stats;
-#endif
 
 static int torrent_statter( ot_torrent *torrent, uintptr_t data ) {
   torrent_stats *stats = (torrent_stats*)data;
