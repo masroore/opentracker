@@ -132,16 +132,16 @@
 		65542D810CE0786F00469330 /* Headers */ = {
 			isa = PBXGroup;
 			children = (
-				65FA33970E7EF09200F7D5A5 /* ot_livesync.h */,
 				653A320A0CE7F475007F0D03 /* ot_accesslist.h */,
 				65542E730CE08B9100469330 /* ot_clean.h */,
 				65542F900CE17CA900469330 /* ot_fullscrape.h */,
 				65B8DF3A0D0310D20017149E /* ot_http.h */,
 				653A56B30CE28EC5000CF140 /* ot_iovec.h */,
+				65FA33970E7EF09200F7D5A5 /* ot_livesync.h */,
 				65542D900CE07CED00469330 /* ot_mutex.h */,
 				65542D920CE07CED00469330 /* ot_stats.h */,
-				65542D890CE078E800469330 /* ot_vector.h */,
 				65542EE60CE0CA6B00469330 /* ot_udp.h */,
+				65542D890CE078E800469330 /* ot_vector.h */,
 				654A80860CD832FC009035DE /* scan_urlencoded_query.h */,
 				654A80880CD832FC009035DE /* trackerlogic.h */,
 			);
@@ -290,11 +290,18 @@
 		1DEB928A08733DD80010E9CD /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				GCC_PREPROCESSOR_DEFINITIONS = WANT_IP_FROM_QUERY_STRING;
+				ARCHS = "$(NATIVE_ARCH)";
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					WANT_ACCESSLIST_WHITE,
+					WANT_IP_FROM_QUERY_STRING,
+					WANT_FULLSCRAPE,
+				);
+				GCC_VERSION = com.apple.compilers.llvm.clang.1_0;
 				GCC_WARN_ABOUT_RETURN_TYPE = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				HEADER_SEARCH_PATHS = ../libowfat/;
 				LIBRARY_SEARCH_PATHS = ../libowfat/;
+				ONLY_ACTIVE_ARCH = YES;
 				PREBINDING = NO;
 				SDKROOT = "$(DEVELOPER_SDK_DIR)/MacOSX10.5.sdk";
 			};
@@ -303,14 +310,20 @@
 		1DEB928B08733DD80010E9CD /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ARCHS = ppc;
+				ARCHS = "$(NATIVE_ARCH)";
 				DEAD_CODE_STRIPPING = NO;
-				GCC_PREPROCESSOR_DEFINITIONS = WANT_IP_FROM_QUERY_STRING;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					WANT_ACCESSLIST_WHITE,
+					WANT_IP_FROM_QUERY_STRING,
+					WANT_FULLSCRAPE,
+				);
+				GCC_VERSION = com.apple.compilers.llvm.clang.1_0;
 				GCC_WARN_ABOUT_RETURN_TYPE = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				HEADER_SEARCH_PATHS = ../libowfat/;
 				LIBRARY_SEARCH_PATHS = ../libowfat/;
 				MACH_O_TYPE = mh_execute;
+				ONLY_ACTIVE_ARCH = YES;
 				OTHER_LDFLAGS = "-lowfat";
 				PREBINDING = NO;
 				SDKROOT = "$(DEVELOPER_SDK_DIR)/MacOSX10.5.sdk";
