@@ -382,6 +382,8 @@ static void handle_read( int64 peersocket ) {
     peer->tracker_id = tracker_id;
     PROXYPEER_SETCONNECTED( peer->state );
 
+    fprintf( stderr, "Incoming connection successful.\n" );
+
     break;
 close_socket:
     io_close( peersocket );
