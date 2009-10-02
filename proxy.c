@@ -366,8 +366,10 @@ static void handle_read( int64 peersocket ) {
     /* See, if we already have a connection to that peer */
     for( i=0; i<MAX_PEERS; ++i )
       if( ( g_connections[i].state & FLAG_MASK ) == FLAG_CONNECTED && 
-            g_connections[i].tracker_id == tracker_id )
+            g_connections[i].tracker_id == tracker_id ) {
+        fprintf( stderr, "Peer already connected. Closing connection.\n" );
         goto close_socket;
+      }
 
     /* Also no need for soliloquy */
     if( tracker_id == g_tracker_id )
