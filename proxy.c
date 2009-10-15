@@ -59,7 +59,7 @@ int      g_self_pipe[2];
 /* So after each bucket wait 1 / OT_BUCKET_COUNT intervals */
 #define OT_SYNC_SLEEP ( ( ( OT_SYNC_INTERVAL_MINUTES ) * 60 * 1000000 ) / ( OT_BUCKET_COUNT ) )
 
-enum { OT_SYNC_PEER };
+enum { OT_SYNC_PEER = 0xbeef };
 enum { FLAG_SERVERSOCKET = 1 };
 
 /* For incoming packets */
@@ -195,8 +195,8 @@ void free_peerlist( ot_peerlist *peer_list ) {
 static void livesync_handle_peersync( ssize_t datalen ) {
   int off = sizeof( g_tracker_id ) + sizeof( uint32_t );
 
-  /* Now basic sanity checks have been done on the live sync packet
-     We might add more testing and logging. */
+  fprintf( stderr, "." );
+
   while( off + (ssize_t)sizeof( ot_hash ) + (ssize_t)sizeof( ot_peer ) <= datalen ) {
     ot_peer *peer = (ot_peer*)(g_inbuffer + off + sizeof(ot_hash));
     ot_hash *hash = (ot_hash*)(g_inbuffer + off);
@@ -227,6 +227,7 @@ enum {
 };
 
 #define PROXYPEER_NEEDSCONNECT(flag)      ((flag)==FLAG_OUTGOING)
+#define PROXYPEER_ISCONNECTED(flag)       (((flag)&FLAG_MASK)==FLAG_CONNECTED)
 #define PROXYPEER_SETDISCONNECTED(flag)   (flag)=(((flag)&FLAG_OUTGOING)|FLAG_DISCONNECTED)
 #define PROXYPEER_SETCONNECTING(flag)     (flag)=(((flag)&FLAG_OUTGOING)|FLAG_CONNECTING)
 #define PROXYPEER_SETWAITTRACKERID(flag)  (flag)=(((flag)&FLAG_OUTGOING)|FLAG_WAITTRACKERID)
@@ -439,16 +440,13 @@ static void handle_write( int64 peersocket ) {
   case FLAG_CONNECTED:
     switch( iob_send( peersocket, &peer->outdata ) ) {
     case 0: /* all data sent */
-      fprintf( stderr, "EMPTY\n" );
       io_dontwantwrite( peersocket );
       break;
     case -3: /* an error occured */
-      fprintf( stderr, "ERROR\n" );
       io_close( peersocket );
       reset_info_block( peer );
       break;
     default: /* Normal operation or eagain */
-      fprintf( stderr, "EGAIN\n" );
       break;
     }
     break;
@@ -594,7 +592,9 @@ static void * streamsync_worker( void * args ) {
       ot_vector *torrents_list = mutex_bucket_lock( bucket );
       size_t tor_offset, count_def = 0, count_one = 0, count_two = 0, count_peers = 0;
       size_t mem, mem_a = 0, mem_b = 0;
-      uint8_t *ptr, *ptr_a, *ptr_b, *ptr_c;
+      uint8_t *ptr = 0, *ptr_a, *ptr_b, *ptr_c;
+
+      if( !torrents_list->size ) goto unlock_continue;
 
       /* For each torrent in this bucket.. */
       for( tor_offset=0; tor_offset<torrents_list->size; ++tor_offset ) {
@@ -613,6 +613,8 @@ static void * streamsync_worker( void * args ) {
       /* Maximal memory requirement: max 3 blocks, max torrents * 20 + max peers * 7 */
       mem = 3 * ( 4 + 1 + 1 + 2 ) + ( count_one + count_two ) * 19 + count_def * 20 +
             ( count_one + 2 * count_two + count_peers ) * 7;
+
+     fprintf( stderr, "Mem: %d\n", mem );
 
       ptr = ptr_a = ptr_b = ptr_c = malloc( mem );
       if( !ptr ) goto unlock_continue;
@@ -697,11 +699,14 @@ unlock_continue:
         mem = ptr_c - ptr;
 
         for( i=0; i<g_connection_count; ++i ) {
-          if( g_connections[i].fd != -1 ) {
+          if( PROXYPEER_ISCONNECTED(g_connections[i].state) ) {
             void *tmp = malloc( mem );
-            if( tmp )
+            if( tmp ) {
+              memcpy( tmp, ptr, mem );
               if( !iob_addbuf_free( &g_connections[i].outdata, tmp, mem ) )
                 free( tmp );
+              io_wantwrite( g_connections[i].fd );
+            }
           }
         }
 
@@ -793,7 +798,7 @@ static void * livesync_worker( void * args ) {
       livesync_handle_peersync( datalen );
       break;
     default:
-      fprintf( stderr, "Received an unknown live sync packet type %u.\n", uint32_read_big( sizeof( g_tracker_id ) + (char*)g_inbuffer ) );
+      // fprintf( stderr, "Received an unknown live sync packet type %u.\n", uint32_read_big( sizeof( g_tracker_id ) + (char*)g_inbuffer ) );
       break;
     }
   }
