@@ -205,6 +205,10 @@ static const ot_keywords keywords_format[] =
   }
 
 #ifdef WANT_FULLSCRAPE
+  if( mode == TASK_FULLSCRAPE_TRACKERSTATE ) {
+    format = mode; mode = TASK_STATS_TPB;
+  }
+
   if( mode == TASK_STATS_TPB ) {
     struct http_data* cookie = io_getcookie( sock );
     tai6464 t;
