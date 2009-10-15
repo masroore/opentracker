@@ -48,9 +48,11 @@ LDFLAGS+=-L$(LIBOWFAT_LIBRARY) -lowfat -pthread -lpthread -lz
 BINARY =opentracker
 HEADERS=trackerlogic.h scan_urlencoded_query.h ot_mutex.h ot_stats.h ot_vector.h ot_clean.h ot_udp.h ot_iovec.h ot_fullscrape.h ot_accesslist.h ot_http.h ot_livesync.h
 SOURCES=opentracker.c trackerlogic.c scan_urlencoded_query.c ot_mutex.c ot_stats.c ot_vector.c ot_clean.c ot_udp.c ot_iovec.c ot_fullscrape.c ot_accesslist.c ot_http.c ot_livesync.c
+SOURCES_proxy=proxy.c ot_vector.c ot_mutex.c
 
 OBJECTS = $(SOURCES:%.c=%.o)
 OBJECTS_debug = $(SOURCES:%.c=%.debug.o)
+OBJECTS_proxy = $(SOURCES_proxy:%.c=%.o)
 
 .SUFFIXES: .debug.o .o .c
 
@@ -58,8 +60,6 @@ all: $(BINARY) $(BINARY).debug
 
 CFLAGS_production = $(CFLAGS) $(OPTS_production) $(FEATURES)
 CFLAGS_debug = $(CFLAGS) $(OPTS_debug) $(FEATURES)
-
-SOURCES_proxy=proxy.c ot_vector.c ot_mutex.c
 
 $(BINARY): $(OBJECTS) $(HEADERS)
 	$(CC) -o $@ $(OBJECTS) $(LDFLAGS)
