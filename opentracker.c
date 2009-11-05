@@ -327,10 +327,11 @@ static int scan_ip6_port( const char *src, ot_ip6 ip, uint16 *port ) {
   if( !(off = scan_ip6( s, ip ) ) )
     return 0;
   s += off;
+  if( bracket && *s == ']' ) ++s;
   if( *s == 0 || isspace(*s)) return s-src;
-  if( *s == ']' && bracket ) ++s;
   if( !ip6_isv4mapped(ip)){
-    if( ( bracket && *(s) != ':' ) || ( *(s) != '.' ) ) return 0;
+     if( *s != ':' && *s != '.' ) return 0;
+     if( !bracket && *(s) == ':' ) return 0;
     s++;
   } else {
     if( *(s++) != ':' ) return 0;
