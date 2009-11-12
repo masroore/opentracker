@@ -14,6 +14,9 @@
 #include <pthread.h>
 #include <unistd.h>
 #include <inttypes.h>
+#ifdef WANT_SYSLOGS
+#include <syslog.h>
+#endif
 
 /* Libowfat */
 #include "byte.h"
@@ -637,6 +640,13 @@ void stats_issue_event( ot_status_event event, PROTO_FLAG proto, uintptr_t event
       if( proto == FLAG_TCP ) ot_overall_tcp_connects++; else ot_overall_udp_connects++;
       break;
     case EVENT_COMPLETED:
+#ifdef WANT_SYSLOGS
+      if( event_data) {
+        char hex_out[42];
+        to_hex( hex_out, (uint8_t*)event_data );
+        syslog( LOG_INFO, "event=completed info_hash=%s", hex_out );
+      }
+#endif
       ot_overall_completed++;
       break;
     case EVENT_SCRAPE:
@@ -715,10 +725,17 @@ static pthread_t thread_id;
 void stats_init( ) {
   ot_start_time = g_now_seconds;
   pthread_create( &thread_id, NULL, stats_worker, NULL );
+#ifdef WANT_SYSLOGS
+  openlog( "opentracker", 0, LOG_USER );
+  setlogmask(LOG_UPTO(LOG_INFO));
+#endif
 }
 
 void stats_deinit( ) {
   pthread_cancel( thread_id );
+#ifdef WANT_SYSLOGS
+  closelog();
+#endif
 }
 
 const char *g_version_stats_c = "$Source$: $Revision$\n";
