@@ -381,6 +381,7 @@ static ssize_t http_handle_announce( const int64 sock, struct ot_workstruct *ws,
     /* Find last occurence of the forwarded header */
     do {
       fwd = fwd_new;
+      fwd_new += 16;
       fwd_new = strcasestr( fwd_new, "\nX-Forwarded-For:" );
     } while( fwd_new );
 
