@@ -18,6 +18,7 @@
 #include "iob.h"
 #include "ip6.h"
 #include "scan.h"
+#include "case.h"
 
 /* Opentracker */
 #include "trackerlogic.h"
@@ -44,33 +45,42 @@ static void http_senddata( const int64 sock, struct ot_workstruct *ws ) {
   struct http_data *cookie = io_getcookie( sock );
   ssize_t written_size;
 
+  if( !cookie ) { io_close(sock); return; }
+  
   /* whoever sends data is not interested in its input-array */
-  if( cookie && ( cookie->flag & STRUCT_HTTP_FLAG_ARRAY_USED ) ) {
-    cookie->flag &= ~STRUCT_HTTP_FLAG_ARRAY_USED;
-    array_reset( &cookie->data.request );
-  }
+  if( ws->keep_alive && ws->header_size != ws->request_size ) {
+    size_t rest = ws->request_size - ws->header_size;
+    if( array_start(&cookie->request) ) {
+      memmove( array_start(&cookie->request), ws->request + ws->header_size, rest );
+      array_truncate( &cookie->request, 1, rest );
+    } else
+      array_catb(&cookie->request, ws->request + ws->header_size, rest );    
+  } else 
+    array_reset( &cookie->request );
 
   written_size = write( sock, ws->reply, ws->reply_size );
-  if( ( written_size < 0 ) || ( written_size == ws->reply_size ) ) {
-    free( cookie ); io_close( sock );
-  } else {
+  if( ( written_size < 0 ) || ( ( written_size == ws->reply_size ) && !ws->keep_alive ) ) {
+    array_reset( &cookie->request );
+    free( cookie ); io_close( sock ); return;
+  }
+
+  if( written_size < ws->reply_size ) {
     char * outbuf;
     tai6464 t;
 
-    if( !cookie ) return;
-    if( !( outbuf =  malloc( ws->reply_size - written_size ) ) ) {
+    if( !( outbuf = malloc( ws->reply_size - written_size ) ) ) {
       free(cookie); io_close( sock );
       return;
     }
 
-    iob_reset( &cookie->data.batch );
     memcpy( outbuf, ws->reply + written_size, ws->reply_size - written_size );
-    iob_addbuf_free( &cookie->data.batch, outbuf, ws->reply_size - written_size );
-    cookie->flag |= STRUCT_HTTP_FLAG_IOB_USED;
+    iob_addbuf_free( &cookie->batch, outbuf, ws->reply_size - written_size );
 
     /* writeable short data sockets just have a tcp timeout */
-    taia_uint( &t, 0 ); io_timeout( sock, t );
-    io_dontwantread( sock );
+    if( !ws->keep_alive ) {
+      taia_uint( &t, 0 ); io_timeout( sock, t );
+      io_dontwantread( sock );
+    }
     io_wantwrite( sock );
   }
 }
@@ -93,7 +103,7 @@ ssize_t http_issue_error( const int64 sock, struct ot_workstruct *ws, int code )
   if( code == CODE_HTTPERROR_302 )
     ws->reply_size = snprintf( ws->reply, G_OUTBUF_SIZE, "HTTP/1.0 302 Found\r\nContent-Length: 0\r\nLocation: %s\r\n\r\n", g_redirecturl );
   else
-    ws->reply_size = snprintf( ws->reply, G_OUTBUF_SIZE, "HTTP/1.0 %s\r\nContent-Type: text/html\r\nConnection: close\r\nContent-Length: %zd\r\n\r\n<title>%s</title>\n", title, strlen(title)+16-4,title+4);
+    ws->reply_size = snprintf( ws->reply, G_OUTBUF_SIZE, "HTTP/1.0 %s\r\nContent-Type: text/html\r\nContent-Length: %zd\r\n\r\n<title>%s</title>\n", title, strlen(title)+16-4,title+4);
 
 #ifdef _DEBUG_HTTPERROR
   fprintf( stderr, "DEBUG: invalid request was: %s\n", ws->debugbuf );
@@ -116,12 +126,8 @@ ssize_t http_sendiovecdata( const int64 sock, struct ot_workstruct *ws, int iove
     HTTPERROR_500;
   }
 
-  /* If this socket collected request in a buffer,
-     free it now */
-  if( cookie->flag & STRUCT_HTTP_FLAG_ARRAY_USED ) {
-    cookie->flag &= ~STRUCT_HTTP_FLAG_ARRAY_USED;
-    array_reset( &cookie->data.request );
-  }
+  /* If this socket collected request in a buffer, free it now */
+  array_reset( &cookie->request );
 
   /* If we came here, wait for the answer is over */
   cookie->flag &= ~STRUCT_HTTP_FLAG_WAITINGFORTASK;
@@ -145,15 +151,13 @@ ssize_t http_sendiovecdata( const int64 sock, struct ot_workstruct *ws, int iove
   else
     header_size = sprintf( header, "HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %zd\r\n\r\n", size );
 
-  iob_reset( &cookie->data.batch );
-  iob_addbuf_free( &cookie->data.batch, header, header_size );
+  iob_reset( &cookie->batch );
+  iob_addbuf_free( &cookie->batch, header, header_size );
 
   /* Will move to ot_iovec.c */
   for( i=0; i<iovec_entries; ++i )
-    iob_addbuf_munmap( &cookie->data.batch, iovector[i].iov_base, iovector[i].iov_len );
+    iob_addbuf_munmap( &cookie->batch, iovector[i].iov_base, iovector[i].iov_len );
   free( iovector );
-
-  cookie->flag |= STRUCT_HTTP_FLAG_IOB_USED;
 
   /* writeable sockets timeout after 10 minutes */
   taia_now( &t ); taia_addsec( &t, &t, OT_CLIENT_TIMEOUT_SEND );
@@ -240,9 +244,7 @@ static const ot_keywords keywords_format[] =
   }
 
   /* Simple stats can be answerred immediately */
-  if( !( ws->reply_size = return_stats_for_tracker( ws->reply, mode, 0 ) ) ) HTTPERROR_500;
-
-  return ws->reply_size;
+  return ws->reply_size = return_stats_for_tracker( ws->reply, mode, 0 );
 }
 
 #ifdef WANT_MODEST_FULLSCRAPES
@@ -336,7 +338,7 @@ static ssize_t http_handle_scrape( const int64 sock, struct ot_workstruct *ws, c
     numwant = OT_MAXMULTISCRAPE_COUNT;
 
   /* Enough for http header + whole scrape string */
-  if( !( ws->reply_size = return_tcp_scrape_for_torrent( multiscrape_buf, numwant, ws->reply ) ) ) HTTPERROR_500;
+  ws->reply_size = return_tcp_scrape_for_torrent( multiscrape_buf, numwant, ws->reply );
   stats_issue_event( EVENT_SCRAPE, FLAG_TCP, ws->reply_size );
   return ws->reply_size;
 }
@@ -344,6 +346,19 @@ static ssize_t http_handle_scrape( const int64 sock, struct ot_workstruct *ws, c
 #ifdef WANT_LOG_NUMWANT
   unsigned long long numwants[201];
 #endif
+
+static char* http_header( char *data, size_t byte_count, char *header ) {
+  size_t i;
+  long sl = strlen( header );
+  for( i = 0; i + sl + 2 < byte_count; ++i ) {
+    if( data[i] != '\n' || data[ i + sl + 1] != ':' ) continue;
+    if( !case_equalb( data + i + 1, sl, header ) ) continue;
+    data += i + sl + 2;
+    while( *data == ' ' || *data == '\t' ) ++data;
+    return data;
+  }
+  return 0;
+}
 
 static ot_keywords keywords_announce[] = { { "port", 1 }, { "left", 2 }, { "event", 3 }, { "numwant", 4 }, { "compact", 5 }, { "compact6", 5 }, { "info_hash", 6 },
 #ifdef WANT_IP_FROM_QUERY_STRING
@@ -373,29 +388,12 @@ static ssize_t http_handle_announce( const int64 sock, struct ot_workstruct *ws,
 #ifdef WANT_IP_FROM_PROXY
   if( accesslist_isblessed( cookie->ip, OT_PERMISSION_MAY_PROXY ) ) {
     ot_ip6 proxied_ip;
-    char *fwd, *fwd_new = ws->request;
-
-    /* Zero terminate for string routines. Normally we'd only overwrite bollocks */
-    ws->request[ws->request_size-1] = 0;
-
-    /* Find last occurence of the forwarded header */
-    do {
-      fwd = fwd_new;
-      fwd_new += 16;
-      fwd_new = strcasestr( fwd_new, "\nX-Forwarded-For:" );
-    } while( fwd_new );
-
-    /* Skip spaces between : and the ip address */
-    if( fwd ) {
-      fwd += 18; /* sizeof( "\nX-Forwarded-For:" ) */
-      while( *fwd == ' ' ) ++fwd;
-    }
-
+    char *fwd = http_header( ws->request, ws->header_size, "x-forwarded-for" );
     if( fwd && scan_ip6( fwd, proxied_ip ) )
       OT_SETIP( &peer, proxied_ip );
     else
       OT_SETIP( &peer, cookie->ip );
-  }
+  } else
 #endif
   OT_SETIP( &peer, cookie->ip );
   OT_SETPORT( &peer, &port );
@@ -509,8 +507,6 @@ static ssize_t http_handle_announce( const int64 sock, struct ot_workstruct *ws,
   else
     ws->reply_size = add_peer_to_torrent_and_return_peers( *hash, &peer, FLAG_TCP, numwant, ws->reply );
 
-  if( !ws->reply_size ) HTTPERROR_500;
-
   stats_issue_event( EVENT_ANNOUNCE, FLAG_TCP, ws->reply_size);
   return ws->reply_size;
 }
@@ -586,10 +582,17 @@ ssize_t http_handle_request( const int64 sock, struct ot_workstruct *ws ) {
   else
     HTTPERROR_404;
 
+  /* Find out if the client wants to keep this connection alive */
+  ws->keep_alive = 0;
+#ifdef WANT_KEEPALIVE
+  read_ptr=http_header( ws->request, ws->header_size, "connection");
+  if( read_ptr && ( *read_ptr == 'K' || *read_ptr == 'k' ) ) ws->keep_alive = 1;
+#endif
+
   /* If routines handled sending themselves, just return */
   if( ws->reply_size == -2 ) return 0;
   /* If routine failed, let http error take over */
-  if( ws->reply_size == -1 ) HTTPERROR_500;
+  if( ws->reply_size <= 0 ) HTTPERROR_500;
 
   /* This one is rather ugly, so I take you step by step through it.
 
@@ -602,8 +605,8 @@ ssize_t http_handle_request( const int64 sock, struct ot_workstruct *ws ) {
   ws->reply = ws->outbuf + reply_off;
 
   /* 2. Now we sprintf our header so that sprintf writes its terminating '\0' exactly one byte before content starts. Complete
-     packet size is increased by size of header plus one byte '\n', we  will copy over '\0' in next step */
-  ws->reply_size += 1 + sprintf( ws->reply, "HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %zd\r\n\r", ws->reply_size );
+     packet size is increased by size of header plus one byte '\n', we will copy over '\0' in next step */
+  ws->reply_size += 1 + sprintf( ws->reply, "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %zd\r\n\r", ws->reply_size );
 
   /* 3. Finally we join both blocks neatly */
   ws->outbuf[ SUCCESS_HTTP_HEADER_LENGTH - 1 ] = '\n';

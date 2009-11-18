@@ -7,18 +7,14 @@
 #define __OT_HTTP_H__
 
 typedef enum {
-  STRUCT_HTTP_FLAG_ARRAY_USED     = 1,
-  STRUCT_HTTP_FLAG_IOB_USED       = 2,
-  STRUCT_HTTP_FLAG_WAITINGFORTASK = 4,
-  STRUCT_HTTP_FLAG_GZIP           = 8,
-  STRUCT_HTTP_FLAG_BZIP2          = 16
+  STRUCT_HTTP_FLAG_WAITINGFORTASK = 1,
+  STRUCT_HTTP_FLAG_GZIP           = 2,
+  STRUCT_HTTP_FLAG_BZIP2          = 4
 } STRUCT_HTTP_FLAG;
 
 struct http_data {
-  union {
-    array          request;
-    io_batch       batch;
-  } data;
+  array            request;
+  io_batch         batch;
   ot_ip6           ip;
   STRUCT_HTTP_FLAG flag;
 };

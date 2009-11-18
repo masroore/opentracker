@@ -143,10 +143,8 @@ static size_t header_complete( char * request, ssize_t byte_count ) {
 static void handle_dead( const int64 sock ) {
   struct http_data* cookie=io_getcookie( sock );
   if( cookie ) {
-    if( cookie->flag & STRUCT_HTTP_FLAG_IOB_USED )
-      iob_reset( &cookie->data.batch );
-    if( cookie->flag & STRUCT_HTTP_FLAG_ARRAY_USED )
-      array_reset( &cookie->data.request );
+    iob_reset( &cookie->batch );
+    array_reset( &cookie->request );
     if( cookie->flag & STRUCT_HTTP_FLAG_WAITINGFORTASK )
       mutex_workqueue_canceltask( sock );
     free( cookie );
@@ -154,46 +152,42 @@ static void handle_dead( const int64 sock ) {
   io_close( sock );
 }
 
-static ssize_t handle_read( const int64 sock, struct ot_workstruct *ws ) {
+static void handle_read( const int64 sock, struct ot_workstruct *ws ) {
   struct http_data* cookie = io_getcookie( sock );
   ssize_t byte_count;
 
   if( ( byte_count = io_tryread( sock, ws->inbuf, G_INBUF_SIZE ) ) <= 0 ) {
     handle_dead( sock );
-    return 0;
+    return;
   }
 
   /* If we get the whole request in one packet, handle it without copying */
-  if( !array_start( &cookie->data.request ) ) {
-    if( memchr( ws->inbuf, '\n', byte_count ) ) {
+  if( !array_start( &cookie->request ) ) {
+    if( ( ws->header_size = header_complete( ws->inbuf, byte_count ) ) ) {
       ws->request = ws->inbuf;
       ws->request_size = byte_count;
-      return http_handle_request( sock, ws );
-    }
-
-    /* ... else take a copy */
-    cookie->flag |= STRUCT_HTTP_FLAG_ARRAY_USED;
-    array_catb( &cookie->data.request, ws->inbuf, byte_count );
-    return 0;
+      http_handle_request( sock, ws );
+    } else
+      array_catb( &cookie->request, ws->inbuf, byte_count );
+    return;
   }
 
-  array_catb( &cookie->data.request, ws->inbuf, byte_count );
+  array_catb( &cookie->request, ws->inbuf, byte_count );
+  if( array_failed( &cookie->request ) || array_bytes( &cookie->request ) > 8192 ) {
+    http_issue_error( sock, ws, CODE_HTTPERROR_500 );
+    return;
+  }
 
-  if( array_failed( &cookie->data.request ) ||
-      array_bytes( &cookie->data.request ) > 8192 )
-    return http_issue_error( sock, ws, CODE_HTTPERROR_500 );
-
-  if( !memchr( array_start( &cookie->data.request ), '\n', array_bytes( &cookie->data.request ) ) )
-    return 0;
-
-  ws->request      = array_start( &cookie->data.request );
-  ws->request_size = array_bytes( &cookie->data.request );
-  return http_handle_request( sock, ws );
+  while( ( ws->header_size = header_complete( array_start( &cookie->request ), array_bytes( &cookie->request ) ) ) ) {
+    ws->request      = array_start( &cookie->request );
+    ws->request_size = array_bytes( &cookie->request );
+    http_handle_request( sock, ws );
+  }
 }
 
 static void handle_write( const int64 sock ) {
   struct http_data* cookie=io_getcookie( sock );
-  if( !cookie || ( iob_send( sock, &cookie->data.batch ) <= 0 ) )
+  if( !cookie || ( iob_send( sock, &cookie->batch ) <= 0 ) )
     handle_dead( sock );
 }
 
@@ -214,11 +208,11 @@ static void handle_accept( const int64 serversocket ) {
       io_close( sock );
       continue;
     }
-    io_setcookie( sock, cookie );
-    io_wantread( sock );
-
     memset(cookie, 0, sizeof( struct http_data ) );
     memcpy(cookie->ip,ip,sizeof(ot_ip6));
+
+    io_setcookie( sock, cookie );
+    io_wantread( sock );
 
     stats_issue_event( EVENT_ACCEPT, FLAG_TCP, (uintptr_t)ip);
 
@@ -228,16 +222,15 @@ static void handle_accept( const int64 serversocket ) {
     tai_unix( &(t.sec), (g_now_seconds + OT_CLIENT_TIMEOUT) );
     io_timeout( sock, t );
   }
-
-  if( errno == EAGAIN )
-    io_eagain( serversocket );
 }
 
-static void server_mainloop( ) {
+static void * server_mainloop( void * args ) {
   struct ot_workstruct ws;
   time_t next_timeout_check = g_now_seconds + OT_CLIENT_TIMEOUT_CHECKINTERVAL;
   struct iovec *iovector;
   int    iovec_entries;
+
+  (void)args;
 
   /* Initialize our "thread local storage" */
   ws.inbuf   = malloc( G_INBUF_SIZE );
@@ -282,6 +275,7 @@ static void server_mainloop( ) {
     /* Enforce setting the clock */
     signal_handler( SIGALRM );
   }
+  return 0;
 }
 
 static int64_t ot_try_bind( ot_ip6 ip, uint16_t port, PROTO_FLAG proto ) {
@@ -475,7 +469,7 @@ void load_state(const char * const state_filename ) {
     if( inbuf[ i++ ] != ':' || !( consumed = scan_ulonglong( inbuf+i, &downcount ) ) ) continue;
     add_torrent_from_saved_state( infohash, base, downcount );
   }
-    
+
   fclose( state_filehandle );
 }
 
@@ -606,7 +600,7 @@ int main( int argc, char **argv ) {
   /* Kick off our initial clock setting alarm */
   alarm(5);
 
-  server_mainloop( );
+  server_mainloop( 0 );
 
   return 0;
 }
