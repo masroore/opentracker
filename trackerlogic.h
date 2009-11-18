@@ -118,8 +118,10 @@ struct ot_workstruct {
 #endif
 
   /* HTTP specific, non static */
+  int     keep_alive;
   char   *request;
   ssize_t request_size;
+  ssize_t header_size;
   char   *reply;
   ssize_t reply_size;
 };

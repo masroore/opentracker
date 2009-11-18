@@ -122,6 +122,24 @@ static void help( char *name ) {
 }
 #undef HELPLINE
 
+static size_t header_complete( char * request, ssize_t byte_count ) {
+  int i = 0, state = 0;
+
+  for( i=1; i < byte_count; i+=2 )
+    if( request[i] <= 13 ) {
+      i--;
+      for( state = 0 ; i < byte_count; ++i ) {
+        char c = request[i];
+        if( c == '\r' || c == '\n' )
+          state = ( state >> 2 ) | ( ( c << 6 ) & 0xc0 );
+        else
+          break;
+        if( state >= 0xa0 || state == 0x99 ) return i + 1;
+      }
+  }
+  return 0;
+}
+
 static void handle_dead( const int64 sock ) {
   struct http_data* cookie=io_getcookie( sock );
   if( cookie ) {
@@ -330,8 +348,8 @@ static int scan_ip6_port( const char *src, ot_ip6 ip, uint16 *port ) {
   if( bracket && *s == ']' ) ++s;
   if( *s == 0 || isspace(*s)) return s-src;
   if( !ip6_isv4mapped(ip)){
-     if( *s != ':' && *s != '.' ) return 0;
-     if( !bracket && *(s) == ':' ) return 0;
+    if( *s != ':' && *s != '.' ) return 0;
+    if( !bracket && *(s) == ':' ) return 0;
     s++;
   } else {
     if( *(s++) != ':' ) return 0;
