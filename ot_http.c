@@ -96,7 +96,7 @@ static void http_senddata( const int64 sock, struct ot_workstruct *ws ) {
 #define HTTPERROR_500            return http_issue_error( sock, ws, CODE_HTTPERROR_500 )
 ssize_t http_issue_error( const int64 sock, struct ot_workstruct *ws, int code ) {
   char *error_code[] = { "302 Found", "400 Invalid Request", "400 Invalid Request", "400 Invalid Request", "402 Payment Required",
-                         "403 Access Denied", "404 Not Found", "500 Internal Server Error" };
+                         "403 Not Modest", "403 Access Denied", "404 Not Found", "500 Internal Server Error" };
   char *title = error_code[code];
 
   ws->reply = ws->outbuf;
