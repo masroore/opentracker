@@ -482,7 +482,7 @@ int drop_privileges (const char * const serverdir) {
 
   if( geteuid() == 0 ) {
     /* Running as root: chroot and drop privileges */
-    if(chroot( serverdir )) {
+    if( serverdir && chroot( serverdir ) ) {
       fprintf( stderr, "Could not chroot to %s, because: %s\n", serverdir, strerror(errno) );
       return -1;
     }
@@ -504,7 +504,7 @@ int drop_privileges (const char * const serverdir) {
   }
   else {
     /* Normal user, just chdir() */
-    if(chdir( serverdir )) {
+    if( serverdir && chdir( serverdir ) ) {
       fprintf( stderr, "Could not chroot to %s, because: %s\n", serverdir, strerror(errno) );
       return -1;
     }
@@ -578,7 +578,7 @@ int main( int argc, char **argv ) {
     ot_try_bind( serverip, 6969, FLAG_UDP );
   }
 
-  if( drop_privileges( g_serverdir ? g_serverdir : "." ) == -1 )
+  if( drop_privileges( g_serverdir ) == -1 )
     panic( "drop_privileges failed, exiting. Last error");
 
   g_now_seconds = time( NULL );
