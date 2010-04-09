@@ -79,10 +79,16 @@
 # batchsync.cluster.admin_ip 10.1.1.1
 #
 
-# V)   Control directory where opentracker will chdir to. So all black/white
-#      list files may be put in that directory (shell option -d).
+# V)   Control privilege drop behaviour.
+#      Put in the directory opentracker will chroot/chdir to. All black/white
+#      list files must be put in that directory (shell option -d).
+#
 #
 # tracker.rootdir /usr/local/etc/opentracker
+#
+#      Tell opentracker which user to setuid to.
+#
+# tracker.user    nobody
 #
 
 # VI)  opentracker can be told to answer to a "GET / HTTP"-request with a

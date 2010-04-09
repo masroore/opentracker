@@ -15,6 +15,7 @@
 #include <stdio.h>
 #include <pwd.h>
 #include <ctype.h>
+#include <pthread.h>
 
 /* Libowfat */
 #include "socket.h"
@@ -41,6 +42,7 @@ volatile int g_opentracker_running = 1;
 int          g_self_pipe[2];
 
 static char * g_serverdir;
+static char * g_serveruser;
 
 static void panic( const char *routine ) {
   fprintf( stderr, "%s: %s\n", routine, strerror(errno) );
@@ -72,7 +74,7 @@ static void defaul_signal_handlers( void ) {
   sigaddset (&signal_mask, SIGHUP);
   sigaddset (&signal_mask, SIGINT);
   sigaddset (&signal_mask, SIGALRM);
-  pthread_sigmask (SIG_BLOCK, &signal_mask, NULL);  
+  pthread_sigmask (SIG_BLOCK, &signal_mask, NULL);
 }
 
 static void install_signal_handlers( void ) {
@@ -88,11 +90,11 @@ static void install_signal_handlers( void ) {
 
   sigaddset (&signal_mask, SIGINT);
   sigaddset (&signal_mask, SIGALRM);
-  pthread_sigmask (SIG_UNBLOCK, &signal_mask, NULL);  
+  pthread_sigmask (SIG_UNBLOCK, &signal_mask, NULL);
 }
 
 static void usage( char *name ) {
-  fprintf( stderr, "Usage: %s [-i ip] [-p port] [-P port] [-r redirect] [-d dir] [-A ip] [-f config] [-s livesyncport]"
+  fprintf( stderr, "Usage: %s [-i ip] [-p port] [-P port] [-r redirect] [-d dir] [-u user] [-A ip] [-f config] [-s livesyncport]"
 #ifdef WANT_ACCESSLIST_BLACK
   " [-b blacklistfile]"
 #elif defined ( WANT_ACCESSLIST_WHITE )
@@ -111,6 +113,7 @@ static void help( char *name ) {
   HELPLINE("-P port","specify udp port to bind to (default: 6969, you may specify more than one)");
   HELPLINE("-r redirecturl","specify url where / should be redirected to (default none)");
   HELPLINE("-d dir","specify directory to try to chroot to (default: \".\")");
+  HELPLINE("-u user","specify user under whose priviliges opentracker should run (default: \"nobody\")");
   HELPLINE("-A ip","bless an ip address as admin address (e.g. to allow syncs from this address)");
 #ifdef WANT_ACCESSLIST_BLACK
   HELPLINE("-b file","specify blacklist file.");
@@ -382,6 +385,8 @@ int parse_configfile( char * config_filename ) {
     /* Scan for commands */
     if(!byte_diff(p,15,"tracker.rootdir" ) && isspace(p[15])) {
       set_config_option( &g_serverdir, p+16 );
+    } else if(!byte_diff(p,12,"tracker.user" ) && isspace(p[12])) {
+      set_config_option( &g_serveruser, p+13 );
     } else if(!byte_diff(p,14,"listen.tcp_udp" ) && isspace(p[14])) {
       uint16_t tmpport = 6969;
       if( !scan_ip6_port( p+15, tmpip, &tmpport )) goto parse_error;
@@ -473,11 +478,18 @@ void load_state(const char * const state_filename ) {
   fclose( state_filehandle );
 }
 
-int drop_privileges (const char * const serverdir) {
+int drop_privileges ( const char * const serveruser, const char * const serverdir ) {
   struct passwd *pws = NULL;
 
+#ifdef _DEBUG
+  if( !geteuid() )
+    fprintf( stderr, "Dropping to user %s.\n", serveruser );
+  if( serverdir )
+    fprintf( stderr, "ch%s'ing to directory %s.\n", geteuid() ? "dir" : "root", serverdir );
+#endif
+
   /* Grab pws entry before chrooting */
-  pws = getpwnam( "nobody" );
+  pws = getpwnam( serveruser );
   endpwent();
 
   if( geteuid() == 0 ) {
@@ -490,7 +502,9 @@ int drop_privileges (const char * const serverdir) {
     if(chdir("/"))
       panic("chdir() failed after chrooting: ");
 
+    /* If we can't find server user, revert to nobody's default uid */
     if( !pws ) {
+      fprintf( stderr, "Warning: Could not get password entry for %s. Reverting to uid -2.\n", serveruser );
       setegid( (gid_t)-2 ); setgid( (gid_t)-2 );
       setuid( (uid_t)-2 );  seteuid( (uid_t)-2 );
     }
@@ -525,7 +539,7 @@ int main( int argc, char **argv ) {
 #endif
 
   while( scanon ) {
-    switch( getopt( argc, argv, ":i:p:A:P:d:r:s:f:l:v"
+    switch( getopt( argc, argv, ":i:p:A:P:d:u:r:s:f:l:v"
 #ifdef WANT_ACCESSLIST_BLACK
 "b:"
 #elif defined( WANT_ACCESSLIST_WHITE )
@@ -553,6 +567,7 @@ int main( int argc, char **argv ) {
         livesync_bind_mcast( serverip, tmpport); break;
 #endif
       case 'd': set_config_option( &g_serverdir, optarg ); break;
+      case 'u': set_config_option( &g_serveruser, optarg ); break;
       case 'r': set_config_option( &g_redirecturl, optarg ); break;
       case 'l': load_state( optarg ); break;
       case 'A':
@@ -578,7 +593,7 @@ int main( int argc, char **argv ) {
     ot_try_bind( serverip, 6969, FLAG_UDP );
   }
 
-  if( drop_privileges( g_serverdir ) == -1 )
+  if( drop_privileges( g_serveruser ? g_serveruser : "nobody", g_serverdir ) == -1 )
     panic( "drop_privileges failed, exiting. Last error");
 
   g_now_seconds = time( NULL );

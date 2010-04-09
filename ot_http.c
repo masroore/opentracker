@@ -347,6 +347,7 @@ static ssize_t http_handle_scrape( const int64 sock, struct ot_workstruct *ws, c
   unsigned long long numwants[201];
 #endif
 
+#if defined( WANT_KEEPALIVE ) || defined( WANT_IP_FROM_PROXY )
 static char* http_header( char *data, size_t byte_count, char *header ) {
   size_t i;
   long sl = strlen( header );
@@ -359,6 +360,7 @@ static char* http_header( char *data, size_t byte_count, char *header ) {
   }
   return 0;
 }
+#endif
 
 static ot_keywords keywords_announce[] = { { "port", 1 }, { "left", 2 }, { "event", 3 }, { "numwant", 4 }, { "compact", 5 }, { "compact6", 5 }, { "info_hash", 6 },
 #ifdef WANT_IP_FROM_QUERY_STRING
