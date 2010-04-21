@@ -46,7 +46,7 @@ static void http_senddata( const int64 sock, struct ot_workstruct *ws ) {
   ssize_t written_size;
 
   if( !cookie ) { io_close(sock); return; }
-  
+
   /* whoever sends data is not interested in its input-array */
   if( ws->keep_alive && ws->header_size != ws->request_size ) {
     size_t rest = ws->request_size - ws->header_size;
@@ -55,7 +55,7 @@ static void http_senddata( const int64 sock, struct ot_workstruct *ws ) {
       array_truncate( &cookie->request, 1, rest );
     } else
       array_catb(&cookie->request, ws->request + ws->header_size, rest );    
-  } else 
+  } else
     array_reset( &cookie->request );
 
   written_size = write( sock, ws->reply, ws->reply_size );

@@ -168,7 +168,7 @@ static size_t stats_get_highscore_networks( stats_network_node *node, int depth,
       node_score = stats_get_highscore_networks( node->children[i], depth+STATS_NETWORK_NODE_BITWIDTH, node_value, scores, networks, network_count, limit );
 
     score += node_score;
-    
+
     if( node_score <= scores[0] ) continue;
 
     __STR(node_value,depth,i);
