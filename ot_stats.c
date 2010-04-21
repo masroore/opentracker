@@ -642,9 +642,17 @@ void stats_issue_event( ot_status_event event, PROTO_FLAG proto, uintptr_t event
     case EVENT_COMPLETED:
 #ifdef WANT_SYSLOGS
       if( event_data) {
+        char timestring[64];
         char hex_out[42];
+        struct tm time_now;
+        time_t ttt;
+
+        time( &ttt );
+        localtime_r( &ttt, &time_now );
+        strftime( timestring, sizeof( timestring ), "%FT%T%z", &time_now );
+
         to_hex( hex_out, (uint8_t*)event_data );
-        syslog( LOG_INFO, "event=completed info_hash=%s", hex_out );
+        syslog( LOG_INFO, "time=%s event=completed info_hash=%s", timestring, hex_out );
       }
 #endif
       ot_overall_completed++;

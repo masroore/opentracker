@@ -165,7 +165,7 @@ size_t add_peer_to_torrent_and_return_peers( ot_hash hash, ot_peer *peer, PROTO_
       torrent->peer_list->seed_count++;
     if( !(OT_PEERFLAG(peer_dest) & PEER_FLAG_COMPLETED ) &&  (OT_PEERFLAG(peer) & PEER_FLAG_COMPLETED ) ) {
       torrent->peer_list->down_count++;
-      stats_issue_event( EVENT_COMPLETED, 0, 0 );
+      stats_issue_event( EVENT_COMPLETED, 0, (uintptr_t)torrent->hash );
     }
     if(   OT_PEERFLAG(peer_dest) & PEER_FLAG_COMPLETED )
       OT_PEERFLAG( peer ) |= PEER_FLAG_COMPLETED;
