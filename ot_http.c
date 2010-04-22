@@ -369,12 +369,11 @@ static ot_keywords keywords_announce[] = { { "port", 1 }, { "left", 2 }, { "even
 #ifdef WANT_FULLLOG_NETWORKS
 { "lognet", 8 },
 #endif
+{ "peer_id", 9 },
 { NULL, -3 } };
 static ot_keywords keywords_announce_event[] = { { "completed", 1 }, { "stopped", 2 }, { NULL, -3 } };
 static ssize_t http_handle_announce( const int64 sock, struct ot_workstruct *ws, char *read_ptr ) {
   int               numwant, tmp, scanon;
-  ot_peer           peer;
-  ot_hash          *hash = NULL;
   unsigned short    port = 0;
   char             *write_ptr;
   ssize_t           len;
@@ -392,14 +391,18 @@ static ssize_t http_handle_announce( const int64 sock, struct ot_workstruct *ws,
     ot_ip6 proxied_ip;
     char *fwd = http_header( ws->request, ws->header_size, "x-forwarded-for" );
     if( fwd && scan_ip6( fwd, proxied_ip ) )
-      OT_SETIP( &peer, proxied_ip );
+      OT_SETIP( &ws->peer, proxied_ip );
     else
-      OT_SETIP( &peer, cookie->ip );
+      OT_SETIP( &ws->peer, cookie->ip );
   } else
 #endif
-  OT_SETIP( &peer, cookie->ip );
-  OT_SETPORT( &peer, &port );
-  OT_PEERFLAG( &peer ) = 0;
+
+  ws->peer_id = NULL;
+  ws->hash = NULL;
+
+  OT_SETIP( &ws->peer, cookie->ip );
+  OT_SETPORT( &ws->peer, &port );
+  OT_PEERFLAG( &ws->peer ) = 0;
   numwant = 50;
   scanon = 1;
 
@@ -411,21 +414,21 @@ static ssize_t http_handle_announce( const int64 sock, struct ot_workstruct *ws,
     case 1: /* matched "port" */
       len = scan_urlencoded_query( &read_ptr, write_ptr = read_ptr, SCAN_SEARCHPATH_VALUE );
       if( ( len <= 0 ) || scan_fixed_int( write_ptr, len, &tmp ) || ( tmp > 0xffff ) ) HTTPERROR_400_PARAM;
-      port = htons( tmp ); OT_SETPORT( &peer, &port );
+      port = htons( tmp ); OT_SETPORT( &ws->peer, &port );
       break;
     case 2: /* matched "left" */
       if( ( len = scan_urlencoded_query( &read_ptr, write_ptr = read_ptr, SCAN_SEARCHPATH_VALUE ) ) <= 0 ) HTTPERROR_400_PARAM;
       if( scan_fixed_int( write_ptr, len, &tmp ) ) tmp = 0;
-      if( !tmp ) OT_PEERFLAG( &peer ) |= PEER_FLAG_SEEDING;
+      if( !tmp ) OT_PEERFLAG( &ws->peer ) |= PEER_FLAG_SEEDING;
       break;
     case 3: /* matched "event" */
       switch( scan_find_keywords( keywords_announce_event, &read_ptr, SCAN_SEARCHPATH_VALUE ) ) {
         case -1: HTTPERROR_400_PARAM;
         case  1: /* matched "completed" */
-          OT_PEERFLAG( &peer ) |= PEER_FLAG_COMPLETED;
+          OT_PEERFLAG( &ws->peer ) |= PEER_FLAG_COMPLETED;
           break;
         case  2: /* matched "stopped" */
-          OT_PEERFLAG( &peer ) |= PEER_FLAG_STOPPED;
+          OT_PEERFLAG( &ws->peer ) |= PEER_FLAG_STOPPED;
           break;
         default:
           break;
@@ -443,10 +446,10 @@ static ssize_t http_handle_announce( const int64 sock, struct ot_workstruct *ws,
       if( !tmp ) HTTPERROR_400_COMPACT;
       break;
     case 6: /* matched "info_hash" */
-      if( hash ) HTTPERROR_400_DOUBLEHASH;
+      if( ws->hash ) HTTPERROR_400_DOUBLEHASH;
       /* ignore this, when we have less than 20 bytes */
       if( scan_urlencoded_query( &read_ptr, write_ptr = read_ptr, SCAN_SEARCHPATH_VALUE ) != 20 ) HTTPERROR_400_PARAM;
-        hash = (ot_hash*)write_ptr;
+        ws->hash = (ot_hash*)write_ptr;
       break;
 #ifdef WANT_IP_FROM_QUERY_STRING
     case  7: /* matched "ip" */
@@ -455,7 +458,7 @@ static ssize_t http_handle_announce( const int64 sock, struct ot_workstruct *ws,
         len = scan_urlencoded_query( &read_ptr, tmp_buf2, SCAN_SEARCHPATH_VALUE );
         tmp_buf2[len] = 0;
         if( ( len <= 0 ) || !scan_ip6( tmp_buf2, tmp_buf1 ) ) HTTPERROR_400_PARAM;
-        OT_SETIP( &peer, tmp_buf1 );
+        OT_SETIP( &ws->peer, tmp_buf1 );
       }
       break;
 #endif
@@ -490,6 +493,12 @@ static ssize_t http_handle_announce( const int64 sock, struct ot_workstruct *ws,
         //}
       }
 #endif
+        break;
+      case 9: /* matched "peer_id" */
+        /* ignore this, when we have less than 20 bytes */
+        if( scan_urlencoded_query( &read_ptr, write_ptr = read_ptr, SCAN_SEARCHPATH_VALUE ) != 20 ) HTTPERROR_400_PARAM;
+        ws->peer_id = write_ptr;
+        break;
     }
   }
 
@@ -501,13 +510,13 @@ static ssize_t http_handle_announce( const int64 sock, struct ot_workstruct *ws,
   stats_issue_event( EVENT_ACCEPT, FLAG_TCP, (uintptr_t)ws->reply );
 
   /* Scanned whole query string */
-  if( !hash )
+  if( !ws->hash )
     return ws->reply_size = sprintf( ws->reply, "d14:failure reason80:Your client forgot to send your torrent's info_hash. Please upgrade your client.e" );
 
-  if( OT_PEERFLAG( &peer ) & PEER_FLAG_STOPPED )
-    ws->reply_size = remove_peer_from_torrent( *hash, &peer, ws->reply, FLAG_TCP );
+  if( OT_PEERFLAG( &ws->peer ) & PEER_FLAG_STOPPED )
+    ws->reply_size = remove_peer_from_torrent( FLAG_TCP, ws );
   else
-    ws->reply_size = add_peer_to_torrent_and_return_peers( *hash, &peer, FLAG_TCP, numwant, ws->reply );
+    ws->reply_size = add_peer_to_torrent_and_return_peers( FLAG_TCP, ws, numwant );
 
   stats_issue_event( EVENT_ANNOUNCE, FLAG_TCP, ws->reply_size);
   return ws->reply_size;

@@ -642,8 +642,9 @@ void stats_issue_event( ot_status_event event, PROTO_FLAG proto, uintptr_t event
     case EVENT_COMPLETED:
 #ifdef WANT_SYSLOGS
       if( event_data) {
+        struct ot_workstruct *ws = (struct ot_workstruct *)event_data;
         char timestring[64];
-        char hex_out[42];
+        char hash_hex[42], peerid_hex[42], ip_readable[64];
         struct tm time_now;
         time_t ttt;
 
@@ -651,8 +652,19 @@ void stats_issue_event( ot_status_event event, PROTO_FLAG proto, uintptr_t event
         localtime_r( &ttt, &time_now );
         strftime( timestring, sizeof( timestring ), "%FT%T%z", &time_now );
 
-        to_hex( hex_out, (uint8_t*)event_data );
-        syslog( LOG_INFO, "time=%s event=completed info_hash=%s", timestring, hex_out );
+        to_hex( hash_hex, *ws->hash );
+        if( ws->peer_id )
+          to_hex( peerid_hex, (uint8_t*)ws->peer_id );
+        else {
+          *peerid_hex=0;
+        }
+
+#ifdef WANT_V6
+        ip_readable[ fmt_ip6c( ip_readable, (char*)&ws->peer ) ] = 0;
+#else
+        ip_readable[ fmt_ip4( ip_readable, (char*)&ws->peer ) ] = 0;
+#endif
+        syslog( LOG_INFO, "time=%s event=completed info_hash=%s peer_id=%s ip=%s", timestring, hash_hex, peerid_hex, ip_readable );
       }
 #endif
       ot_overall_completed++;

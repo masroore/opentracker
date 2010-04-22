@@ -35,44 +35,6 @@
     0x0024 0x02 peer flags v1 ( SEEDING = 0x80, COMPLETE = 0x40, STOPPED = 0x20 )
   ]*
 
-                               ########
- ######## SCRAPE SYNC PROTOCOL ########
- ########
-
-  Each tracker instance SHOULD broadcast a beacon every LIVESYNC_BEACON_INTERVAL
-  seconds after running at least LIVESYNC_FIRST_BEACON_DELAY seconds:
-
-  packet type SYNC_SCRAPE_BEACON
-  [ 0x0008 0x08 amount of torrents served
-  ]
-
-  If a tracker instance receives a beacon from another instance that has more than
-  its torrent count plus a threshold, it inquires for a scrape. It must wait for at
-  least 2 * LIVESYNC_BEACON_INTERVAL seconds in order to inspect beacons from all
-  tracker instances and inquire only the one with most torrents.
-
-  If it sees a SYNC_SCRAPE_TELL within that time frame, it's likely, that another
-  scrape sync is going on. It should reset its state to needs no inquiry. It should
-  be reenabled on the next beacon, if still needed.
-
-  packet type SYNC_SCRAPE_INQUIRE
-  [ 0x0008 0x04 id of tracker instance to inquire
-  ]
-
-  The inquired tracker instance answers with as many scrape tell packets it needs
-  to deliver stats about all its torrents
-
-  packet type SYNC_SCRAPE_TELL
-  [ 0x0008 0x14 info_hash
-    0x001c 0x04 base offset (i.e. when was it last announced, in minutes)
-    0x0020 0x08 downloaded count
-  ]*
-
-  Each tracker instance that receives a SYNC_SCRAPE_TELL, looks up each torrent and
-  compares downloaded count with its own counter. It can send out its own scrape
-  tell packets, if it knows more. However to not interrupt a scrape tell, a tracker
-  should wait LIVESYNC_BEACON_INTERVAL after receiving a scrape tell.
-
 */
 
 #ifdef WANT_SYNC_LIVE
@@ -86,7 +48,7 @@ void livesync_deinit();
 void livesync_bind_mcast( char *ip, uint16_t port );
 
 /* Inform live sync about whats going on. */
-void livesync_tell( ot_hash const info_hash, const ot_peer * const peer );
+void livesync_tell( struct ot_workstruct *ws );
 
 /* Tickle the live sync module from time to time, so no events get
    stuck when there's not enough traffic to fill udp packets fast

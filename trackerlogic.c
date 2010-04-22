@@ -71,36 +71,35 @@ void add_torrent_from_saved_state( ot_hash hash, ot_time base, size_t down_count
   return mutex_bucket_unlock_by_hash( hash, 1 );
 }
 
-size_t add_peer_to_torrent_and_return_peers( ot_hash hash, ot_peer *peer, PROTO_FLAG proto, size_t amount, char * reply ) {
+size_t add_peer_to_torrent_and_return_peers( PROTO_FLAG proto, struct ot_workstruct *ws, size_t amount ) {
   int         exactmatch, delta_torrentcount = 0;
-  size_t      reply_size;
   ot_torrent *torrent;
   ot_peer    *peer_dest;
-  ot_vector  *torrents_list = mutex_bucket_lock_by_hash( hash );
+  ot_vector  *torrents_list = mutex_bucket_lock_by_hash( *ws->hash );
 
-  if( !accesslist_hashisvalid( hash ) ) {
-    mutex_bucket_unlock_by_hash( hash, 0 );
+  if( !accesslist_hashisvalid( *ws->hash ) ) {
+    mutex_bucket_unlock_by_hash( *ws->hash, 0 );
     if( proto == FLAG_TCP ) {
       const char invalid_hash[] = "d14:failure reason63:Requested download is not authorized for use with this tracker.e";
-      memcpy( reply, invalid_hash, strlen( invalid_hash ) );
+      memcpy( ws->reply, invalid_hash, strlen( invalid_hash ) );
       return strlen( invalid_hash );
     }
     return 0;
   }
 
-  torrent = vector_find_or_insert( torrents_list, (void*)hash, sizeof( ot_torrent ), OT_HASH_COMPARE_SIZE, &exactmatch );
+  torrent = vector_find_or_insert( torrents_list, (void*)ws->hash, sizeof( ot_torrent ), OT_HASH_COMPARE_SIZE, &exactmatch );
   if( !torrent ) {
-    mutex_bucket_unlock_by_hash( hash, 0 );
+    mutex_bucket_unlock_by_hash( *ws->hash, 0 );
     return 0;
   }
 
   if( !exactmatch ) {
     /* Create a new torrent entry, then */
-    memcpy( torrent->hash, hash, sizeof(ot_hash) );
+    memcpy( torrent->hash, *ws->hash, sizeof(ot_hash) );
 
     if( !( torrent->peer_list = malloc( sizeof (ot_peerlist) ) ) ) {
       vector_remove_torrent( torrents_list, torrent );
-      mutex_bucket_unlock_by_hash( hash, 0 );
+      mutex_bucket_unlock_by_hash( *ws->hash, 0 );
       return 0;
     }
 
@@ -112,76 +111,76 @@ size_t add_peer_to_torrent_and_return_peers( ot_hash hash, ot_peer *peer, PROTO_
   torrent->peer_list->base = g_now_minutes;
 
   /* Check for peer in torrent */
-  peer_dest = vector_find_or_insert_peer( &(torrent->peer_list->peers), peer, &exactmatch );
+  peer_dest = vector_find_or_insert_peer( &(torrent->peer_list->peers), &ws->peer, &exactmatch );
   if( !peer_dest ) {
-    mutex_bucket_unlock_by_hash( hash, delta_torrentcount );
+    mutex_bucket_unlock_by_hash( *ws->hash, delta_torrentcount );
     return 0;
   }
 
   /* Tell peer that it's fresh */
-  OT_PEERTIME( peer ) = 0;
+  OT_PEERTIME( &ws->peer ) = 0;
 
   /* Sanitize flags: Whoever claims to have completed download, must be a seeder */
-  if( ( OT_PEERFLAG( peer ) & ( PEER_FLAG_COMPLETED | PEER_FLAG_SEEDING ) ) == PEER_FLAG_COMPLETED )
-    OT_PEERFLAG( peer ) ^= PEER_FLAG_COMPLETED;
+  if( ( OT_PEERFLAG( &ws->peer ) & ( PEER_FLAG_COMPLETED | PEER_FLAG_SEEDING ) ) == PEER_FLAG_COMPLETED )
+    OT_PEERFLAG( &ws->peer ) ^= PEER_FLAG_COMPLETED;
 
   /* If we hadn't had a match create peer there */
   if( !exactmatch ) {
 
 #ifdef WANT_SYNC_LIVE
     if( proto == FLAG_MCA )
-      OT_PEERFLAG( peer ) |= PEER_FLAG_FROM_SYNC;
+      OT_PEERFLAG( &ws->peer ) |= PEER_FLAG_FROM_SYNC;
     else
-      livesync_tell( hash, peer );
+      livesync_tell( ws );
 #endif
 
     torrent->peer_list->peer_count++;
-    if( OT_PEERFLAG(peer) & PEER_FLAG_COMPLETED ) {
+    if( OT_PEERFLAG(&ws->peer) & PEER_FLAG_COMPLETED ) {
       torrent->peer_list->down_count++;
-      stats_issue_event( EVENT_COMPLETED, 0, (uintptr_t)torrent->hash );
+      stats_issue_event( EVENT_COMPLETED, 0, (uintptr_t)ws );
     }
-    if( OT_PEERFLAG(peer) & PEER_FLAG_SEEDING )
+    if( OT_PEERFLAG(&ws->peer) & PEER_FLAG_SEEDING )
       torrent->peer_list->seed_count++;
 
   } else {
     stats_issue_event( EVENT_RENEW, 0, OT_PEERTIME( peer_dest ) );
 #ifdef WANT_SPOT_WOODPECKER
     if( ( OT_PEERTIME(peer_dest) > 0 ) && ( OT_PEERTIME(peer_dest) < 20 ) )
-      stats_issue_event( EVENT_WOODPECKER, 0, (uintptr_t)peer );
+      stats_issue_event( EVENT_WOODPECKER, 0, (uintptr_t)&ws->peer );
 #endif
 #ifdef WANT_SYNC_LIVE
     /* Won't live sync peers that come back too fast. Only exception:
        fresh "completed" reports */
     if( proto != FLAG_MCA ) {
       if( OT_PEERTIME( peer_dest ) > OT_CLIENT_SYNC_RENEW_BOUNDARY ||
-         ( !(OT_PEERFLAG(peer_dest) & PEER_FLAG_COMPLETED ) && (OT_PEERFLAG(peer) & PEER_FLAG_COMPLETED ) ) )
-        livesync_tell( hash, peer );
+         ( !(OT_PEERFLAG(peer_dest) & PEER_FLAG_COMPLETED ) && (OT_PEERFLAG(&ws->peer) & PEER_FLAG_COMPLETED ) ) )
+        livesync_tell( ws );
     }
 #endif
 
-    if(  (OT_PEERFLAG(peer_dest) & PEER_FLAG_SEEDING )   && !(OT_PEERFLAG(peer) & PEER_FLAG_SEEDING ) )
+    if(  (OT_PEERFLAG(peer_dest) & PEER_FLAG_SEEDING )   && !(OT_PEERFLAG(&ws->peer) & PEER_FLAG_SEEDING ) )
       torrent->peer_list->seed_count--;
-    if( !(OT_PEERFLAG(peer_dest) & PEER_FLAG_SEEDING )   &&  (OT_PEERFLAG(peer) & PEER_FLAG_SEEDING ) )
+    if( !(OT_PEERFLAG(peer_dest) & PEER_FLAG_SEEDING )   &&  (OT_PEERFLAG(&ws->peer) & PEER_FLAG_SEEDING ) )
       torrent->peer_list->seed_count++;
-    if( !(OT_PEERFLAG(peer_dest) & PEER_FLAG_COMPLETED ) &&  (OT_PEERFLAG(peer) & PEER_FLAG_COMPLETED ) ) {
+    if( !(OT_PEERFLAG(peer_dest) & PEER_FLAG_COMPLETED ) &&  (OT_PEERFLAG(&ws->peer) & PEER_FLAG_COMPLETED ) ) {
       torrent->peer_list->down_count++;
-      stats_issue_event( EVENT_COMPLETED, 0, (uintptr_t)torrent->hash );
+      stats_issue_event( EVENT_COMPLETED, 0, (uintptr_t)ws );
     }
     if(   OT_PEERFLAG(peer_dest) & PEER_FLAG_COMPLETED )
-      OT_PEERFLAG( peer ) |= PEER_FLAG_COMPLETED;
+      OT_PEERFLAG( &ws->peer ) |= PEER_FLAG_COMPLETED;
   }
 
-  memcpy( peer_dest, peer, sizeof(ot_peer) );
+  memcpy( peer_dest, &ws->peer, sizeof(ot_peer) );
 #ifdef WANT_SYNC
   if( proto == FLAG_MCA ) {
-    mutex_bucket_unlock_by_hash( hash, delta_torrentcount );
+    mutex_bucket_unlock_by_hash( *ws->hash, delta_torrentcount );
     return 0;
   }
 #endif
 
-  reply_size = return_peers_for_torrent( torrent, amount, reply, proto );
-  mutex_bucket_unlock_by_hash( torrent->hash, delta_torrentcount );
-  return reply_size;
+  ws->reply_size = return_peers_for_torrent( torrent, amount, ws->reply, proto );
+  mutex_bucket_unlock_by_hash( *ws->hash, delta_torrentcount );
+  return ws->reply_size;
 }
 
 static size_t return_peers_all( ot_peerlist *peer_list, char *reply ) {
@@ -350,23 +349,22 @@ size_t return_tcp_scrape_for_torrent( ot_hash *hash_list, int amount, char *repl
 }
 
 static ot_peerlist dummy_list;
-size_t remove_peer_from_torrent( ot_hash hash, ot_peer *peer, char *reply, PROTO_FLAG proto ) {
+size_t remove_peer_from_torrent( PROTO_FLAG proto, struct ot_workstruct *ws ) {
   int          exactmatch;
-  size_t       reply_size = 0;
-  ot_vector   *torrents_list = mutex_bucket_lock_by_hash( hash );
-  ot_torrent  *torrent = binary_search( hash, torrents_list->data, torrents_list->size, sizeof( ot_torrent ), OT_HASH_COMPARE_SIZE, &exactmatch );
+  ot_vector   *torrents_list = mutex_bucket_lock_by_hash( *ws->hash );
+  ot_torrent  *torrent = binary_search( ws->hash, torrents_list->data, torrents_list->size, sizeof( ot_torrent ), OT_HASH_COMPARE_SIZE, &exactmatch );
   ot_peerlist *peer_list = &dummy_list;
 
 #ifdef WANT_SYNC_LIVE
   if( proto != FLAG_MCA ) {
-    OT_PEERFLAG( peer ) |= PEER_FLAG_STOPPED;
-    livesync_tell( hash, peer );
+    OT_PEERFLAG( &ws->peer ) |= PEER_FLAG_STOPPED;
+    livesync_tell( ws );
   }
 #endif
 
   if( exactmatch ) {
     peer_list = torrent->peer_list;
-    switch( vector_remove_peer( &peer_list->peers, peer ) ) {
+    switch( vector_remove_peer( &peer_list->peers, &ws->peer ) ) {
       case 2:  peer_list->seed_count--; /* Fall throughs intended */
       case 1:  peer_list->peer_count--; /* Fall throughs intended */
       default: break;
@@ -375,19 +373,19 @@ size_t remove_peer_from_torrent( ot_hash hash, ot_peer *peer, char *reply, PROTO
 
   if( proto == FLAG_TCP ) {
     int erval = OT_CLIENT_REQUEST_INTERVAL_RANDOM;
-    reply_size = sprintf( reply, "d8:completei%zde10:incompletei%zde8:intervali%ie12:min intervali%ie" PEERS_BENCODED "0:e", peer_list->seed_count, peer_list->peer_count - peer_list->seed_count, erval, erval / 2 );
+    ws->reply_size = sprintf( ws->reply, "d8:completei%zde10:incompletei%zde8:intervali%ie12:min intervali%ie" PEERS_BENCODED "0:e", peer_list->seed_count, peer_list->peer_count - peer_list->seed_count, erval, erval / 2 );
   }
 
   /* Handle UDP reply */
   if( proto == FLAG_UDP ) {
-    ((uint32_t*)reply)[2] = htonl( OT_CLIENT_REQUEST_INTERVAL_RANDOM );
-    ((uint32_t*)reply)[3] = htonl( peer_list->peer_count - peer_list->seed_count );
-    ((uint32_t*)reply)[4] = htonl( peer_list->seed_count);
-    reply_size = 20;
+    ((uint32_t*)ws->reply)[2] = htonl( OT_CLIENT_REQUEST_INTERVAL_RANDOM );
+    ((uint32_t*)ws->reply)[3] = htonl( peer_list->peer_count - peer_list->seed_count );
+    ((uint32_t*)ws->reply)[4] = htonl( peer_list->seed_count);
+    ws->reply_size = 20;
   }
 
-  mutex_bucket_unlock_by_hash( hash, 0 );
-  return reply_size;
+  mutex_bucket_unlock_by_hash( *ws->hash, 0 );
+  return ws->reply_size;
 }
 
 void iterate_all_torrents( int (*for_each)( ot_torrent* torrent, uintptr_t data ), uintptr_t data ) {

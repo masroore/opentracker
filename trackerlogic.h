@@ -108,22 +108,29 @@ struct ot_peerlist {
 
 struct ot_workstruct {
   /* Thread specific, static */
-  char   *inbuf;
-#define G_INBUF_SIZE    8192
-  char   *outbuf;
-#define G_OUTBUF_SIZE   8192
-#ifdef _DEBUG_HTTPERROR
-  char   *debugbuf;
-#define G_DEBUGBUF_SIZE 8192
+  char    *inbuf;
+#define   G_INBUF_SIZE    8192
+  char    *outbuf;
+#define   G_OUTBUF_SIZE   8192
+#ifdef    _DEBUG_HTTPERROR
+  char    *debugbuf;
+#define   G_DEBUGBUF_SIZE 8192
 #endif
 
+  /* The peer currently in the working */
+  ot_peer  peer;
+
+  /* Pointers into the request buffer */
+  ot_hash *hash;
+  char    *peer_id;
+
   /* HTTP specific, non static */
-  int     keep_alive;
-  char   *request;
-  ssize_t request_size;
-  ssize_t header_size;
-  char   *reply;
-  ssize_t reply_size;
+  int      keep_alive;
+  char    *request;
+  ssize_t  request_size;
+  ssize_t  header_size;
+  char    *reply;
+  ssize_t  reply_size;
 };
 
 /*
@@ -150,9 +157,8 @@ void exerr( char * message );
 
 /* add_peer_to_torrent does only release the torrent bucket if from_sync is set,
    otherwise it is released in return_peers_for_torrent */
-#define add_peer_to_torrent(hash,peer,proto) add_peer_to_torrent_and_return_peers(hash,peer,proto,0,NULL)
-size_t  add_peer_to_torrent_and_return_peers( ot_hash hash, ot_peer *peer, PROTO_FLAG proto, size_t amount, char * reply );
-size_t  remove_peer_from_torrent( ot_hash hash, ot_peer *peer, char *reply, PROTO_FLAG proto );
+size_t  add_peer_to_torrent_and_return_peers( PROTO_FLAG proto, struct ot_workstruct *ws, size_t amount );
+size_t  remove_peer_from_torrent( PROTO_FLAG proto, struct ot_workstruct *ws );
 size_t  return_tcp_scrape_for_torrent( ot_hash *hash, int amount, char *reply );
 size_t  return_udp_scrape_for_torrent( ot_hash hash, char *reply );
 void    add_torrent_from_saved_state( ot_hash hash, ot_time base, size_t down_count );

@@ -29,8 +29,6 @@ static void udp_make_connectionid( uint32_t * connid, const ot_ip6 remoteip ) {
 
 /* UDP implementation according to http://xbtt.sourceforge.net/udp_tracker_protocol.html */
 void handle_udp6( int64 serversocket, struct ot_workstruct *ws ) {
-  ot_peer     peer;
-  ot_hash    *hash = NULL;
   ot_ip6      remoteip;
   uint32_t   *inpacket = (uint32_t*)ws->inbuf;
   uint32_t   *outpacket = (uint32_t*)ws->outbuf;
@@ -43,6 +41,10 @@ void handle_udp6( int64 serversocket, struct ot_workstruct *ws ) {
   stats_issue_event( EVENT_ACCEPT, FLAG_UDP, (uintptr_t)remoteip );
   stats_issue_event( EVENT_READ, FLAG_UDP, byte_count );
 
+  /* Initialise hash pointer */
+  ws->hash = NULL;
+  ws->peer_id = NULL;
+  
   /* Minimum udp tracker packet size, also catches error */
   if( byte_count < 16 )
     return;
@@ -71,33 +73,36 @@ void handle_udp6( int64 serversocket, struct ot_workstruct *ws ) {
       numwant = ntohl( inpacket[92/4] );
       if (numwant > 200) numwant = 200;
 
-      event = ntohl( inpacket[80/4] );
-      port  = *(uint16_t*)( ((char*)inpacket) + 96 );
-      hash  = (ot_hash*)( ((char*)inpacket) + 16 );
+      event    = ntohl( inpacket[80/4] );
+      port     = *(uint16_t*)( ((char*)inpacket) + 96 );
+      ws->hash = (ot_hash*)( ((char*)inpacket) + 16 );
 
-      OT_SETIP( &peer, remoteip );
-      OT_SETPORT( &peer, &port );
-      OT_PEERFLAG( &peer ) = 0;
+      OT_SETIP( &ws->peer, remoteip );
+      OT_SETPORT( &ws->peer, &port );
+      OT_PEERFLAG( &ws->peer ) = 0;
 
       switch( event ) {
-        case 1: OT_PEERFLAG( &peer ) |= PEER_FLAG_COMPLETED; break;
-        case 3: OT_PEERFLAG( &peer ) |= PEER_FLAG_STOPPED; break;
+        case 1: OT_PEERFLAG( &ws->peer ) |= PEER_FLAG_COMPLETED; break;
+        case 3: OT_PEERFLAG( &ws->peer ) |= PEER_FLAG_STOPPED; break;
         default: break;
       }
 
       if( !left )
-        OT_PEERFLAG( &peer )         |= PEER_FLAG_SEEDING;
+        OT_PEERFLAG( &ws->peer )         |= PEER_FLAG_SEEDING;
 
       outpacket[0] = htonl( 1 );    /* announce action */
       outpacket[1] = inpacket[12/4];
 
-      if( OT_PEERFLAG( &peer ) & PEER_FLAG_STOPPED ) /* Peer is gone. */
-        byte_count = remove_peer_from_torrent( *hash, &peer, ws->outbuf, FLAG_UDP );
-      else
-        byte_count = 8 + add_peer_to_torrent_and_return_peers( *hash, &peer, FLAG_UDP, numwant, ((char*)outpacket) + 8 );
+      if( OT_PEERFLAG( &ws->peer ) & PEER_FLAG_STOPPED ) { /* Peer is gone. */
+        ws->reply      = ws->outbuf;
+        ws->reply_size = remove_peer_from_torrent( FLAG_UDP, ws );
+      } else {
+        ws->reply      = ws->outbuf + 8;
+        ws->reply_size = 8 + add_peer_to_torrent_and_return_peers( FLAG_UDP, ws, numwant );
+      }
 
-      socket_send6( serversocket, ws->outbuf, byte_count, remoteip, remoteport, 0 );
-      stats_issue_event( EVENT_ANNOUNCE, FLAG_UDP, byte_count );
+      socket_send6( serversocket, ws->outbuf, ws->reply_size, remoteip, remoteport, 0 );
+      stats_issue_event( EVENT_ANNOUNCE, FLAG_UDP, ws->reply_size );
       break;
 
     case 2: /* This is a scrape action */
