@@ -53,26 +53,29 @@ static void accesslist_readfile( void ) {
     fprintf( stderr, "Warning: Not enough memory to allocate %zd bytes for accesslist buffer. May succeed later.\n", ( maplen / 41 ) * 20 );
     return;
   }
-  
+
   /* No use to scan if there's not enough room for another full info_hash */
   map_end = map + maplen - 40;
   read_offs = map;
 
   /* We do ignore anything that is not of the form "^[:xdigit:]{40}[^:xdigit:].*" */
-  while( read_offs < map_end ) {
+  while( read_offs + 40 <= map_end ) {
     int i;
     for( i=0; i<(int)sizeof(ot_hash); ++i ) {
-      int eger = 16 * scan_fromhex( read_offs[ 2*i ] ) + scan_fromhex( read_offs[ 1 + 2*i ] );
-      if( eger < 0 )
-        continue;
-      (*info_hash)[i] = eger;
+      int eger1 = scan_fromhex( read_offs[ 2*i ] );
+      int eger2 = scan_fromhex( read_offs[ 1 + 2*i ] );
+      if( eger1 < 0 || eger2 < 0 )
+        break;
+      (*info_hash)[i] = eger1 * 16 + eger2;
     }
 
-    read_offs += 40;
+    if( i == sizeof(ot_hash) ) {
+      read_offs += 40;
 
-    /* Append accesslist to accesslist vector */
-    if( scan_fromhex( *read_offs ) < 0 )
-      ++info_hash;
+      /* Append accesslist to accesslist vector */
+      if( read_offs == map_end || scan_fromhex( *read_offs ) < 0 )
+        ++info_hash;
+    }
 
     /* Find start of next line */
     while( read_offs < map_end && *(read_offs++) != '\n' );
