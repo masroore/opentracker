@@ -185,6 +185,10 @@ static void handle_read( const int64 sock, struct ot_workstruct *ws ) {
     ws->request      = array_start( &cookie->request );
     ws->request_size = array_bytes( &cookie->request );
     http_handle_request( sock, ws );
+#ifdef WANT_KEEPALIVE
+    if( !ws->keep_alive )
+#endif
+      return;
   }
 }
 
