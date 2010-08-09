@@ -69,6 +69,7 @@ static void http_senddata( const int64 sock, struct ot_workstruct *ws ) {
     tai6464 t;
 
     if( !( outbuf = malloc( ws->reply_size - written_size ) ) ) {
+      array_reset( &cookie->request );
       free(cookie); io_close( sock );
       return;
     }
