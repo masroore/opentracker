@@ -32,10 +32,12 @@
 #include "ot_mutex.h"
 #include "ot_stats.h"
 
+#ifndef WANT_SYNC_LIVE
 #define WANT_SYNC_LIVE
+#endif
 #include "ot_livesync.h"
 
-ot_ip6   g_serverip; 
+ot_ip6   g_serverip;
 uint16_t g_serverport = 9009;
 uint32_t g_tracker_id;
 char     groupip_1[4] = { 224,0,23,5 };
@@ -59,7 +61,7 @@ int      g_self_pipe[2];
 /* So after each bucket wait 1 / OT_BUCKET_COUNT intervals */
 #define OT_SYNC_SLEEP ( ( ( OT_SYNC_INTERVAL_MINUTES ) * 60 * 1000000 ) / ( OT_BUCKET_COUNT ) )
 
-enum { OT_SYNC_PEER = 0xbeef };
+enum { OT_SYNC_PEER };
 enum { FLAG_SERVERSOCKET = 1 };
 
 /* For incoming packets */
@@ -614,7 +616,7 @@ static void * streamsync_worker( void * args ) {
       mem = 3 * ( 4 + 1 + 1 + 2 ) + ( count_one + count_two ) * 19 + count_def * 20 +
             ( count_one + 2 * count_two + count_peers ) * 7;
 
-     fprintf( stderr, "Mem: %d\n", mem );
+     fprintf( stderr, "Mem: %zd\n", mem );
 
       ptr = ptr_a = ptr_b = ptr_c = malloc( mem );
       if( !ptr ) goto unlock_continue;
