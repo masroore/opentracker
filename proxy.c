@@ -412,7 +412,7 @@ close_socket:
 static void handle_write( int64 peersocket ) {
   proxy_peer *peer = io_getcookie( peersocket );
 
-  if( !peer ) { 
+  if( !peer ) {
     /* Can't happen ;) */
     io_close( peersocket );
     return;
@@ -672,7 +672,7 @@ static void * streamsync_worker( void * args ) {
         }
 
         /* Copy tail of info_hash, advance pointer */
-        memcpy( *dst, torrent->hash + 1, sizeof( ot_hash ) - 1);
+        memcpy( *dst, ((uint8_t*)torrent->hash) + 1, sizeof( ot_hash ) - 1);
         *dst += sizeof( ot_hash ) - 1;
 
         /* Encode peer count */
@@ -764,7 +764,7 @@ static void livesync_proxytell( uint8_t prefix, uint8_t *info_hash, uint8_t *pee
 }
 
 static void process_indata( proxy_peer * peer ) {
-  int consumed, peers;
+  size_t consumed, peers;
   uint8_t *data    = peer->indata, *hash;
   uint8_t *dataend = data + peer->indata_length;
 
@@ -782,7 +782,7 @@ printf( "type: %hhu, prefix: %02X, torrentcount: %zd\n", peer->packet_type, peer
     }
 
 next_torrent:
-    /* Ensure size for the complete torrent block */
+    /* Ensure size for a minimal torrent block */
     if( data + sizeof(ot_hash) + OT_IP_SIZE + 3 > dataend ) break;
 
     /* Advance pointer to peer count or peers */
@@ -798,9 +798,9 @@ next_torrent:
     }
 
     /* Ensure enough data being read to hold all peers */
-    if( data + 7 * peers > dataend ) break;
+    if( data + (OT_IP_SIZE + 3) * peers > dataend ) break;
 
-printf( "peers: %d\n", peers );
+printf( "peers: %zd\n", peers );
 
     while( peers-- ) {
       livesync_proxytell( peer->packet_tprefix, hash, data );
