@@ -53,6 +53,7 @@ SOURCES_proxy=proxy.c ot_vector.c ot_mutex.c
 OBJECTS = $(SOURCES:%.c=%.o)
 OBJECTS_debug = $(SOURCES:%.c=%.debug.o)
 OBJECTS_proxy = $(SOURCES_proxy:%.c=%.o)
+OBJECTS_proxy_debug = $(SOURCES_proxy:%.c=%.debug.o)
 
 .SUFFIXES: .debug.o .o .c
 
@@ -67,7 +68,9 @@ $(BINARY): $(OBJECTS) $(HEADERS)
 $(BINARY).debug: $(OBJECTS_debug) $(HEADERS)
 	$(CC) -o $@ $(OBJECTS_debug) $(LDFLAGS)
 proxy: $(OBJECTS_proxy) $(HEADERS)
-	$(CC) -o $@ $(OBJECTS_proxy) $(LDFLAGS)
+	$(CC) -o $@ $(OBJECTS_proxy) $(CFLAGS_production) $(LDFLAGS)
+proxy.debug: $(OBJECTS_proxy_debug) $(HEADERS)
+	$(CC) -o $@ $(OBJECTS_proxy_debug) $(LDFLAGS)
 
 .c.debug.o : $(HEADERS)
 	$(CC) -c -o $@ $(CFLAGS_debug) $(<:.debug.o=.c)
