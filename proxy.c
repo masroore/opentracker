@@ -368,7 +368,7 @@ static void handle_read( int64 peersocket ) {
 
     /* See, if we already have a connection to that peer */
     for( i=0; i<MAX_PEERS; ++i )
-      if( ( g_connections[i].state & FLAG_MASK ) == FLAG_CONNECTED && 
+      if( ( g_connections[i].state & FLAG_MASK ) == FLAG_CONNECTED &&
             g_connections[i].tracker_id == tracker_id ) {
         fprintf( stderr, "Peer already connected. Closing connection.\n" );
         goto close_socket;
@@ -557,8 +557,8 @@ int main( int argc, char **argv ) {
       ot_try_bind( serverip, tmpport );
       ++sbound;
       break;
-    case 'c': 
-      if( g_connection_count > MAX_PEERS / 2 ) exerr( "Connection limit exceeded.\n" ); 
+    case 'c':
+      if( g_connection_count > MAX_PEERS / 2 ) exerr( "Connection limit exceeded.\n" );
       tmpport = 0;
       if( !scan_ip6_port( optarg,
         g_connections[g_connection_count].ip,
@@ -613,46 +613,42 @@ static void * streamsync_worker( void * args ) {
       }
 
       /* Maximal memory requirement: max 3 blocks, max torrents * 20 + max peers * 7 */
-      mem = 3 * ( 4 + 1 + 1 + 2 ) + ( count_one + count_two ) * 19 + count_def * 20 +
+      mem = 3 * ( 4 + 1 + 1 + 2 ) + ( count_one + count_two ) * 19 + count_def * ( 19 + 6 ) +
             ( count_one + 2 * count_two + count_peers ) * 7;
 
-     fprintf( stderr, "Mem: %zd\n", mem );
+      fprintf( stderr, "Mem: %zd\n", mem );
 
       ptr = ptr_a = ptr_b = ptr_c = malloc( mem );
       if( !ptr ) goto unlock_continue;
 
-      if( count_one > 8 ) {
+      if( count_one > 8 || !count_def ) {
         mem_a = 4 + 1 + 1 + 2 + count_one * ( 19 + 7 );
         ptr_b += mem_a; ptr_c += mem_a;
         memcpy( ptr_a, &g_tracker_id, sizeof(g_tracker_id)); /* Offset 0: the tracker ID */
-        ptr_a[4] = 1;                                       /* Offset 4: packet type 1 */
-        ptr_a[5] = (bucket << 8) >> OT_BUCKET_COUNT_BITS;   /* Offset 5: the shared prefix */
+        ptr_a[4] = 1;                                        /* Offset 4: packet type 1 */
+        ptr_a[5] = (bucket << 8) >> OT_BUCKET_COUNT_BITS;    /* Offset 5: the shared prefix */
         ptr_a[6] = count_one >> 8;
         ptr_a[7] = count_one & 255;
         ptr_a += 8;
-      } else {
+      } else
         count_def   += count_one;
-        count_peers += count_one;
-      }
 
-      if( count_two > 8 ) {
+      if( count_two > 8 || !count_def ) {
         mem_b = 4 + 1 + 1 + 2 + count_two * ( 19 + 14 );
         ptr_c += mem_b;
         memcpy( ptr_b, &g_tracker_id, sizeof(g_tracker_id)); /* Offset 0: the tracker ID */
-        ptr_b[4] = 2;                                       /* Offset 4: packet type 2 */
-        ptr_b[5] = (bucket << 8) >> OT_BUCKET_COUNT_BITS;   /* Offset 5: the shared prefix */
+        ptr_b[4] = 2;                                        /* Offset 4: packet type 2 */
+        ptr_b[5] = (bucket << 8) >> OT_BUCKET_COUNT_BITS;    /* Offset 5: the shared prefix */
         ptr_b[6] = count_two >> 8;
         ptr_b[7] = count_two & 255;
         ptr_b += 8;
-      } else {
+      } else
         count_def   += count_two;
-        count_peers += 2 * count_two;
-      }
 
       if( count_def ) {
         memcpy( ptr_c, &g_tracker_id, sizeof(g_tracker_id)); /* Offset 0: the tracker ID */
-        ptr_c[4] = 0;                                       /* Offset 4: packet type 0 */
-        ptr_c[5] = (bucket << 8) >> OT_BUCKET_COUNT_BITS;   /* Offset 5: the shared prefix */
+        ptr_c[4] = 0;                                        /* Offset 4: packet type 0 */
+        ptr_c[5] = (bucket << 8) >> OT_BUCKET_COUNT_BITS;    /* Offset 5: the shared prefix */
         ptr_c[6] = count_def >> 8;
         ptr_c[7] = count_def & 255;
         ptr_c += 8;
@@ -665,26 +661,36 @@ static void * streamsync_worker( void * args ) {
         ot_peerlist *peer_list = torrent->peer_list;
         ot_peer *peers = (ot_peer*)(peer_list->peers.data);
         uint8_t **dst;
-        int multi = 0;
-        switch( peer_list->peer_count ) {
+
+        /* Determine destination slot */
+        count_peers = peer_list->peer_count;
+        switch( count_peers ) {
           case 0:  continue;
           case 1:  dst = mem_a ? &ptr_a : &ptr_c; break;
           case 2:  dst = mem_b ? &ptr_b : &ptr_c; break;
-          default: dst = &ptr_c; multi = 1; break;
+          default: dst = &ptr_c; break;
         }
 
-        do {
-          size_t i, pc = peer_list->peer_count;
-          if( pc > 255 ) pc = 255;
-          memcpy( *dst, torrent->hash + 1, sizeof( ot_hash ) - 1);
-          *dst += sizeof( ot_hash ) - 1;
-          if( multi ) *(*dst)++ = pc;
-          for( i=0; i < pc; ++i ) {
-            memcpy( *dst, peers++, OT_IP_SIZE + 3 );
-            *dst += OT_IP_SIZE + 3;
+        /* Copy tail of info_hash, advance pointer */
+        memcpy( *dst, torrent->hash + 1, sizeof( ot_hash ) - 1);
+        *dst += sizeof( ot_hash ) - 1;
+
+        /* Encode peer count */
+        if( dst == &ptr_c )
+          while( count_peers ) {
+            if( count_peers <= 0x7f )
+              *(*dst)++ = count_peers;
+            else
+              *(*dst)++ = 0x80 | ( count_peers & 0x7f );
+            count_peers >>= 7;
           }
-          peer_list->peer_count -= pc; 
-        } while( peer_list->peer_count );
+
+        /* Copy peers */
+        count_peers = peer_list->peer_count;
+        while( count_peers-- ) {
+          memcpy( *dst, peers++, OT_IP_SIZE + 3 );
+          *dst += OT_IP_SIZE + 3;
+        }
         free_peerlist(peer_list);
       }
 
@@ -700,7 +706,7 @@ unlock_continue:
         if( ptr_a > ptr_c ) ptr_c = ptr_a;
         mem = ptr_c - ptr;
 
-        for( i=0; i<g_connection_count; ++i ) {
+        for( i=0; i < g_connection_count; ++i ) {
           if( PROXYPEER_ISCONNECTED(g_connections[i].state) ) {
             void *tmp = malloc( mem );
             if( tmp ) {
@@ -735,18 +741,30 @@ void livesync_ticker( ) {
 }
 
 static void livesync_proxytell( uint8_t prefix, uint8_t *info_hash, uint8_t *peer ) {
+  unsigned int i;
+
   *g_peerbuffer_pos = prefix;
   memcpy( g_peerbuffer_pos + 1, info_hash, sizeof(ot_hash) - 1 );
   memcpy( g_peerbuffer_pos + sizeof(ot_hash), peer, sizeof(ot_peer) - 1 );
 
-  g_peerbuffer_pos += sizeof(ot_hash) + sizeof(ot_peer);
+  /* Dump info_hash */
+  for( i=0; i<sizeof(ot_hash); ++i )
+    printf( "%02X", g_peerbuffer_pos[i] );
+  putchar( ':' );
+
+  g_peerbuffer_pos += sizeof(ot_hash);
+
+  printf( "%d.%d.%d.%d:%hd (%02X %02X)\n", g_peerbuffer_pos[0], g_peerbuffer_pos[1], g_peerbuffer_pos[2], g_peerbuffer_pos[3],
+    g_peerbuffer_pos[4] | ( g_peerbuffer_pos[5] << 8 ), g_peerbuffer_pos[6], g_peerbuffer_pos[7] );
+
+  g_peerbuffer_pos += sizeof(ot_peer);
 
   if( g_peerbuffer_pos >= g_peerbuffer_highwater )
     livesync_issue_peersync();
 }
 
 static void process_indata( proxy_peer * peer ) {
-  int ensuremem, consumed, peers;
+  int consumed, peers;
   uint8_t *data    = peer->indata, *hash;
   uint8_t *dataend = data + peer->indata_length;
 
@@ -760,21 +778,37 @@ static void process_indata( proxy_peer * peer ) {
       peer->packet_tprefix = data[5];
       peer->packet_tcount  = data[6] * 256 + data[7];
       data += 8;
+printf( "type: %d, prefix: %02X, torrentcount: %d\n", peer->packet_type, peer->packet_tprefix, peer->packet_tcount );
     }
 
-    /* ensure size for the complete torrent block */
-    if( data + 26 > dataend ) break;
-    peers = peer->packet_type ? peer->packet_type : data[19];
-    ensuremem = 19 + ( peer->packet_type == 0 ) + 7 * peers;
-    if( data + ensuremem > dataend ) break;
+next_torrent:
+    /* Ensure size for the complete torrent block */
+    if( data + sizeof(ot_hash) + OT_IP_SIZE + 3 > dataend ) break;
 
+    /* Advance pointer to peer count or peers */
     hash = data;
-    data += 19 + ( peer->packet_type == 0 );
+    data += sizeof(ot_hash) - 1;
+
+    /* Type 0 has peer count encoded before each peers */
+    if( peer->packet_type == 0 ) {
+      int shift = 0;
+      peers = 0;
+      do peers |= ( 0x7f & *data ) << ( 7 * shift );
+        while ( *(data++) & 0x80 && shift++ < 6 );
+    } else
+      peers = peer->packet_type;
+
+    /* Ensure enough data being read to hold all peers */
+    if( data + 7 * peers > dataend ) break;
+
+printf( "peers: %d\n", peers );
 
     while( peers-- ) {
       livesync_proxytell( peer->packet_tprefix, hash, data );
-      data += 7;
+      data += OT_IP_SIZE + 3;
     }
+    if( --peer->packet_tcount )
+      goto next_torrent;
   }
 
   consumed = data - peer->indata;
