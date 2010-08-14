@@ -245,9 +245,9 @@ typedef struct {
   int64    fd;              /* A file handle, if connected, <= 0 is disconnected (0 initially, -1 else) */
   io_batch outdata;         /* The iobatch containing our sync data */
 
-  int      packet_tcount;   /* Number of unprocessed torrents in packet we currently receive */
-  char     packet_tprefix;  /* Prefix byte for all torrents in current packet */
-  char     packet_type;     /* Type of current packet */
+  size_t   packet_tcount;   /* Number of unprocessed torrents in packet we currently receive */
+  uint8_t  packet_tprefix;  /* Prefix byte for all torrents in current packet */
+  uint8_t  packet_type;     /* Type of current packet */
   uint32_t packet_tid;      /* Tracker id for current packet */
 
 } proxy_peer;
@@ -754,7 +754,7 @@ static void livesync_proxytell( uint8_t prefix, uint8_t *info_hash, uint8_t *pee
 
   g_peerbuffer_pos += sizeof(ot_hash);
 
-  printf( "%d.%d.%d.%d:%hd (%02X %02X)\n", g_peerbuffer_pos[0], g_peerbuffer_pos[1], g_peerbuffer_pos[2], g_peerbuffer_pos[3],
+  printf( "%hhu.%hhu.%hhu.%hhu:%hu (%02X %02X)\n", g_peerbuffer_pos[0], g_peerbuffer_pos[1], g_peerbuffer_pos[2], g_peerbuffer_pos[3],
     g_peerbuffer_pos[4] | ( g_peerbuffer_pos[5] << 8 ), g_peerbuffer_pos[6], g_peerbuffer_pos[7] );
 
   g_peerbuffer_pos += sizeof(ot_peer);
@@ -778,7 +778,7 @@ static void process_indata( proxy_peer * peer ) {
       peer->packet_tprefix = data[5];
       peer->packet_tcount  = data[6] * 256 + data[7];
       data += 8;
-printf( "type: %d, prefix: %02X, torrentcount: %d\n", peer->packet_type, peer->packet_tprefix, peer->packet_tcount );
+printf( "type: %hhu, prefix: %02X, torrentcount: %zd\n", peer->packet_type, peer->packet_tprefix, peer->packet_tcount );
     }
 
 next_torrent:
@@ -790,13 +790,12 @@ next_torrent:
     data += sizeof(ot_hash) - 1;
 
     /* Type 0 has peer count encoded before each peers */
-    if( peer->packet_type == 0 ) {
+    peers = peer->packet_type;
+    if( !peers ) {
       int shift = 0;
-      peers = 0;
       do peers |= ( 0x7f & *data ) << ( 7 * shift );
         while ( *(data++) & 0x80 && shift++ < 6 );
-    } else
-      peers = peer->packet_type;
+    }
 
     /* Ensure enough data being read to hold all peers */
     if( data + 7 * peers > dataend ) break;
