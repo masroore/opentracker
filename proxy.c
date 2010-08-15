@@ -603,17 +603,16 @@ static void * streamsync_worker( void * args ) {
         /* Address torrents members */
         ot_peerlist *peer_list = ( ((ot_torrent*)(torrents_list->data))[tor_offset] ).peer_list;
         switch( peer_list->peer_count ) {
-          case 2: count_two++; break;
-          case 1: count_one++; break;
-          case 0: break;
-          default:
-            count_peers += peer_list->peer_count;
-            count_def   += 1 + ( peer_list->peer_count >> 8 );
+          case 2:  count_two++; break;
+          case 1:  count_one++; break;
+          case 0:               break;
+          default: count_def++;
+                   count_peers += peer_list->peer_count;
         }
       }
 
       /* Maximal memory requirement: max 3 blocks, max torrents * 20 + max peers * 7 */
-      mem = 3 * ( 4 + 1 + 1 + 2 ) + ( count_one + count_two ) * 19 + count_def * ( 19 + 6 ) +
+      mem = 3 * ( 4 + 1 + 1 + 2 ) + ( count_one + count_two ) * 19 + count_def * ( 19 + 8 ) +
             ( count_one + 2 * count_two + count_peers ) * 7;
 
       fprintf( stderr, "Mem: %zd\n", mem );
@@ -781,7 +780,6 @@ static void process_indata( proxy_peer * peer ) {
 printf( "type: %hhu, prefix: %02X, torrentcount: %zd\n", peer->packet_type, peer->packet_tprefix, peer->packet_tcount );
     }
 
-next_torrent:
     /* Ensure size for a minimal torrent block */
     if( data + sizeof(ot_hash) + OT_IP_SIZE + 3 > dataend ) break;
 
@@ -800,14 +798,11 @@ next_torrent:
     /* Ensure enough data being read to hold all peers */
     if( data + (OT_IP_SIZE + 3) * peers > dataend ) break;
 
-printf( "peers: %zd\n", peers );
-
     while( peers-- ) {
       livesync_proxytell( peer->packet_tprefix, hash, data );
       data += OT_IP_SIZE + 3;
     }
-    if( --peer->packet_tcount )
-      goto next_torrent;
+    --peer->packet_tcount;
   }
 
   consumed = data - peer->indata;
