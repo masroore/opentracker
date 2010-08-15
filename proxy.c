@@ -380,22 +380,27 @@ static void handle_read( int64 peersocket ) {
 
     /* The new connection is good, send our tracker_id on incoming connections */
     if( peer->state == FLAG_CONNECTING )
-      io_trywrite( peersocket, (void*)&g_tracker_id, sizeof( g_tracker_id ) );
+      if( io_trywrite( peersocket, (void*)&g_tracker_id, sizeof( g_tracker_id ) ) != sizeof( g_tracker_id ) )
+        goto close_socket;
 
     peer->tracker_id = tracker_id;
     PROXYPEER_SETCONNECTED( peer->state );
 
-    fprintf( stderr, "Incoming connection successful.\n" );
+    if( peer->state & FLAG_OUTGOING )
+      fprintf( stderr, "succeeded.\n" );
+    else
+      fprintf( stderr, "Incoming connection successful.\n" );
 
     break;
 close_socket:
+    fprintf( stderr, "Handshake incomplete, closing socket\n" );
     io_close( peersocket );
-    reset_info_block( peer ); 
+    reset_info_block( peer );
     break;
   case FLAG_CONNECTED:
     /* Here we acutally expect data from peer
        indata_length should be less than 20+256*7 bytes, for incomplete torrent entries */
-    datalen = io_tryread( peersocket, (void*)(peer->indata + peer->indata_length), sizeof( peer->indata ) - peer->indata_length ); 
+    datalen = io_tryread( peersocket, (void*)(peer->indata + peer->indata_length), sizeof( peer->indata ) - peer->indata_length );
     if( !datalen || datalen < -1 ) {
       fprintf( stderr, "Connection closed by remote peer.\n" );
       io_close( peersocket );
@@ -432,12 +437,15 @@ static void handle_write( int64 peersocket ) {
         break;
     }
 
-    io_trywrite( peersocket, (void*)&g_tracker_id, sizeof( g_tracker_id ) );
-    PROXYPEER_SETWAITTRACKERID( peer->state );
-    fprintf( stderr, " succeeded.\n" );
-
-    io_dontwantwrite( peersocket );
-    io_wantread( peersocket );
+    if( io_trywrite( peersocket, (void*)&g_tracker_id, sizeof( g_tracker_id ) ) == sizeof( g_tracker_id ) ) {
+      PROXYPEER_SETWAITTRACKERID( peer->state );
+      io_dontwantwrite( peersocket );
+      io_wantread( peersocket );
+    } else {
+      fprintf( stderr, "Handshake incomplete, closing socket\n" );
+      io_close( peersocket );
+      reset_info_block( peer );
+    }
     break;
   case FLAG_CONNECTED:
     switch( iob_send( peersocket, &peer->outdata ) ) {
@@ -612,7 +620,7 @@ static void * streamsync_worker( void * args ) {
       }
 
       /* Maximal memory requirement: max 3 blocks, max torrents * 20 + max peers * 7 */
-      mem = 3 * ( 4 + 1 + 1 + 2 ) + ( count_one + count_two ) * 19 + count_def * ( 19 + 8 ) +
+      mem = 3 * ( 4 + 1 + 1 + 2 ) + ( count_one + count_two ) * ( 19 + 1 ) + count_def * ( 19 + 8 ) +
             ( count_one + 2 * count_two + count_peers ) * 7;
 
       fprintf( stderr, "Mem: %zd\n", mem );
@@ -630,7 +638,7 @@ static void * streamsync_worker( void * args ) {
         ptr_a[7] = count_one & 255;
         ptr_a += 8;
       } else
-        count_def   += count_one;
+        count_def += count_one;
 
       if( count_two > 8 || !count_def ) {
         mem_b = 4 + 1 + 1 + 2 + count_two * ( 19 + 14 );
@@ -642,7 +650,7 @@ static void * streamsync_worker( void * args ) {
         ptr_b[7] = count_two & 255;
         ptr_b += 8;
       } else
-        count_def   += count_two;
+        count_def += count_two;
 
       if( count_def ) {
         memcpy( ptr_c, &g_tracker_id, sizeof(g_tracker_id)); /* Offset 0: the tracker ID */
@@ -740,22 +748,23 @@ void livesync_ticker( ) {
 }
 
 static void livesync_proxytell( uint8_t prefix, uint8_t *info_hash, uint8_t *peer ) {
-  unsigned int i;
+//  unsigned int i;
 
   *g_peerbuffer_pos = prefix;
   memcpy( g_peerbuffer_pos + 1, info_hash, sizeof(ot_hash) - 1 );
   memcpy( g_peerbuffer_pos + sizeof(ot_hash), peer, sizeof(ot_peer) - 1 );
 
+#if 0
   /* Dump info_hash */
   for( i=0; i<sizeof(ot_hash); ++i )
     printf( "%02X", g_peerbuffer_pos[i] );
   putchar( ':' );
-
+#endif
   g_peerbuffer_pos += sizeof(ot_hash);
-
+#if 0
   printf( "%hhu.%hhu.%hhu.%hhu:%hu (%02X %02X)\n", g_peerbuffer_pos[0], g_peerbuffer_pos[1], g_peerbuffer_pos[2], g_peerbuffer_pos[3],
     g_peerbuffer_pos[4] | ( g_peerbuffer_pos[5] << 8 ), g_peerbuffer_pos[6], g_peerbuffer_pos[7] );
-
+#endif
   g_peerbuffer_pos += sizeof(ot_peer);
 
   if( g_peerbuffer_pos >= g_peerbuffer_highwater )
@@ -794,10 +803,14 @@ printf( "type: %hhu, prefix: %02X, torrentcount: %zd\n", peer->packet_type, peer
       do peers |= ( 0x7f & *data ) << ( 7 * shift );
         while ( *(data++) & 0x80 && shift++ < 6 );
     }
-
+#if 0
+printf( "peers: %zd\n", peers );
+#endif
     /* Ensure enough data being read to hold all peers */
-    if( data + (OT_IP_SIZE + 3) * peers > dataend ) break;
-
+    if( data + (OT_IP_SIZE + 3) * peers > dataend ) {
+      data = hash;
+      break;
+    }
     while( peers-- ) {
       livesync_proxytell( peer->packet_tprefix, hash, data );
       data += OT_IP_SIZE + 3;
