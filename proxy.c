@@ -713,7 +713,7 @@ unlock_continue:
         if( ptr_a > ptr_c ) ptr_c = ptr_a;
         mem = ptr_c - ptr;
 
-        for( i=0; i < g_connection_count; ++i ) {
+        for( i=0; i < MAX_PEERS; ++i ) {
           if( PROXYPEER_ISCONNECTED(g_connections[i].state) ) {
             void *tmp = malloc( mem );
             if( tmp ) {
