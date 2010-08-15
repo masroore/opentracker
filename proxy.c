@@ -620,7 +620,7 @@ static void * streamsync_worker( void * args ) {
       }
 
       /* Maximal memory requirement: max 3 blocks, max torrents * 20 + max peers * 7 */
-      mem = 3 * ( 4 + 1 + 1 + 2 ) + ( count_one + count_two ) * ( 19 + 1 ) + count_def * ( 19 + 8 ) +
+      mem = 3 * ( 1 + 1 + 2 ) + ( count_one + count_two ) * ( 19 + 1 ) + count_def * ( 19 + 8 ) +
             ( count_one + 2 * count_two + count_peers ) * 7;
 
       fprintf( stderr, "Mem: %zd\n", mem );
@@ -628,37 +628,34 @@ static void * streamsync_worker( void * args ) {
       ptr = ptr_a = ptr_b = ptr_c = malloc( mem );
       if( !ptr ) goto unlock_continue;
 
-      if( count_one > 8 || !count_def ) {
-        mem_a = 4 + 1 + 1 + 2 + count_one * ( 19 + 7 );
+      if( count_one > 4 || !count_def ) {
+        mem_a = 1 + 1 + 2 + count_one * ( 19 + 7 );
         ptr_b += mem_a; ptr_c += mem_a;
-        memcpy( ptr_a, &g_tracker_id, sizeof(g_tracker_id)); /* Offset 0: the tracker ID */
-        ptr_a[4] = 1;                                        /* Offset 4: packet type 1 */
-        ptr_a[5] = (bucket << 8) >> OT_BUCKET_COUNT_BITS;    /* Offset 5: the shared prefix */
-        ptr_a[6] = count_one >> 8;
-        ptr_a[7] = count_one & 255;
-        ptr_a += 8;
+        ptr_a[0] = 1;                                        /* Offset 0: packet type 1 */
+        ptr_a[1] = (bucket << 8) >> OT_BUCKET_COUNT_BITS;    /* Offset 1: the shared prefix */
+        ptr_a[2] = count_one >> 8;
+        ptr_a[3] = count_one & 255;
+        ptr_a += 4;
       } else
         count_def += count_one;
 
-      if( count_two > 8 || !count_def ) {
-        mem_b = 4 + 1 + 1 + 2 + count_two * ( 19 + 14 );
+      if( count_two > 4 || !count_def ) {
+        mem_b = 1 + 1 + 2 + count_two * ( 19 + 14 );
         ptr_c += mem_b;
-        memcpy( ptr_b, &g_tracker_id, sizeof(g_tracker_id)); /* Offset 0: the tracker ID */
-        ptr_b[4] = 2;                                        /* Offset 4: packet type 2 */
-        ptr_b[5] = (bucket << 8) >> OT_BUCKET_COUNT_BITS;    /* Offset 5: the shared prefix */
-        ptr_b[6] = count_two >> 8;
-        ptr_b[7] = count_two & 255;
-        ptr_b += 8;
+        ptr_b[0] = 2;                                        /* Offset 0: packet type 2 */
+        ptr_b[1] = (bucket << 8) >> OT_BUCKET_COUNT_BITS;    /* Offset 1: the shared prefix */
+        ptr_b[2] = count_two >> 8;
+        ptr_b[3] = count_two & 255;
+        ptr_b += 4;
       } else
         count_def += count_two;
 
       if( count_def ) {
-        memcpy( ptr_c, &g_tracker_id, sizeof(g_tracker_id)); /* Offset 0: the tracker ID */
-        ptr_c[4] = 0;                                        /* Offset 4: packet type 0 */
-        ptr_c[5] = (bucket << 8) >> OT_BUCKET_COUNT_BITS;    /* Offset 5: the shared prefix */
-        ptr_c[6] = count_def >> 8;
-        ptr_c[7] = count_def & 255;
-        ptr_c += 8;
+        ptr_c[0] = 0;                                        /* Offset 0: packet type 0 */
+        ptr_c[1] = (bucket << 8) >> OT_BUCKET_COUNT_BITS;    /* Offset 1: the shared prefix */
+        ptr_c[2] = count_def >> 8;
+        ptr_c[3] = count_def & 255;
+        ptr_c += 4;
       }
 
       /* For each torrent in this bucket.. */
@@ -780,12 +777,11 @@ static void process_indata( proxy_peer * peer ) {
     /* If we're not inside of a packet, make a new one */
     if( !peer->packet_tcount ) {
       /* Ensure the header is complete or postpone processing */
-      if( data + 8 > dataend ) break;
-      memcpy( &peer->packet_tid, data, sizeof(peer->packet_tid) );
-      peer->packet_type    = data[4];
-      peer->packet_tprefix = data[5];
-      peer->packet_tcount  = data[6] * 256 + data[7];
-      data += 8;
+      if( data + 4 > dataend ) break;
+      peer->packet_type    = data[0];
+      peer->packet_tprefix = data[1];
+      peer->packet_tcount  = data[2] * 256 + data[3];
+      data += 4;
 printf( "type: %hhu, prefix: %02X, torrentcount: %zd\n", peer->packet_type, peer->packet_tprefix, peer->packet_tcount );
     }
 
