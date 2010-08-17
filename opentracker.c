@@ -535,6 +535,7 @@ int main( int argc, char **argv ) {
   ot_ip6 serverip, tmpip;
   int bound = 0, scanon = 1;
   uint16_t tmpport;
+  char * statefile = 0;
 
   memset( serverip, 0, sizeof(ot_ip6) );
 #ifndef WANT_V6
@@ -573,7 +574,7 @@ int main( int argc, char **argv ) {
       case 'd': set_config_option( &g_serverdir, optarg ); break;
       case 'u': set_config_option( &g_serveruser, optarg ); break;
       case 'r': set_config_option( &g_redirecturl, optarg ); break;
-      case 'l': load_state( optarg ); break;
+      case 'l': statefile = optarg; break;
       case 'A':
         if( !scan_ip6( optarg, tmpip )) { usage( argv[0] ); exit( 1 ); }
         accesslist_blessip( tmpip, 0xffff ); /* Allow everything for now */
@@ -614,6 +615,10 @@ int main( int argc, char **argv ) {
   defaul_signal_handlers( );
   /* Init all sub systems. This call may fail with an exit() */
   trackerlogic_init( );
+
+  if( statefile )
+    load_state( statefile );
+
   install_signal_handlers( );
 
   /* Kick off our initial clock setting alarm */
