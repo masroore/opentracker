@@ -374,8 +374,8 @@ int parse_configfile( char * config_filename ) {
   }
 
   while( fgets( inbuf, sizeof(inbuf), accesslist_filehandle ) ) {
-    char *newl;
     char *p = inbuf;
+    size_t strl;
 
     /* Skip white spaces */
     while(isspace(*p)) ++p;
@@ -383,8 +383,10 @@ int parse_configfile( char * config_filename ) {
     /* Ignore comments and empty lines */
     if((*p=='#')||(*p=='\n')||(*p==0)) continue;
 
-    /* chomp */
-    if(( newl = strchr(p, '\n' ))) *newl = 0;
+    /* consume trailing new lines and spaces */
+    strl = strlen(p);
+    while( strl && isspace(p[strl-1]))
+      p[--strl] = 0;
 
     /* Scan for commands */
     if(!byte_diff(p,15,"tracker.rootdir" ) && isspace(p[15])) {
