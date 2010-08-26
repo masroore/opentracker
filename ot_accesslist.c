@@ -78,7 +78,7 @@ static void accesslist_readfile( void ) {
     }
 
     /* Find start of next line */
-    while( read_offs < map_end && *(read_offs++) != '\n' );
+    while( read_offs <= map_end && *(read_offs++) != '\n' );
   }
 #ifdef _DEBUG
   fprintf( stderr, "Added %zd info_hashes to accesslist\n", (size_t)(info_hash - accesslist_new) );
@@ -121,7 +121,7 @@ static void * accesslist_worker( void * args ) {
   (void)args;
 
   while( 1 ) {
-    
+
     /* Initial attempt to read accesslist */
     accesslist_readfile( );
 
