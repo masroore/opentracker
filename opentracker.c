@@ -16,6 +16,9 @@
 #include <pwd.h>
 #include <ctype.h>
 #include <pthread.h>
+#ifdef WANT_SYSLOGS
+#include <syslog.h>
+#endif
 
 /* Libowfat */
 #include "socket.h"
@@ -59,6 +62,11 @@ static void signal_handler( int s ) {
     g_opentracker_running = 0;
 
     trackerlogic_deinit();
+
+#ifdef WANT_SYSLOGS
+    closelog();
+#endif
+
     exit( 0 );
   } else if( s == SIGALRM ) {
     /* Maintain our copy of the clock. time() on BSDs is very expensive. */
@@ -599,6 +607,11 @@ int main( int argc, char **argv ) {
     ot_try_bind( serverip, 6969, FLAG_TCP );
     ot_try_bind( serverip, 6969, FLAG_UDP );
   }
+
+#ifdef WANT_SYSLOGS
+  openlog( "opentracker", 0, LOG_USER );
+  setlogmask(LOG_UPTO(LOG_INFO));
+#endif
 
   if( drop_privileges( g_serveruser ? g_serveruser : "nobody", g_serverdir ) == -1 )
     panic( "drop_privileges failed, exiting. Last error");
