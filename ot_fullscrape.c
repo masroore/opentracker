@@ -57,7 +57,7 @@ static void * fullscrape_worker( void * args ) {
   int iovec_entries;
   struct iovec *iovector;
 
-  args = args;
+  (void) args;
 
   while( 1 ) {
     ot_tasktype tasktype = TASK_FULLSCRAPE;

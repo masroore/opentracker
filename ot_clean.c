@@ -100,7 +100,7 @@ int clean_single_torrent( ot_torrent *torrent ) {
 /* Clean up all peers in current bucket, remove timedout pools and
  torrents */
 static void * clean_worker( void * args ) {
-  args=args;
+  (void) args;
   while( 1 ) {
     int bucket = OT_BUCKET_COUNT;
     while( bucket-- ) {
