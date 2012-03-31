@@ -28,7 +28,7 @@ static void udp_make_connectionid( uint32_t * connid, const ot_ip6 remoteip ) {
 }
 
 /* UDP implementation according to http://xbtt.sourceforge.net/udp_tracker_protocol.html */
-void handle_udp6( int64 serversocket, struct ot_workstruct *ws ) {
+int handle_udp6( int64 serversocket, struct ot_workstruct *ws ) {
   ot_ip6      remoteip;
   uint32_t   *inpacket = (uint32_t*)ws->inbuf;
   uint32_t   *outpacket = (uint32_t*)ws->outbuf;
@@ -37,6 +37,7 @@ void handle_udp6( int64 serversocket, struct ot_workstruct *ws ) {
   size_t      byte_count, scrape_count;
 
   byte_count = socket_recv6( serversocket, ws->inbuf, G_INBUF_SIZE, remoteip, &remoteport, &scopeid );
+  if( !byte_count ) return 0;
 
   stats_issue_event( EVENT_ACCEPT, FLAG_UDP, (uintptr_t)remoteip );
   stats_issue_event( EVENT_READ, FLAG_UDP, byte_count );
@@ -44,16 +45,16 @@ void handle_udp6( int64 serversocket, struct ot_workstruct *ws ) {
   /* Initialise hash pointer */
   ws->hash = NULL;
   ws->peer_id = NULL;
-  
+
   /* Minimum udp tracker packet size, also catches error */
   if( byte_count < 16 )
-    return;
+    return 1;
 
   switch( ntohl( inpacket[2] ) ) {
     case 0: /* This is a connect action */
       /* look for udp bittorrent magic id */
       if( (ntohl(inpacket[0]) != 0x00000417) || (ntohl(inpacket[1]) != 0x27101980) )
-        return;
+        return 1;
 
       outpacket[0] = 0;
       outpacket[1] = inpacket[3];
@@ -65,7 +66,7 @@ void handle_udp6( int64 serversocket, struct ot_workstruct *ws ) {
     case 1: /* This is an announce action */
       /* Minimum udp announce packet size */
       if( byte_count < 98 )
-        return;
+        return 1;
 
       /* We do only want to know, if it is zero */
       left  = inpacket[64/4] | inpacket[68/4];
@@ -116,6 +117,7 @@ void handle_udp6( int64 serversocket, struct ot_workstruct *ws ) {
       stats_issue_event( EVENT_SCRAPE, FLAG_UDP, scrape_count );
       break;
   }
+  return 1;
 }
 
 void udp_init( ) {
