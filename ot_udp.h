@@ -6,6 +6,6 @@
 #ifndef __OT_UDP_H__
 #define __OT_UDP_H__
 
-void handle_udp6( int64 serversocket, struct ot_workstruct *ws );
+int handle_udp6( int64 serversocket, struct ot_workstruct *ws );
 
 #endif
