@@ -266,7 +266,7 @@ static void * server_mainloop( void * args ) {
       if( (intptr_t)cookie == FLAG_TCP )
         handle_accept( sock );
       else if( (intptr_t)cookie == FLAG_UDP )
-        while( handle_udp6( sock, &ws ) );
+        handle_udp6( sock, &ws );
       else if( (intptr_t)cookie == FLAG_SELFPIPE )
         io_tryread( sock, ws.inbuf, G_INBUF_SIZE );
       else
