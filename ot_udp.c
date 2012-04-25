@@ -4,6 +4,8 @@
    $id$ */
 
 /* System */
+#include <stdlib.h>
+#include <pthread.h>
 #include <string.h>
 #include <arpa/inet.h>
 #include <stdio.h>
@@ -120,8 +122,35 @@ int handle_udp6( int64 serversocket, struct ot_workstruct *ws ) {
   return 1;
 }
 
-void udp_init( ) {
+static void* udp_worker( void * args ) {
+  int64 sock = (int64)args;
+  struct ot_workstruct ws;
+  memset( &ws, 0, sizeof(ws) );
 
+  ws.inbuf=malloc(G_INBUF_SIZE);
+  ws.outbuf=malloc(G_OUTBUF_SIZE);
+#ifdef    _DEBUG_HTTPERROR
+  ws.debugbuf=malloc(G_DEBUGBUF_SIZE);
+#endif
+
+  while( g_opentracker_running )
+    handle_udp6( sock, &ws );
+
+  free( ws.inbuf );
+  free( ws.outbuf );
+#ifdef    _DEBUG_HTTPERROR
+  free( ws.debugbuf );
+#endif
+  return NULL;
+}
+
+void udp_init( int64 sock, unsigned int worker_count ) {
+  pthread_t thread_id;
+#ifdef _DEBUG
+  fprintf( stderr, " installing %d workers on udp socket %ld", worker_count, (unsigned long)sock );
+#endif
+  while( worker_count-- )
+    pthread_create( &thread_id, NULL, udp_worker, (void *)sock );
 }
 
 const char *g_version_udp_c = "$Source$: $Revision$\n";

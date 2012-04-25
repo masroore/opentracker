@@ -7,6 +7,15 @@
 #      If no listen option is given (here or on the command line), opentracker
 #      listens on 0.0.0.0:6969 tcp and udp.
 #
+#      The next variable determines if udp sockets are handled in the event
+#      loop (set it to 0, the default) or are handled in blocking reads in
+#      dedicated worker threads. You have to set this value before the
+#      listen.tcp_udp or listen.udp statements before it takes effect, but you
+#      can re-set it for each listen statement. Normally you should keep it at
+#      the top of the config file.
+#
+# listen.udp.workers 4
+#
 # listen.tcp_udp 0.0.0.0
 # listen.tcp_udp 192.168.0.1:80
 # listen.tcp_udp 10.0.0.5:6969

@@ -46,6 +46,7 @@ int          g_self_pipe[2];
 
 static char * g_serverdir;
 static char * g_serveruser;
+static unsigned int g_udp_workers;
 
 static void panic( const char *routine ) {
   fprintf( stderr, "%s: %s\n", routine, strerror(errno) );
@@ -328,7 +329,11 @@ static int64_t ot_try_bind( ot_ip6 ip, uint16_t port, PROTO_FLAG proto ) {
 
   io_setcookie( sock, (void*)proto );
 
-  io_wantread( sock );
+  if( (proto == FLAG_UDP) && g_udp_workers ) {
+    io_block( sock );
+    udp_init( sock, g_udp_workers );
+  } else
+    io_wantread( sock );
 
 #ifdef _DEBUG
   fputs( " success.\n", stderr);
@@ -416,6 +421,10 @@ int parse_configfile( char * config_filename ) {
       if( !scan_ip6_port( p+11, tmpip, &tmpport )) goto parse_error;
       ot_try_bind( tmpip, tmpport, FLAG_UDP );
       ++bound;
+    } else if(!byte_diff(p,18,"listen.udp.workers" ) && isspace(p[18])) {
+      char *value = p + 18;
+      while( isspace(*value) ) ++value;
+      scan_uint( value, &g_udp_workers );
 #ifdef WANT_ACCESSLIST_WHITE
     } else if(!byte_diff(p, 16, "access.whitelist" ) && isspace(p[16])) {
       set_config_option( &g_accesslist_filename, p+17 );
