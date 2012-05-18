@@ -613,7 +613,10 @@ static void stats_make( int *iovec_entries, struct iovec **iovector, ot_tasktype
     case TASK_STATS_PEERS:       r += stats_peers_mrtg( r );                break;
     case TASK_STATS_SLASH24S:    r += stats_slash24s_txt( r, 128 );         break;
     case TASK_STATS_TOP10:       r += stats_top_txt( r, 10 );               break;
-    case TASK_STATS_TOP100:      r += stats_top_txt( r, 100 );              break;
+    case TASK_STATS_TOP100:
+                                 if( !( r = iovec_increase( iovec_entries, iovector, 4*OT_STATS_TMPSIZE ) ) )
+                                    return;
+                                 r += stats_top_txt( r, 100 );              break;
     case TASK_STATS_EVERYTHING:  r += stats_return_everything( r );         break;
 #ifdef WANT_SPOT_WOODPECKER
     case TASK_STATS_WOODPECKERS: r += stats_return_woodpeckers( r, 128 );   break;
