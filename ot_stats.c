@@ -93,7 +93,7 @@ static stats_network_node *stats_network_counters_root;
 static int stat_increase_network_count( stats_network_node **pnode, int depth, uintptr_t ip ) {
   int foo = __LDR(ip,depth);
   stats_network_node *node;
-  
+
   if( !*pnode ) {
     *pnode = malloc( sizeof( stats_network_node ) );
     if( !*pnode )
@@ -125,7 +125,7 @@ static int stats_shift_down_network_count( stats_network_node **node, int depth,
     free( *node );
     *node = NULL;
   }
-  
+
   return rest;
 }
 
@@ -295,30 +295,33 @@ static char*to_hex(char*d,uint8_t*s){char*m="0123456789ABCDEF";char *t=d;char*e=
 typedef struct { size_t val; ot_torrent * torrent; } ot_record;
 
 /* Fetches stats from tracker */
-size_t stats_top10_txt( char * reply ) {
+size_t stats_top_txt( char * reply, int amount ) {
   size_t    j;
-  ot_record top10s[10], top10c[10];
+  ot_record top100s[100], top100c[100];
   char     *r  = reply, hex_out[42];
   int       idx, bucket;
 
-  byte_zero( top10s, sizeof( top10s ) );
-  byte_zero( top10c, sizeof( top10c ) );
+  if( amount > 100 )
+    amount = 100;
+
+  byte_zero( top100s, sizeof( top100s ) );
+  byte_zero( top100c, sizeof( top100c ) );
 
   for( bucket=0; bucket<OT_BUCKET_COUNT; ++bucket ) {
     ot_vector *torrents_list = mutex_bucket_lock( bucket );
     for( j=0; j<torrents_list->size; ++j ) {
       ot_peerlist *peer_list = ( ((ot_torrent*)(torrents_list->data))[j] ).peer_list;
-      int idx = 9; while( (idx >= 0) && ( peer_list->peer_count > top10c[idx].val ) ) --idx;
-      if ( idx++ != 9 ) {
-        memmove( top10c + idx + 1, top10c + idx, ( 9 - idx ) * sizeof( ot_record ) );
-        top10c[idx].val = peer_list->peer_count;
-        top10c[idx].torrent = (ot_torrent*)(torrents_list->data) + j;
+      int idx = amount - 1; while( (idx >= 0) && ( peer_list->peer_count > top100c[idx].val ) ) --idx;
+      if ( idx++ != amount - 1 ) {
+        memmove( top100c + idx + 1, top100c + idx, ( amount - 1 - idx ) * sizeof( ot_record ) );
+        top100c[idx].val = peer_list->peer_count;
+        top100c[idx].torrent = (ot_torrent*)(torrents_list->data) + j;
       }
-      idx = 9; while( (idx >= 0) && ( peer_list->seed_count > top10s[idx].val ) ) --idx;
-      if ( idx++ != 9 ) {
-        memmove( top10s + idx + 1, top10s + idx, ( 9 - idx ) * sizeof( ot_record ) );
-        top10s[idx].val = peer_list->seed_count;
-        top10s[idx].torrent = (ot_torrent*)(torrents_list->data) + j;
+      idx = amount - 1; while( (idx >= 0) && ( peer_list->seed_count > top100s[idx].val ) ) --idx;
+      if ( idx++ != amount - 1 ) {
+        memmove( top100s + idx + 1, top100s + idx, ( amount - 1 - idx ) * sizeof( ot_record ) );
+        top100s[idx].val = peer_list->seed_count;
+        top100s[idx].torrent = (ot_torrent*)(torrents_list->data) + j;
       }
     }
     mutex_bucket_unlock( bucket, 0 );
@@ -326,14 +329,14 @@ size_t stats_top10_txt( char * reply ) {
       return 0;
   }
 
-  r += sprintf( r, "Top 10 torrents by peers:\n" );
-  for( idx=0; idx<10; ++idx )
-    if( top10c[idx].torrent )
-      r += sprintf( r, "\t%zd\t%s\n", top10c[idx].val, to_hex( hex_out, top10c[idx].torrent->hash) );
-  r += sprintf( r, "Top 10 torrents by seeds:\n" );
-  for( idx=0; idx<10; ++idx )
-    if( top10s[idx].torrent )
-      r += sprintf( r, "\t%zd\t%s\n", top10s[idx].val, to_hex( hex_out, top10s[idx].torrent->hash) );
+  r += sprintf( r, "Top %d torrents by peers:\n", amount );
+  for( idx=0; idx<amount; ++idx )
+    if( top100c[idx].torrent )
+      r += sprintf( r, "\t%zd\t%s\n", top100c[idx].val, to_hex( hex_out, top100c[idx].torrent->hash) );
+  r += sprintf( r, "Top %d torrents by seeds:\n", amount );
+  for( idx=0; idx<amount; ++idx )
+    if( top100s[idx].torrent )
+      r += sprintf( r, "\t%zd\t%s\n", top100s[idx].val, to_hex( hex_out, top100s[idx].torrent->hash) );
 
   return r - reply;
 }
@@ -609,7 +612,8 @@ static void stats_make( int *iovec_entries, struct iovec **iovector, ot_tasktype
     case TASK_STATS_TORRENTS:    r += stats_torrents_mrtg( r );             break;
     case TASK_STATS_PEERS:       r += stats_peers_mrtg( r );                break;
     case TASK_STATS_SLASH24S:    r += stats_slash24s_txt( r, 128 );         break;
-    case TASK_STATS_TOP10:       r += stats_top10_txt( r );                 break;
+    case TASK_STATS_TOP10:       r += stats_top_txt( r, 10 );               break;
+    case TASK_STATS_TOP100:      r += stats_top_txt( r, 100 );              break;
     case TASK_STATS_EVERYTHING:  r += stats_return_everything( r );         break;
 #ifdef WANT_SPOT_WOODPECKER
     case TASK_STATS_WOODPECKERS: r += stats_return_woodpeckers( r, 128 );   break;
