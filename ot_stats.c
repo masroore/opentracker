@@ -614,8 +614,8 @@ static void stats_make( int *iovec_entries, struct iovec **iovector, ot_tasktype
     case TASK_STATS_SLASH24S:    r += stats_slash24s_txt( r, 128 );         break;
     case TASK_STATS_TOP10:       r += stats_top_txt( r, 10 );               break;
     case TASK_STATS_TOP100:
-                                 if( !( r = iovec_increase( iovec_entries, iovector, 4*OT_STATS_TMPSIZE ) ) )
-                                    return;
+                                 r = iovec_fix_increase_or_free( iovec_entries, iovector, r, 4 * OT_STATS_TMPSIZE );
+                                 if( !r ) return;
                                  r += stats_top_txt( r, 100 );              break;
     case TASK_STATS_EVERYTHING:  r += stats_return_everything( r );         break;
 #ifdef WANT_SPOT_WOODPECKER
