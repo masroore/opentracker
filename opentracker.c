@@ -562,6 +562,12 @@ int main( int argc, char **argv ) {
   noipv6=1;
 #endif
 
+#ifdef WANT_DEV_RANDOM
+  srandomdev();
+#else
+  srandom( time(NULL) );
+#endif
+
   while( scanon ) {
     switch( getopt( argc, argv, ":i:p:A:P:d:u:r:s:f:l:v"
 #ifdef WANT_ACCESSLIST_BLACK
@@ -616,6 +622,9 @@ int main( int argc, char **argv ) {
     ot_try_bind( serverip, 6969, FLAG_TCP );
     ot_try_bind( serverip, 6969, FLAG_UDP );
   }
+
+  if( !g_udp_workers )
+    udp_init( -1, 0 );
 
 #ifdef WANT_SYSLOGS
   openlog( "opentracker", 0, LOG_USER );
