@@ -35,6 +35,7 @@ BINDIR?=$(PREFIX)/bin
 #FEATURES+=-DWANT_MODEST_FULLSCRAPES
 #FEATURES+=-DWANT_SPOT_WOODPECKER
 #FEATURES+=-DWANT_SYSLOGS
+FEATURES+=-DWANT_DEV_RANDOM
 FEATURES+=-DWANT_FULLSCRAPE
 
 #FEATURES+=-D_DEBUG_HTTPERROR
@@ -46,8 +47,8 @@ CFLAGS+=-I$(LIBOWFAT_HEADERS) -Wall -pipe -Wextra #-ansi -pedantic
 LDFLAGS+=-L$(LIBOWFAT_LIBRARY) -lowfat -pthread -lpthread -lz
 
 BINARY =opentracker
-HEADERS=trackerlogic.h scan_urlencoded_query.h ot_mutex.h ot_stats.h ot_vector.h ot_clean.h ot_udp.h ot_iovec.h ot_fullscrape.h ot_accesslist.h ot_http.h ot_livesync.h
-SOURCES=opentracker.c trackerlogic.c scan_urlencoded_query.c ot_mutex.c ot_stats.c ot_vector.c ot_clean.c ot_udp.c ot_iovec.c ot_fullscrape.c ot_accesslist.c ot_http.c ot_livesync.c
+HEADERS=trackerlogic.h scan_urlencoded_query.h ot_mutex.h ot_stats.h ot_vector.h ot_clean.h ot_udp.h ot_iovec.h ot_fullscrape.h ot_accesslist.h ot_http.h ot_livesync.h ot_rijndael.h
+SOURCES=opentracker.c trackerlogic.c scan_urlencoded_query.c ot_mutex.c ot_stats.c ot_vector.c ot_clean.c ot_udp.c ot_iovec.c ot_fullscrape.c ot_accesslist.c ot_http.c ot_livesync.c ot_rijndael.c
 SOURCES_proxy=proxy.c ot_vector.c ot_mutex.c
 
 OBJECTS = $(SOURCES:%.c=%.o)
