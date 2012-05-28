@@ -38,7 +38,6 @@ static void udp_generate_rijndael_round_key() {
 static void udp_make_connectionid( uint32_t connid[4], const ot_ip6 remoteip ) {
   uint32_t plain[4], crypt[4];
   int age, i;
-for( i=0; i<16; ++i ) fprintf( stderr, "%02uX ", (uint8_t)remoteip[i] ); fprintf(stderr, "\n" );
   if( g_now_minutes + 60 > g_hour_of_the_key ) {
     g_hour_of_the_key = g_now_minutes;
     g_key_of_the_hour[1] = g_key_of_the_hour[0];
