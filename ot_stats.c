@@ -48,6 +48,7 @@ static unsigned long long ot_overall_tcp_successfulannounces = 0;
 static unsigned long long ot_overall_udp_successfulannounces = 0;
 static unsigned long long ot_overall_tcp_successfulscrapes = 0;
 static unsigned long long ot_overall_udp_successfulscrapes = 0;
+static unsigned long long ot_overall_udp_connectionidmissmatches = 0;
 static unsigned long long ot_overall_tcp_connects = 0;
 static unsigned long long ot_overall_udp_connects = 0;
 static unsigned long long ot_overall_completed = 0;
@@ -59,7 +60,6 @@ static char *             ot_failed_request_names[] = { "302 Redirect", "400 Par
 static unsigned long long ot_renewed[OT_PEER_TIMEOUT];
 static unsigned long long ot_overall_sync_count;
 static unsigned long long ot_overall_stall_count;
-static unsigned long long g_stats_connid_missmatches;
 
 static time_t ot_start_time;
 
@@ -539,7 +539,7 @@ static size_t stats_return_everything( char * reply ) {
   r += sprintf( r, "  <completed>\n    <count>%llu</count>\n  </completed>\n", ot_overall_completed );
   r += sprintf( r, "  <connections>\n" );
   r += sprintf( r, "    <tcp>\n      <accept>%llu</accept>\n      <announce>%llu</announce>\n      <scrape>%llu</scrape>\n    </tcp>\n", ot_overall_tcp_connections, ot_overall_tcp_successfulannounces, ot_overall_udp_successfulscrapes );
-  r += sprintf( r, "    <udp>\n      <overall>%llu</overall>\n      <connect>%llu</connect>\n      <announce>%llu</announce>\n      <scrape>%llu</scrape>\n    </udp>\n", ot_overall_udp_connections, ot_overall_udp_connects, ot_overall_udp_successfulannounces, ot_overall_udp_successfulscrapes );
+  r += sprintf( r, "    <udp>\n      <overall>%llu</overall>\n      <connect>%llu</connect>\n      <announce>%llu</announce>\n      <scrape>%llu</scrape>\n      <missmatch>%llu</missmatch>\n    </udp>\n", ot_overall_udp_connections, ot_overall_udp_connects, ot_overall_udp_successfulannounces, ot_overall_udp_successfulscrapes, ot_overall_udp_connectionidmissmatches );
   r += sprintf( r, "    <livesync>\n      <count>%llu</count>\n    </livesync>\n", ot_overall_sync_count );
   r += sprintf( r, "  </connections>\n" );
   r += sprintf( r, "  <debug>\n" );
@@ -725,7 +725,7 @@ void stats_issue_event( ot_status_event event, PROTO_FLAG proto, uintptr_t event
       break;
 #endif
     case EVENT_CONNID_MISSMATCH:
-      ++g_stats_connid_missmatches;
+      ++ot_overall_udp_connectionidmissmatches;
     default:
       break;
   }
