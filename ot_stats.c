@@ -59,6 +59,7 @@ static char *             ot_failed_request_names[] = { "302 Redirect", "400 Par
 static unsigned long long ot_renewed[OT_PEER_TIMEOUT];
 static unsigned long long ot_overall_sync_count;
 static unsigned long long ot_overall_stall_count;
+static unsigned long long g_stats_connid_missmatches;
 
 static time_t ot_start_time;
 
@@ -723,6 +724,8 @@ void stats_issue_event( ot_status_event event, PROTO_FLAG proto, uintptr_t event
       pthread_mutex_unlock( &g_woodpeckers_mutex );
       break;
 #endif
+    case EVENT_CONNID_MISSMATCH:
+      ++g_stats_connid_missmatches;
     default:
       break;
   }

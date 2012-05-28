@@ -20,7 +20,8 @@ typedef enum {
   EVENT_FULLSCRAPE,   /* TCP only */
   EVENT_FAILED,
   EVENT_BUCKET_LOCKED,
-  EVENT_WOODPECKER
+  EVENT_WOODPECKER,
+  EVENT_CONNID_MISSMATCH
 } ot_status_event;
 
 enum {
