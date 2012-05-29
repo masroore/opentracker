@@ -39,7 +39,6 @@
 
 /* Begin PBXFileReference section */
 		6520B7520D036AAF00A43B1F /* libowfat.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libowfat.a; path = ../libowfat/libowfat.a; sourceTree = SOURCE_ROOT; };
-		6520B8110D0E011000A43B1F /* liblibowfat.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = liblibowfat.a; sourceTree = BUILT_PRODUCTS_DIR; };
 		653A320A0CE7F475007F0D03 /* ot_accesslist.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ot_accesslist.h; sourceTree = "<group>"; };
 		653A320B0CE7F475007F0D03 /* ot_accesslist.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = ot_accesslist.c; sourceTree = "<group>"; };
 		653A56AC0CE201FF000CF140 /* opentracker */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = opentracker; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -70,13 +69,6 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		654A80A60CD83615009035DE /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		8DD76FAD0486AB0100D96B5E /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -93,6 +85,7 @@
 			children = (
 				65542D810CE0786F00469330 /* Headers */,
 				08FB7795FE84155DC02AAC07 /* Source */,
+				92762AC9104EDED700FDCB60 /* Libraries */,
 				C6A0FF2B0290797F04C91782 /* Documentation */,
 				653A56AD0CE201FF000CF140 /* Products */,
 			);
@@ -123,8 +116,6 @@
 			isa = PBXGroup;
 			children = (
 				653A56AC0CE201FF000CF140 /* opentracker */,
-				6520B7520D036AAF00A43B1F /* libowfat.a */,
-				6520B8110D0E011000A43B1F /* liblibowfat.a */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -148,6 +139,14 @@
 			name = Headers;
 			sourceTree = "<group>";
 		};
+		92762AC9104EDED700FDCB60 /* Libraries */ = {
+			isa = PBXGroup;
+			children = (
+				6520B7520D036AAF00A43B1F /* libowfat.a */,
+			);
+			name = Libraries;
+			sourceTree = "<group>";
+		};
 		C6A0FF2B0290797F04C91782 /* Documentation */ = {
 			isa = PBXGroup;
 			children = (
@@ -158,34 +157,7 @@
 		};
 /* End PBXGroup section */
 
-/* Begin PBXHeadersBuildPhase section */
-		654A80A40CD83615009035DE /* Headers */ = {
-			isa = PBXHeadersBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-/* End PBXHeadersBuildPhase section */
-
 /* Begin PBXNativeTarget section */
-		654A80A70CD83615009035DE /* libowfat */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = 654A80AB0CD83635009035DE /* Build configuration list for PBXNativeTarget "libowfat" */;
-			buildPhases = (
-				654A80A40CD83615009035DE /* Headers */,
-				654A80A50CD83615009035DE /* Sources */,
-				654A80A60CD83615009035DE /* Frameworks */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-			);
-			name = libowfat;
-			productName = libowfat;
-			productReference = 6520B8110D0E011000A43B1F /* liblibowfat.a */;
-			productType = "com.apple.product-type.library.static";
-		};
 		8DD76FA90486AB0100D96B5E /* opentracker */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 1DEB928508733DD80010E9CD /* Build configuration list for PBXNativeTarget "opentracker" */;
@@ -218,19 +190,11 @@
 			projectRoot = "";
 			targets = (
 				8DD76FA90486AB0100D96B5E /* opentracker */,
-				654A80A70CD83615009035DE /* libowfat */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXSourcesBuildPhase section */
-		654A80A50CD83615009035DE /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		8DD76FAB0486AB0100D96B5E /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -290,7 +254,7 @@
 		1DEB928A08733DD80010E9CD /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ARCHS = "$(NATIVE_ARCH)";
+				ARCHS = "$(ONLY_ACTIVE_ARCH_PRE_XCODE_3_1)";
 				GCC_PREPROCESSOR_DEFINITIONS = (
 					WANT_ACCESSLIST_WHITE,
 					WANT_IP_FROM_QUERY_STRING,
@@ -301,16 +265,16 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				HEADER_SEARCH_PATHS = ../libowfat/;
 				LIBRARY_SEARCH_PATHS = ../libowfat/;
-				ONLY_ACTIVE_ARCH = YES;
+				ONLY_ACTIVE_ARCH_PRE_XCODE_3_1 = "$(NATIVE_ARCH_ACTUAL)";
 				PREBINDING = NO;
-				SDKROOT = "$(DEVELOPER_SDK_DIR)/MacOSX10.5.sdk";
+				SDKROOT = "$(DEVELOPER_SDK_DIR)/MacOSX10.6.sdk";
 			};
 			name = Debug;
 		};
 		1DEB928B08733DD80010E9CD /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ARCHS = "$(NATIVE_ARCH)";
+				ARCHS = "$(ONLY_ACTIVE_ARCH_PRE_XCODE_3_1)";
 				DEAD_CODE_STRIPPING = NO;
 				GCC_PREPROCESSOR_DEFINITIONS = (
 					WANT_ACCESSLIST_WHITE,
@@ -322,40 +286,9 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				HEADER_SEARCH_PATHS = ../libowfat/;
 				LIBRARY_SEARCH_PATHS = ../libowfat/;
-				MACH_O_TYPE = mh_execute;
-				ONLY_ACTIVE_ARCH = YES;
-				OTHER_LDFLAGS = "-lowfat";
+				ONLY_ACTIVE_ARCH_PRE_XCODE_3_1 = "$(NATIVE_ARCH_ACTUAL)";
 				PREBINDING = NO;
-				SDKROOT = "$(DEVELOPER_SDK_DIR)/MacOSX10.5.sdk";
-				ZERO_LINK = NO;
-			};
-			name = Release;
-		};
-		654A80A90CD83617009035DE /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				COPY_PHASE_STRIP = NO;
-				GCC_DYNAMIC_NO_PIC = NO;
-				GCC_ENABLE_FIX_AND_CONTINUE = YES;
-				GCC_MODEL_TUNING = G5;
-				GCC_OPTIMIZATION_LEVEL = 0;
-				INSTALL_PATH = /usr/local/lib;
-				PREBINDING = NO;
-				PRODUCT_NAME = libowfat;
-				ZERO_LINK = YES;
-			};
-			name = Debug;
-		};
-		654A80AA0CD83617009035DE /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				COPY_PHASE_STRIP = YES;
-				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				GCC_ENABLE_FIX_AND_CONTINUE = NO;
-				GCC_MODEL_TUNING = G5;
-				INSTALL_PATH = /usr/local/lib;
-				PREBINDING = NO;
-				PRODUCT_NAME = libowfat;
+				SDKROOT = "$(DEVELOPER_SDK_DIR)/MacOSX10.6.sdk";
 				ZERO_LINK = NO;
 			};
 			name = Release;
@@ -377,15 +310,6 @@
 			buildConfigurations = (
 				1DEB928A08733DD80010E9CD /* Debug */,
 				1DEB928B08733DD80010E9CD /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		654A80AB0CD83635009035DE /* Build configuration list for PBXNativeTarget "libowfat" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				654A80A90CD83617009035DE /* Debug */,
-				654A80AA0CD83617009035DE /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
