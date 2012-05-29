@@ -560,13 +560,13 @@ static size_t stats_return_everything( char * reply ) {
 extern const char
 *g_version_opentracker_c, *g_version_accesslist_c, *g_version_clean_c, *g_version_fullscrape_c, *g_version_http_c,
 *g_version_iovec_c, *g_version_mutex_c, *g_version_stats_c, *g_version_udp_c, *g_version_vector_c,
-*g_version_scan_urlencoded_query_c, *g_version_trackerlogic_c, *g_version_livesync_c;
+*g_version_scan_urlencoded_query_c, *g_version_trackerlogic_c, *g_version_livesync_c, *g_version_rijndael_c;
 
 size_t stats_return_tracker_version( char *reply ) {
-  return sprintf( reply, "%s%s%s%s%s%s%s%s%s%s%s%s%s",
+  return sprintf( reply, "%s%s%s%s%s%s%s%s%s%s%s%s%s%s",
                  g_version_opentracker_c, g_version_accesslist_c, g_version_clean_c, g_version_fullscrape_c, g_version_http_c,
                  g_version_iovec_c, g_version_mutex_c, g_version_stats_c, g_version_udp_c, g_version_vector_c,
-                 g_version_scan_urlencoded_query_c, g_version_trackerlogic_c, g_version_livesync_c );
+                 g_version_scan_urlencoded_query_c, g_version_trackerlogic_c, g_version_livesync_c, g_version_rijndael_c );
 }
 
 size_t return_stats_for_tracker( char *reply, int mode, int format ) {

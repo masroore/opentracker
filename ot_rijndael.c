@@ -486,3 +486,5 @@ void rijndaelEncrypt128(const uint32_t rk[44], const uint8_t pt[16], uint8_t ct[
         rk[43];
     PUTU32(ct + 12, s3);
 }
+
+const char *g_version_rijndael_c = "$Source$: $Revision$\n";
