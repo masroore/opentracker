@@ -102,6 +102,7 @@ static int fullscrape_increase( int *iovec_entries, struct iovec **iovector,
   /* When compressing, we have all the bytes in output buffer */
 #ifdef WANT_COMPRESSION_GZIP
   if( mode & TASK_FLAG_GZIP ) {
+    int zres;
     *re -= OT_SCRAPE_MAXENTRYLEN;
     strm->next_out  = (uint8_t*)*r;
     strm->avail_out = OT_SCRAPE_CHUNK_SIZE;
