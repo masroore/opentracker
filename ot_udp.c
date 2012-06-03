@@ -35,22 +35,20 @@ static void udp_generate_rijndael_round_key() {
 }
 
 /* Generate current and previous connection id for ip */
-static void udp_make_connectionid( uint32_t connid[4], const ot_ip6 remoteip ) {
+static void udp_make_connectionid( uint32_t connid[2], const ot_ip6 remoteip, int age ) {
   uint32_t plain[4], crypt[4];
-  int age, i;
+  int i;
   if( g_now_minutes + 60 > g_hour_of_the_key ) {
     g_hour_of_the_key = g_now_minutes;
     g_key_of_the_hour[1] = g_key_of_the_hour[0];
     g_key_of_the_hour[0] = random();
   }
 
-  for( age = 0; age < 1; ++age ) {
-    memcpy( plain, remoteip, sizeof( plain ) );
-    for( i=0; i<4; ++i ) plain[i] ^= g_key_of_the_hour[age];
-    rijndaelEncrypt128( g_rijndael_round_key, (uint8_t*)remoteip, (uint8_t*)crypt );
-    connid[2*age  ] = crypt[0] ^ crypt[1];
-    connid[2*age+1] = crypt[2] ^ crypt[3];
-  }
+  memcpy( plain, remoteip, sizeof( plain ) );
+  for( i=0; i<4; ++i ) plain[i] ^= g_key_of_the_hour[age];
+  rijndaelEncrypt128( g_rijndael_round_key, (uint8_t*)remoteip, (uint8_t*)crypt );
+  connid[0] = crypt[0] ^ crypt[1];
+  connid[1] = crypt[2] ^ crypt[3];
 }
 
 /* UDP implementation according to http://xbtt.sourceforge.net/udp_tracker_protocol.html */
@@ -59,7 +57,7 @@ int handle_udp6( int64 serversocket, struct ot_workstruct *ws ) {
   uint32_t   *inpacket = (uint32_t*)ws->inbuf;
   uint32_t   *outpacket = (uint32_t*)ws->outbuf;
   uint32_t    numwant, left, event, scopeid;
-  uint32_t    connid[4];
+  uint32_t    connid[2];
   uint16_t    port, remoteport;
   size_t      byte_count, scrape_count;
 
@@ -75,7 +73,7 @@ int handle_udp6( int64 serversocket, struct ot_workstruct *ws ) {
 
   /* Generate the connection id we give out and expect to and from
      the requesting ip address, this prevents udp spoofing */
-  udp_make_connectionid( connid, remoteip );
+  udp_make_connectionid( connid, remoteip, 0 );
 
   /* Initialise hash pointer */
   ws->hash = NULL;
@@ -83,14 +81,19 @@ int handle_udp6( int64 serversocket, struct ot_workstruct *ws ) {
 
   /* If action is not a ntohl(a) == a == 0, then we
      expect the derived connection id in first 64 bit */
-  if( inpacket[2] && ( inpacket[0] != connid[0] || inpacket[1] != connid[1] ) &&
-                     ( inpacket[0] != connid[2] || inpacket[1] != connid[3] ) ) {
-    const size_t s = sizeof( "Connection ID missmatch." );
-    outpacket[0] = 3; outpacket[1] = inpacket[3];
-    memcpy( &outpacket[2], "Connection ID missmatch.", s );
-    socket_send6( serversocket, ws->outbuf, 8 + s, remoteip, remoteport, 0 );
-    stats_issue_event( EVENT_CONNID_MISSMATCH, FLAG_UDP, 8 + s );
-    return 1;
+  if( inpacket[2] && ( inpacket[0] != connid[0] || inpacket[1] != connid[1] ) ) {
+    /* If connection id does not match, try the one that was
+       valid in the previous hour. Only if this also does not
+       match, return an error packet */
+    udp_make_connectionid( connid, remoteip, 1 );
+    if( inpacket[0] != connid[0] || inpacket[1] != connid[1] ) {
+      const size_t s = sizeof( "Connection ID missmatch." );
+      outpacket[0] = 3; outpacket[1] = inpacket[3];
+      memcpy( &outpacket[2], "Connection ID missmatch.", s );
+      socket_send6( serversocket, ws->outbuf, 8 + s, remoteip, remoteport, 0 );
+      stats_issue_event( EVENT_CONNID_MISSMATCH, FLAG_UDP, 8 + s );
+      return 1;
+    }
   }
 
   switch( ntohl( inpacket[2] ) ) {
