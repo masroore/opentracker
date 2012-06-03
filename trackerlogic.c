@@ -411,13 +411,12 @@ void exerr( char * message ) {
 }
 
 void trackerlogic_init( ) {
-  srandom( time(NULL) );
   g_tracker_id = random();
 
   if( !g_stats_path )
     g_stats_path = "stats";
   g_stats_path_len = strlen( g_stats_path );
-  
+
   /* Initialise background worker threads */
   mutex_init( );
   clean_init( );
