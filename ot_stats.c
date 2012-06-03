@@ -731,6 +731,14 @@ void stats_issue_event( ot_status_event event, PROTO_FLAG proto, uintptr_t event
   }
 }
 
+void stats_cleanup() {
+#ifdef WANT_SPOT_WOODPECKER
+  pthread_mutex_lock( &g_woodpeckers_mutex );
+  stats_shift_down_network_count( &stats_woodpeckers_tree, 0, 1 );
+  pthread_mutex_unlock( &g_woodpeckers_mutex );
+#endif
+}
+
 static void * stats_worker( void * args ) {
   int iovec_entries;
   struct iovec *iovector;

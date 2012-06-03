@@ -39,6 +39,7 @@ enum {
 
 void   stats_issue_event( ot_status_event event, PROTO_FLAG proto, uintptr_t event_data );
 void   stats_deliver( int64 sock, int tasktype );
+void   stats_cleanup();
 size_t return_stats_for_tracker( char *reply, int mode, int format );
 size_t stats_return_tracker_version( char *reply );
 void   stats_init( );
