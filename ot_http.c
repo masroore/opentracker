@@ -401,11 +401,11 @@ static ssize_t http_handle_announce( const int64 sock, struct ot_workstruct *ws,
       OT_SETIP( &ws->peer, cookie->ip );
   } else
 #endif
+  OT_SETIP( &ws->peer, cookie->ip );
 
   ws->peer_id = NULL;
   ws->hash = NULL;
 
-  OT_SETIP( &ws->peer, cookie->ip );
   OT_SETPORT( &ws->peer, &port );
   OT_PEERFLAG( &ws->peer ) = 0;
   numwant = 50;
