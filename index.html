@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset='utf-8'>
+    <meta http-equiv="X-UA-Compatible" content="chrome=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+    <link href='https://fonts.googleapis.com/css?family=Architects+Daughter' rel='stylesheet' type='text/css'>
+    <link rel="stylesheet" type="text/css" href="stylesheets/stylesheet.css" media="screen">
+    <link rel="stylesheet" type="text/css" href="stylesheets/pygment_trac.css" media="screen">
+    <link rel="stylesheet" type="text/css" href="stylesheets/print.css" media="print">
+
+    <!--[if lt IE 9]>
+    <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+
+    <title>Opentracker by masroore</title>
+  </head>
+
+  <body>
+    <header>
+      <div class="inner">
+        <h1>Opentracker</h1>
+        <h2>opentracker is a open and free bittorrent tracker project</h2>
+        <a href="https://github.com/masroore/opentracker" class="button"><small>View project on</small>GitHub</a>
+      </div>
+    </header>
+
+    <div id="content-wrapper">
+      <div class="inner clearfix">
+        <section id="main-content">
+          <h2>
+<a name="opentracker---open-source-and-free-bittorrent-tracker" class="anchor" href="#opentracker---open-source-and-free-bittorrent-tracker"><span class="octicon octicon-link"></span></a>opentracker - open-source and free BitTorrent tracker</h2>
+
+<p><strong>opentracker</strong> is a open and free <a href="http://wiki.theory.org/BitTorrentSpecification">bittorrent tracker</a> project. It aims for minimal resource usage and is intended to run at your wlan router. Currently it is deployed as an open and free tracker instance.</p>
+
+<h3>
+<a name="build-instructions" class="anchor" href="#build-instructions"><span class="octicon octicon-link"></span></a>Build instructions</h3>
+
+<p>You need <a href="https://github.com/masroore/libowfat">libowfat</a> (<a href="http://www.fefe.de/libowfat/">http://www.fefe.de/libowfat/</a>).</p>
+
+<p><strong>Steps to go:</strong></p>
+
+<p>Clone the <a href="https://github.com/masroore/libowfat">libowfat</a> library:</p>
+
+<pre><code>git clone git@github.com:masroore/libowfat.git
+cd libowfat
+make    
+cd ..
+</code></pre>
+
+<p>Clone this repository:</p>
+
+<pre><code>git clone git@github.com:masroore/opentracker.git
+cd opentracker
+make
+</code></pre>
+
+<p>That should leave you with an exectuable called <code>opentracker</code> and one debug version <code>opentracker.debug</code>.</p>
+
+<p>This tracker is open in a sense that everyone announcing a torrent is welcome to do so and will be informed about anyone else announcing the same torrent. Unless
+<code>-DWANT_IP_FROM_QUERY_STRING</code> is enabled (which is meant for debugging purposes only), only source IPs are accepted. The tracker implements a minimal set of
+essential features only but was able respond to far more than 10000 requests per second on a Sun Fire 2200 M2 (thats where we found no more clients able to fire
+more of our <code>testsuite.sh</code> script).</p>
+
+<p>Some variables in opentracker's <code>Makefile</code> control features and behaviour of opentracker. Here they are:</p>
+
+<ul>
+<li><p><code>-DWANT_V6</code> makes opentracker an IPv6-only tracker. More in the v6-section below.</p></li>
+<li><p>opentracker can deliver gzip compressed full scrapes. Enable this with <code>-DWANT_COMPRESSION_GZIP</code> option.</p></li>
+<li><p>Normally opentracker tracks any torrent announced to it. You can change that behaviour by enabling ONE of <code>-DWANT_ACCESSLIST_BLACK</code> or <code>-DWANT_ACCESSLIST_WHITE</code>. Note, that you have to provide a whitelist file in order to make opentracker do anything in the latter case. More in the closed mode section below.</p></li>
+<li><p>opentracker can run in a cluster. Enable this behaviour by enabling <code>-DWANT_SYNC_LIVE</code>. Note, that you have to configure your cluster before you can use opentracker when this option is on.</p></li>
+<li><p>Some statistics opentracker can provide are sensitive. You can restrict access to these statistics by enabling <code>-DWANT_RESTRICT_STATS</code>. See section statistics for more details.</p></li>
+<li><p>Fullscrapes is bittorrent's way to query a tracker for all tracked torrents. Since it's in the standard, it is enabled by default. Disable it by commenting out <code>-DWANT_FULLSCRAPE</code>.</p></li>
+<li><p>By default opentracker will only allow the connecting endpoint's IP address to be announced. Bittorrent standard allows clients to provide an IP address in its query string. You can make opentracker use this IP address by enabling -<code>DWANT_IP_FROM_QUERY_STRING</code>.</p></li>
+<li><p>Some experimental or older, deprecated features can be enabled by the -<code>DWANT_LOG_NETWORKS</code>, -<code>DWANT_SYNC_SCRAPE</code> or -<code>DWANT_IP_FROM_PROXY</code> switch.</p></li>
+</ul><p>Currently there is some packages for some linux distributions and OpenBSD around, but some of them patch Makefile and default config to make opentracker closed by default. I explicitly don't endorse those packages and will not give support for problems stemming from these missconfigurations.</p>
+
+<p>Some tweaks you may want to try under FreeBSD:</p>
+
+<pre><code>sysctl kern.ipc.somaxconn=1024
+sysctl kern.ipc.nmbclusters=32768
+sysctl net.inet.tcp.msl=10000
+sysctl kern.maxfiles=10240
+</code></pre>
+
+<h3>
+<a name="invocation" class="anchor" href="#invocation"><span class="octicon octicon-link"></span></a>Invocation</h3>
+
+<p><code>opentracker</code> can be run by just typing <code>./opentracker</code>. This will make opentracker bind to 0.0.0.0:6969 and happily serve all torrents presented to it. If ran as root, opentracker will immediately chroot to . (or any directory given with the <code>-d</code> option) and drop all priviliges after binding to whatever tcp or udp ports it is requested.</p>
+
+<p>When options were few, <em>opentracker</em> used to accept all of them from command line. While this still is possible for most options, using them is quite unhandy: an example invocation would look like:</p>
+
+<pre><code>./opentracker -i 23.23.23.7 -p 80 -P 80 -p 6969 -i 23.23.23.8 -p 80 -r http://www.mytorrentsite.com/ -d /usr/local/etc/opentracker -w mytorrents.list -A 127.0.0.1
+</code></pre>
+
+<p>opentracker now uses a config file that you can provide with the <code>-f</code> switch.</p>
+
+<h3>
+<a name="config-file" class="anchor" href="#config-file"><span class="octicon octicon-link"></span></a>Config file</h3>
+
+<p><em>opentrackers</em> config file is very straight forward and a very well documented example config can be found in the file opentracker.conf.sample.</p>
+
+<h3>
+<a name="closed-mode" class="anchor" href="#closed-mode"><span class="octicon octicon-link"></span></a>Closed mode</h3>
+
+<p>While personally I like my tracker to be open, I can see that there's people that want to control what torrents to track – or not to track. If you've compiled <em>opentracker</em> with one of the accesslist-options (see Build instructions above), you can control which torrents are tracked by providing a file that contains a list of human readable info_hashes. An example whitelist file would look like:</p>
+
+<pre><code>0123456789abcdef0123456789abcdef01234567
+890123456789abcdef0123456789abcdef012345
+</code></pre>
+
+<p>To make opentracker reload it's white/blacklist, send a <code>SIGHUP</code> unix signal.</p>
+
+<h3>
+<a name="statistics" class="anchor" href="#statistics"><span class="octicon octicon-link"></span></a>Statistics</h3>
+
+<p>Given its very network centric approach, talking to opentracker via http comes very naturally. Besides the <code>/announce</code> and <code>/scrape</code> paths, there is a third path you can access the tracker by: <code>/stats</code>. This request takes parameters, for a quick overview just inquire <code>/stats?mode=everything</code>.</p>
+
+<p>Statistics have grown over time and are currently not very tidied up. Most modes were written to dump legacy-SNMP-style blocks that can easily be monitored by MRTG. These modes are: <code>peer, conn, scrp, udp4, tcp4, busy, torr, fscr, completed, syncs</code>. I'm not going to explain these here.</p>
+
+<p>The <code>statedump</code> mode dumps non-recreatable states of the tracker so you can later reconstruct an <em>opentracker</em> session with the <code>-l</code> option. This is beta and wildly undocumented.</p>
+
+<p>You can inquire opentracker's version (i.e. CVS versions of all its objects) using the version mode.</p>
+
+<h3>
+<a name="philosophy" class="anchor" href="#philosophy"><span class="octicon octicon-link"></span></a>Philosophy</h3>
+
+<p>A torrent tracker basically is an http-Server that collects all clients ip addresses into pools sorted by one of the request strings parameters and answers all other clients that specified this exact same parameter a list of all other recent clients. All technologies to implement this are around for more than twenty years. Still most implementations suck performancewise.</p>
+
+<p>Utilizing the highly scalable server framework from <a href="https://github.com/masroore/libowfat">libowfat</a>, opentracker can easily serve multiple thousands of requests on a standard plastic WLAN-router, limited only by your kernels capabilities ;)</p>
+
+<p>One important design decision of opentracker was to not store any data persistently. This reduces wear&amp;tear on hard disks and eliminates problems with corrupt databases.</p>
+
+<h3>
+<a name="author" class="anchor" href="#author"><span class="octicon octicon-link"></span></a>Author</h3>
+
+<p><em>opentracker</em> was written by Dirk Engling, who likes to hear from happy customers. His mail address is <a href="mailto:erdgeist@erdgeist.org">erdgeist@erdgeist.org</a></p>
+
+<h3>
+<a name="thanks" class="anchor" href="#thanks"><span class="octicon octicon-link"></span></a>Thanks</h3>
+
+<p>A project like this one is impossible without lots of help from friends. It is powered by beer, much energy and love, batches of bug reports and support on the operating system integration side by denis, taklamakan, cryx, supergrobi and – his libowfat always on the bleeding edge – Fefe. Thanks are also due to Hannes for helping me out with designing internal data representation.</p>
+
+<h3>
+<a name="license" class="anchor" href="#license"><span class="octicon octicon-link"></span></a>License</h3>
+
+<p>opentracker is considered <a href="http://en.wikipedia.org/wiki/Beerware">beer ware</a></p>
+
+<p>Although the libowfat library is under GPL, Felix von Leitner agreed that the compiled binary may be distributed under the same beer ware license as the source code for opentracker. However, we like to hear from happy customers.</p>
+        </section>
+
+        <aside id="sidebar">
+          <a href="https://github.com/masroore/opentracker/zipball/master" class="button">
+            <small>Download</small>
+            .zip file
+          </a>
+          <a href="https://github.com/masroore/opentracker/tarball/master" class="button">
+            <small>Download</small>
+            .tar.gz file
+          </a>
+
+          <p class="repo-owner"><a href="https://github.com/masroore/opentracker"></a> is maintained by <a href="https://github.com/masroore">masroore</a>.</p>
+
+          <p>This page was generated by <a href="https://pages.github.com">GitHub Pages</a> using the Architect theme by <a href="https://twitter.com/jasonlong">Jason Long</a>.</p>
+        </aside>
+      </div>
+    </div>
+
+  
+  </body>
+</html>
