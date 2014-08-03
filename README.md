@@ -1,14 +1,20 @@
+## opentracker - open-source and free BitTorrent tracker
+
 **opentracker** is a open and free [bittorrent tracker](http://wiki.theory.org/BitTorrentSpecification) project. It aims for minimal resource usage and is intended to run at your wlan router. Currently it is deployed as an open and free tracker instance.
 
 
 ### Build instructions
 
+You need [libowfat](https://github.com/masroore/libowfat) (http://www.fefe.de/libowfat/).
+
+
+**Steps to go:**
+
 Clone the [libowfat](https://github.com/masroore/libowfat) library:
 
 	git clone git@github.com:masroore/libowfat.git
 	cd libowfat
-	make
-	
+	make	
 	cd ..
 	
 Clone this repository:
@@ -20,7 +26,12 @@ Clone this repository:
 
 That should leave you with an exectuable called `opentracker` and one debug version `opentracker.debug`.
 
-Some variables in opentracker's Makefile control features and behaviour of opentracker. Here they are:
+This tracker is open in a sense that everyone announcing a torrent is welcome to do so and will be informed about anyone else announcing the same torrent. Unless
+`-DWANT_IP_FROM_QUERY_STRING` is enabled (which is meant for debugging purposes only), only source IPs are accepted. The tracker implements a minimal set of
+essential features only but was able respond to far more than 10000 requests per second on a Sun Fire 2200 M2 (thats where we found no more clients able to fire
+more of our `testsuite.sh` script).
+
+Some variables in opentracker's `Makefile` control features and behaviour of opentracker. Here they are:
 
 * `-DWANT_V6` makes opentracker an IPv6-only tracker. More in the v6-section below.
 
@@ -39,6 +50,14 @@ Some variables in opentracker's Makefile control features and behaviour of opent
 * Some experimental or older, deprecated features can be enabled by the -`DWANT_LOG_NETWORKS`, -`DWANT_SYNC_SCRAPE` or -`DWANT_IP_FROM_PROXY` switch.
 
 Currently there is some packages for some linux distributions and OpenBSD around, but some of them patch Makefile and default config to make opentracker closed by default. I explicitly don't endorse those packages and will not give support for problems stemming from these missconfigurations.
+
+Some tweaks you may want to try under FreeBSD:
+
+	sysctl kern.ipc.somaxconn=1024
+	sysctl kern.ipc.nmbclusters=32768
+	sysctl net.inet.tcp.msl=10000
+	sysctl kern.maxfiles=10240
+
 
 
 ### Invocation
@@ -101,3 +120,4 @@ A project like this one is impossible without lots of help from friends. It is p
 
 opentracker is considered [beer ware](http://en.wikipedia.org/wiki/Beerware)
 
+Although the libowfat library is under GPL, Felix von Leitner agreed that the compiled binary may be distributed under the same beer ware license as the source code for opentracker. However, we like to hear from happy customers.
